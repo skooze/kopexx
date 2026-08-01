@@ -24,7 +24,7 @@ Real authentication is a later, additive change: a new implementation of the sam
 ## Alternatives Considered
 
 Build full authentication now. Rejected: it is not on the critical path to proving the product
-thesis and would delay Phase 1.
+thesis and would delay the vertical thread.
 
 Omit the user concept entirely and add it later. Rejected: ownership checks are a security
 control, and adding them after sessions exist means backfilling ownership onto rows whose real

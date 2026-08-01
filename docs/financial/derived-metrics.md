@@ -1,6 +1,6 @@
 # Derived Metrics
 
-IMPLEMENTATION STATUS: PLANNED (Phase 3)
+IMPLEMENTATION STATUS: PLANNED (Sprint 6)
 OWNER PACKAGE: `packages/financial_metrics`
 
 Derived metrics are computed deterministically from normalized facts. The language model may

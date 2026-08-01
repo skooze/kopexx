@@ -135,6 +135,62 @@ def test_source_block_parent_is_nullable() -> None:
     assert FootnoteSourceBlock.__table__.c.footnote_id.nullable is True
 
 
+def test_source_block_records_its_own_attachment_decision() -> None:
+    """The grouping audit is per child block, so it must be storable on the child.
+
+    docs/footnotes/canonicalization-algorithm.md requires every attachment to be answerable:
+    which stage, on what evidence, against which alternatives. Recording that only on the parent
+    footnote cannot answer it, because stages 3 and 6 through 10 decide per child.
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from packages.persistence import FootnoteSourceBlock
+
+    columns = FootnoteSourceBlock.__table__.c
+    for name in (
+        "grouping_method",
+        "grouping_confidence",
+        "grouping_evidence",
+        "competing_candidates",
+        "extraction_run_id",
+        "grouping_parser_version",
+        "grouping_decided_at",
+    ):
+        assert name in columns, f"footnote_source_block cannot record {name}"
+
+
+def test_filing_stores_only_non_derivable_completeness_state() -> None:
+    """Counts are derived; judgements are stored.
+
+    Eleven of the thirteen counters in docs/footnotes/completeness.md are COUNT() queries over
+    child tables. Storing a copy would create a second source of truth that goes stale. The two
+    that cannot be recomputed from child rows are stored.
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from packages.persistence import Filing
+
+    columns = Filing.__table__.c
+    assert "completeness_confidence" in columns
+    assert "reconciliation_status" in columns
+    for derivable in (
+        "canonical_footnotes_extracted",
+        "source_blocks_associated",
+        "source_blocks_orphaned",
+        "summaries_accepted",
+    ):
+        assert derivable not in columns, (
+            f"{derivable} is a COUNT() over child rows; storing it duplicates the source of truth"
+        )
+
+
+def test_reconciliation_status_is_constrained() -> None:
+    """A TOC mismatch must be recordable as MISMATCH, and nothing outside the vocabulary."""
+    sys.path.insert(0, str(REPO_ROOT))
+    from packages.persistence import Filing
+
+    checks = " ".join(str(c.sqltext) for c in Filing.__table__.constraints if hasattr(c, "sqltext"))
+    assert "RECONCILED" in checks and "MISMATCH" in checks and "NOT_ATTEMPTED" in checks
+
+
 def test_llm_invocation_constrains_content_format() -> None:
     """LLM-SERIALIZATION-INVARIANT enforced at the database level."""
     sys.path.insert(0, str(REPO_ROOT))

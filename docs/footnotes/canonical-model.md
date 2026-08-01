@@ -1,6 +1,6 @@
 # The Canonical Footnote Model
 
-IMPLEMENTATION STATUS: PLANNED (model specified; implementation is Phase 1)
+IMPLEMENTATION STATUS: PLANNED (model specified; implementation is Sprint 4)
 DECISION RECORD: `docs/adr/ADR-0005-canonical-footnote-grouping.md`
 ALGORITHM: `docs/footnotes/canonicalization-algorithm.md`
 
@@ -151,7 +151,7 @@ This is a **single-filing result**. It must not be presented as a general guaran
 | Role URI works before 2009 | KNOWN FALSE, role URIs do not exist pre-XBRL |
 | Filing agents construct role URIs consistently | UNKNOWN, a plausible failure mode |
 
-Phase 5 validates across at least 25 issuers spanning all four filing eras before scale-out, and
+Stage 2 phase W-3 validates across at least 25 issuers spanning all four filing eras before scale-out, and
 publishes the confidence distribution. Until that runs, the fallback chain is not optional
 scaffolding; it is the part of the design that makes the single-filing result safe to build on.
 

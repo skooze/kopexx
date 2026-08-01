@@ -1,6 +1,6 @@
 # Summary Validation
 
-IMPLEMENTATION STATUS: PLANNED (Phase 6); boundary validation IMPLEMENTED
+IMPLEMENTATION STATUS: PLANNED (Sprint 5); boundary validation IMPLEMENTED
 OWNER PACKAGE: `packages/validation`
 
 ## Principle

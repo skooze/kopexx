@@ -1,6 +1,6 @@
 openapi: 3.1.0
 
-# IMPLEMENTATION STATUS: PLANNED (Phase 7). No endpoint is implemented.
+# IMPLEMENTATION STATUS: PLANNED (Sprint 6). No endpoint is implemented.
 #
 # This is browser-facing JSON and is OUTSIDE the LLM content boundary defined in ADR-0013.
 # JSON is correct here. A browser is not a model.
@@ -125,6 +125,10 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/Accession"}
         - {name: topic, in: query, schema: {type: string}}
+        # `changed` is defined by docs/footnotes/period-comparison.md as a stored
+        # footnote_comparison of CHANGED_MATERIAL against the immediately prior period. Until
+        # that table is populated (Sprint 6) the value is REJECTED with 400 UNSUPPORTED_FILTER.
+        # An interface must not imply a capability nothing computes.
         - {name: classification, in: query,
            schema: {type: string, enum: [routine, changed, material]}}
         - {name: deep_dive_recommended, in: query, schema: {type: boolean}}
@@ -140,6 +144,82 @@ paths:
                     type: array
                     items: {$ref: "#/components/schemas/CanonicalFootnote"}
                   coverage: {$ref: "#/components/schemas/Coverage"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+
+  /issuers/{cik}/footnote-topics:
+    get:
+      tags: [footnotes]
+      summary: Footnote topics available for cross-period comparison
+      description: >-
+        A topic key is stable across periods where a footnote number is not: a note that is
+        Note 9 one year may be Note 8 the next. Served from stored comparisons; no model call.
+        See docs/footnotes/period-comparison.md.
+      parameters:
+        - {$ref: "#/components/parameters/Cik"}
+        - {$ref: "#/components/parameters/Range"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [topics]
+                properties:
+                  topics:
+                    type: array
+                    items:
+                      type: object
+                      required: [topic_key, title, periods_covered]
+                      properties:
+                        topic_key: {type: string}
+                        title: {type: string}
+                        periods_covered: {type: integer}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /issuers/{cik}/footnote-topics/{topic_key}:
+    get:
+      tags: [footnotes]
+      summary: One footnote topic across periods, with what changed
+      description: >-
+        Deterministic comparison computed at publication. Reports THAT a note changed and WHAT
+        changed textually and numerically. It does not explain why; that is Deep Analysis.
+      parameters:
+        - {$ref: "#/components/parameters/Cik"}
+        - {name: topic_key, in: path, required: true, schema: {type: string}}
+        - {$ref: "#/components/parameters/Range"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [topic_key, periods]
+                properties:
+                  topic_key: {type: string}
+                  periods:
+                    type: array
+                    items:
+                      type: object
+                      required: [accession, fiscal_year, fiscal_period, classification]
+                      properties:
+                        accession: {type: string}
+                        fiscal_year: {type: integer}
+                        fiscal_period: {type: string}
+                        footnote_id: {type: string, format: uuid}
+                        summary: {type: string}
+                        classification:
+                          type: string
+                          enum: [NEW, ABSENT, UNCHANGED, CHANGED_IMMATERIAL,
+                                 CHANGED_MATERIAL, INCOMPARABLE]
+                        text_similarity: {type: number}
+                        changed_figures: {type: array, items: {type: object}}
+                        structural_changes: {type: array, items: {type: object}}
+                        comparison_method:
+                          type: string
+                          enum: [role_uri_stem, dominant_concept, normalized_title]
+                        confidence: {type: number}
+                        source_url: {type: string, format: uri}
+        "404": {$ref: "#/components/responses/NotFound"}
 
   /footnotes/{footnote_id}:
     get:

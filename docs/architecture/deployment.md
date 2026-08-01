@@ -1,13 +1,13 @@
 # Deployment Architecture
 
-IMPLEMENTATION STATUS: PLANNED (Phase 7). Nothing is deployed. The local stack runs.
+IMPLEMENTATION STATUS: PLANNED (Stage 2 phase W-7). Nothing is deployed. The local stack runs.
 DECISION RECORDS: ADR-0008 (Terraform), ADR-0009 (ECS over Lambda)
 
 ## Local development — IMPLEMENTED
 
 ```
 docker compose up      postgres, minio, redis
-make check             format, lint, types, 104 tests
+make check             format, lint, types, 143 tests
 ```
 
 No model credentials required. The default provider is an in-process mock.

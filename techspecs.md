@@ -4,9 +4,12 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 2
-VERIFICATION: 137 tests passing and 2 skipped, 95 percent coverage on implemented packages, ruff
-format and lint clean, mypy clean across 59 source files.
+LAST SYNCHRONIZED WITH CODE: Sprint 2 alignment review
+VERIFICATION: 143 tests passing and 2 skipped, 93 percent coverage on implemented packages, ruff
+format and lint clean, mypy clean across 41 source files.
+
+The source-file count fell from 59 to 41 because the alignment review removed eighteen packages
+that contained only a docstring. See ADR-0015.
 
 ---
 
@@ -51,26 +54,36 @@ outbound side effect is a model invocation, which is metered and audited.
 | DERA bulk download | `dera_notes` + `sec_client` | IMPLEMENTED and EXECUTED (78/78 packages) |
 | DERA TSV load | `dera_notes` | PLANNED (Sprint 3) |
 | PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
-| Alembic migration | `migrations` | IMPLEMENTED (offline-verified; live apply BLOCKED) |
+| Alembic migration | `migrations` | IMPLEMENTED (offline-verified; live apply PENDING Sprint 3) |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
-| Bedrock provider adapter | `llm_gateway/providers` | PLANNED (Phase 6) |
-| Issuer registry | `issuer_registry` | PLANNED (Phase 2) |
-| Filing discovery | `filing_discovery` | PLANNED (Phase 2) |
-| Document acquisition | `filing_acquisition` | PLANNED (Phase 4) |
-| Era parsers | `filing_parser` | PLANNED (Phase 4) |
-| XBRL processing | `xbrl` | PLANNED (Phase 3) |
-| Fact lake | `fact_lake` | PLANNED (Phase 3) |
-| Fiscal period logic | `fiscal` | PLANNED (Phase 3) |
-| Metric definitions and resolution | `metric_definitions`, `financial_metrics` | PLANNED (Phase 3) |
-| Footnote extraction and canonicalization | `footnote_extractor`, `footnote_canonicalizer` | PLANNED (Phase 1 and 5) |
-| Table parsing | `table_parser` | PLANNED (Phase 5) |
-| Summarization pipeline | `summarization` | PLANNED (Phase 6) |
-| Validation pipeline | `validation` | PLANNED (Phase 6) |
-| Retrieval | `retrieval` | PLANNED (Phase 9) |
-| Deep Analysis | `deep_analysis` | PLANNED (Phase 9) |
-| API | `apps/api` | PLANNED (Phase 7) |
-| Worker and scheduler | `apps/worker`, `apps/scheduler` | PLANNED (Phase 7) |
-| Web dashboard | `apps/web` | PLANNED (Phase 8) |
+
+Reserved package names. **These directories do not exist.** Sprint 1 created them containing only
+a docstring, which reserved names up to twenty sprints ahead of their code and caused two
+architecture tests to pass while scanning nothing. They were removed by the alignment review
+(ADR-0015); each is created in the sprint that writes its first module. `tests/architecture`
+enforces that no package is an empty stub.
+
+| Reserved name | Planned path | Sprint |
+|---|---|---|
+| Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |
+| Filing discovery | `packages/filing_discovery` | 3 |
+| Document acquisition | `packages/filing_acquisition` | 3 |
+| Era parsers | `packages/filing_parser` | 3 |
+| Footnote extraction | `packages/footnote_extractor` | 4 |
+| Footnote canonicalization | `packages/footnote_canonicalizer` | 4 |
+| Table parsing | `packages/table_parser` | 4 |
+| Summarization pipeline | `packages/summarization` | 5 |
+| Validation pipeline | `packages/validation` | 5 |
+| Fiscal period logic | `packages/fiscal` | 6 |
+| XBRL processing | `packages/xbrl` | 6 |
+| Fact lake | `packages/fact_lake` | 6 |
+| Metric resolution | `packages/financial_metrics` | 6 |
+| API | `apps/api` | 6 |
+| Web dashboard | `apps/web` | 6 |
+| Retrieval | `packages/retrieval` | 7 |
+| Deep Analysis | `packages/deep_analysis` | 7 |
+| Issuer registry | `packages/issuer_registry` | Stage 2, W-1 |
+| Worker and scheduler | `apps/worker`, `apps/scheduler` | Stage 2, W-7 |
 
 ---
 
@@ -196,7 +209,7 @@ PUBLIC INTERFACE. `get_logger`, `log_event`, `configure_logging`, `correlation_s
 
 INVARIANT. Filing text and model payload bodies are never logged. A fixed field set is redacted.
 
-### 3.6 `packages/dera_notes` — discovery and ledger IMPLEMENTED; download and load PLANNED
+### 3.6 `packages/dera_notes` — discovery, ledger, and bulk download IMPLEMENTED; TSV load PLANNED (Sprint 3)
 
 RESPONSIBILITY. Discover, mirror, and record SEC DERA NOTES packages.
 
@@ -233,7 +246,7 @@ with bounded backoff.
 
 SCALING. Single-process. The in-process limiter means exactly one client may run at a time,
 because the SEC limit is aggregate across machines. The Redis-backed limiter is required before
-multi-process ingestion and is BLOCKING for Phase 4.
+multi-process ingestion and is BLOCKING for Stage 2 phase W-2.
 
 TESTS. 15 in `tests/unit/test_sec_http_client.py` using `httpx.MockTransport`, including a test
 asserting the cooldown is exactly one 600-second pause rather than a backoff sequence.
@@ -251,7 +264,7 @@ append-only fact lake, metric definitions and derived values, versioned summarie
 ledger, the DERA mirror ledger, Deep Analysis sessions and messages and memory, model invocation
 audit, prompt registry, and the dataset version pointer.
 
-PROHIBITED DEPENDENCIES. `packages/domain` must never import this package. Dependency flows
+PROHIBITED DEPENDENCIES. Pure-logic packages must never import this package. Dependency flows
 domain <- persistence.
 
 KEY ENFORCEMENT.
@@ -380,7 +393,7 @@ There is no `processed` boolean anywhere in the schema.
 ## 8. Security
 
 Full threat model in `docs/deep-analysis/security.md`. Boundary controls implemented in Sprint 1;
-session and retrieval controls are Phase 9.
+session and retrieval controls are Sprint 7.
 
 Implemented today: User-Agent validation failing closed, path-traversal rejection, log redaction,
 model content-boundary enforcement in both directions, native tool-call refusal, budget
@@ -389,10 +402,10 @@ enforcement before spend, and audit persistence of exact model bodies.
 ## 9. Known defects and limitations
 
 1. The rate limiter is in-process. Multi-process ingestion requires the Redis-backed bucket
-   because the SEC limit is aggregate across machines. BLOCKING for Phase 4. The Sprint 2 mirror
+   because the SEC limit is aggregate across machines. BLOCKING for Stage 2 phase W-2. The Sprint 2 mirror
    ran as a single process precisely because of this.
 2. Canonical grouping by role URI is verified on exactly one filing. Breadth validation across
-   25 issuers and four eras precedes scale-out. BLOCKING for Phase 5.
+   25 issuers and four eras precedes scale-out. BLOCKING for Stage 2 phase W-3.
 3. Token estimation is a character-ratio heuristic, adequate for budget guards and relative
    comparison, not for billing reconciliation.
 4. The provider catalog and pricing are unverified. BLOCKING for any cost commitment.
@@ -403,5 +416,5 @@ enforcement before spend, and audit persistence of exact model bodies.
 7. The Alembic migration has NOT been applied to a live PostgreSQL. This environment has no
    PostgreSQL and its Docker daemon cannot start containers, so upgrade and downgrade were
    verified by offline DDL generation and by structural tests only. The two live tests skip with
-   an explicit reason. BLOCKING for Phase 3, and the first thing to run wherever a database
+   an explicit reason. BLOCKING for Sprint 3, and the first thing to run wherever a database
    exists.

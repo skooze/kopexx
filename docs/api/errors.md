@@ -1,6 +1,6 @@
 # API Error Taxonomy
 
-IMPLEMENTATION STATUS: PLANNED (Phase 7)
+IMPLEMENTATION STATUS: PLANNED (Sprint 6)
 
 ## Envelope
 
@@ -26,6 +26,7 @@ This is browser-facing JSON and is outside the LLM content boundary (ADR-0013).
 | 400 | `INVALID_REQUEST` | no | Schema validation failed |
 | 400 | `UNKNOWN_METRIC` | no | Metric not in the definition registry |
 | 400 | `INVALID_RANGE` | no | Range is unparseable or inverted |
+| 400 | `UNSUPPORTED_FILTER` | no | A filter whose backing data is not yet computed, for example `classification=changed` before footnote comparisons are populated. Rejected explicitly rather than silently returning everything or nothing |
 | 401 | `UNAUTHENTICATED` | no | No valid principal |
 | 403 | `FORBIDDEN` | no | Principal may not access this resource |
 | 403 | `SESSION_NOT_OWNED` | no | Session belongs to another principal |

@@ -29,7 +29,7 @@ The repository is the durable project memory. No conversation or chat log is aut
 Sprint 1 complete. Foundation, governance, SEC primitives, and the LLM content boundary.
 
 ```
-104 tests passing
+143 tests passing
  94% coverage on the seven implemented packages
 ruff format clean, ruff lint clean, mypy clean across 55 source files
 ```
@@ -109,7 +109,7 @@ See `docs/llm/content-boundary.md` and ADR-0013.
 ## Layout
 
 ```
-packages/          25 domain packages; 7 implemented
+packages/          8 implemented; reserved names listed in techspecs.md section 2
   sec_identity       CIK, accession, and URL construction — the single home
   configuration      settings with eager validation
   sec_client         rate limiting and throttle classification
@@ -117,11 +117,12 @@ packages/          25 domain packages; 7 implemented
   observability      structured logging and correlation
   dera_notes         SEC dataset discovery and mirror ledger
   llm_gateway        the model content boundary
-apps/              api, worker, scheduler, web            planned
+  persistence        the PostgreSQL control-plane schema
 prompts/           versioned .txt and .yaml — never .md
-metric_definitions/  curated concept priority, reviewed like code
+metric_definitions/  curated concept priority and the item-disclosure exclusions
 tests/             unit, integration, architecture, and fixtures
-docs/              49 specification documents, 14 ADRs, 10 runbooks
+docs/              specification documents, 15 ADRs, runbooks
+migrations/        Alembic; the initial control-plane migration
 scripts/           operational entry points
 ```
 

@@ -1,6 +1,6 @@
 # Deep Analysis Retrieval
 
-IMPLEMENTATION STATUS: PLANNED (Phase 9)
+IMPLEMENTATION STATUS: PLANNED (Sprint 7; pgvector deferred to Stage 2 W-6)
 OWNER PACKAGE: `packages/retrieval`
 DECISION RECORD: `docs/adr/ADR-0007-pgvector-before-opensearch.md`
 

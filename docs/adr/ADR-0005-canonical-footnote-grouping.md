@@ -76,7 +76,7 @@ Item-disclosure exclusion list is a maintained artifact that will drift as SEC a
 mandates.
 
 The 100 percent attachment rate is a single-filing result. It must not be presented as a general
-guarantee. Phase 5 validates breadth across at least 25 issuers spanning all four eras before
+guarantee. Stage 2 phase W-3 validates breadth across at least 25 issuers spanning all four eras before
 scale-out.
 
 Pre-2009 filings have no role URIs at all, so Stage 3 is unavailable and grouping there depends

@@ -1,6 +1,6 @@
 # Generic forensic analysis, run when a Deep Analysis session is started with no question.
 #
-# IMPLEMENTATION STATUS: PLANNED (Phase 9)
+# IMPLEMENTATION STATUS: PLANNED (Sprint 7)
 #
 # The categories are ordered by how often they change an investment view. The analysis works
 # through them, retrieves original evidence for those with signal, and reports only where the

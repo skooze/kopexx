@@ -9,7 +9,7 @@ covers the planned components so the specification is complete before the code e
 
 ---
 
-## issuer_registry — PLANNED (Phase 2)
+## issuer_registry — PLANNED (Stage 2 phase W-1)
 
 RESPONSIBILITY. Maintain the temporal issuer registry and compute the active universe.
 INPUTS. Ticker snapshots, submissions metadata, quarterly indexes.
@@ -31,7 +31,7 @@ SCALING. Read-heavy, cacheable.
 TESTS. Ticker reuse resolution, former-name reconciliation, snapshot union, exclusion
 classification.
 
-## filing_discovery — PLANNED (Phase 2)
+## filing_discovery — PLANNED (Sprint 3)
 
 RESPONSIBILITY. Enumerate every 10-K and 10-Q for covered issuers, across all history.
 INPUTS. `submissions.zip`, per-issuer submissions JSON, `filings.files[]` shards, `master.gz`.
@@ -43,7 +43,7 @@ FAILURE MODES. Missing shard is a hard error, not a silent truncation.
 OBSERVABILITY. Filings discovered per issuer, reconciliation discrepancies, watermark age.
 TESTS. Overflow shard handling, `25-NSE` duplicate rows, reconciliation mismatch.
 
-## filing_acquisition — PLANNED (Phase 4)
+## filing_acquisition — PLANNED (Sprint 3)
 
 RESPONSIBILITY. Fetch and preserve source objects using the era decision table.
 INVARIANTS. Era branch chosen from the filing record. Rejection assertions run before persistence.
@@ -53,7 +53,7 @@ match, accession mismatch. All are permanent, none retried.
 SCALING. Bounded by the SEC rate limit, not by workers.
 TESTS. One golden fixture per era; resumability under `kill -9`.
 
-## filing_parser — PLANNED (Phase 4 and 5)
+## filing_parser — PLANNED (Sprint 3; other eras Stage 2 W-2)
 
 RESPONSIBILITY. Turn a preserved source object into sections, footnote blocks, tables, and facts.
 PUBLIC INTERFACE. The `FilingParser` protocol; five era implementations.
@@ -62,14 +62,14 @@ counts. A failure is never downgraded to a warning.
 FAILURE MODES. Encoding failure, unresolved continuation chain, malformed table, missing heading.
 TESTS. Golden fixtures per era; the short-block assertion catching silent continuation failure.
 
-## fact_lake — PLANNED (Phase 3)
+## fact_lake — PLANNED (Sprint 6)
 
 RESPONSIBILITY. Store filed facts immutably and compute selection separately.
 INVARIANTS. `value_as_filed` is append-only, enforced by trigger. `duration_months` computed at
 ingest. Restatements append.
 TESTS. Update rejection, selection recomputation idempotency, dimensional preservation.
 
-## footnote_canonicalizer — PLANNED (Phase 1 and 5)
+## footnote_canonicalizer — PLANNED (Sprint 4; fallback stages Stage 2 W-3)
 
 RESPONSIBILITY. Produce canonical footnotes and attach every source block and table.
 FULL SPECIFICATION. `docs/footnotes/canonicalization-algorithm.md`.
@@ -77,7 +77,7 @@ INVARIANTS. Source identity survives grouping. Every decision records stage, con
 evidence. An unattachable block keeps a null parent and enters review; it is never force-attached.
 TESTS. The Apple 13-footnote and 46-attachment cases; TOC mismatch producing PARTIAL.
 
-## summarization — PLANNED (Phase 6)
+## summarization — PLANNED (Sprint 5)
 
 RESPONSIBILITY. One summary per canonical footnote, batched offline.
 INVARIANTS. One canonical footnote per model request. Every source block and table supplied.
@@ -85,18 +85,18 @@ Never invoked on the dashboard path.
 DEPENDENCIES. `llm_gateway` only; never a provider SDK.
 TESTS. Coverage property test; batch expiry re-queue.
 
-## validation — PLANNED (Phase 6)
+## validation — PLANNED (Sprint 5)
 
 RESPONSIBILITY. Schema, identity, source, citation, numeric, period, unit, scale, sign, and
 coverage validation of every summary.
 INVARIANT. An unvalidated summary is never published or displayed.
 
-## retrieval — PLANNED (Phase 9)
+## retrieval — PLANNED (Sprint 7)
 
 RESPONSIBILITY. Scope-filtered hybrid search over summaries and source content.
 INVARIANT. Scope predicates are applied in the query builder, never as a post-filter.
 
-## deep_analysis — PLANNED (Phase 9)
+## deep_analysis — PLANNED (Sprint 7)
 
 RESPONSIBILITY. Session lifecycle, scope enforcement, retrieval orchestration, memory, budgets.
 INVARIANT. Scope is immutable and server-side. Tools re-derive the allowlist per call.

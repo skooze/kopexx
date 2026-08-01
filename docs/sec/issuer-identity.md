@@ -1,6 +1,6 @@
 # Issuer Identity and the Temporal Universe
 
-IMPLEMENTATION STATUS: sec_identity IMPLEMENTED; issuer registry PLANNED (Phase 2)
+IMPLEMENTATION STATUS: sec_identity IMPLEMENTED; issuer registry PLANNED (Stage 2 phase W-1)
 OWNER PACKAGES: `packages/sec_identity`, `packages/issuer_registry`
 
 ## The core rule
@@ -131,5 +131,5 @@ test_extracted_instance_url_is_derivable
 test_quarterly_index_uses_gzip
 ```
 
-All pass as of Sprint 1. PLANNED for Phase 2: ticker reuse resolution, former-name
+All pass as of Sprint 1. PLANNED for Stage 2 phase W-1: ticker reuse resolution, former-name
 reconciliation, snapshot union, and exclusion classification.

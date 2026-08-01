@@ -8,9 +8,95 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
+Sprint 2 alignment review: a product-alignment audit against the fifteen core product
+requirements, a Git governance amendment, and the resulting planning corrections. No feature
+code was added. Not yet committed.
+
 ### Added
 
-Nothing since Sprint 2.
+- `rules.md` sections 15 to 20: the COMMIT-AUTHORIZATION, PRE-COMMIT-VALIDATION, TEST-DISCOVERY,
+  DOCUMENTATION-SYNCHRONIZATION, and GIT-SAFETY invariants, plus Sprint Completion and Git. No
+  agent may create or push Git history without explicit per-operation user approval;
+  `--dangerously-skip-permissions` and pre-approved tool-permission entries grant no Git
+  authority. The former section 15 is renumbered to 21.
+- `CLAUDE.md`: loaded automatically each session, requiring `rules.md` to be read and restating
+  the commit and push authorization requirement.
+- `docs/adr/ADR-0015-thread-first-delivery-sequence.md`: prove one vertical thread through every
+  layer before widening any layer.
+- `docs/dashboard/ux-specification.md`: the product surface, including the states previously
+  unspecified — partial coverage, low confidence, refused out-of-scope requests, budget
+  exhaustion, and session restoration.
+- `docs/llm/analysis-model-benchmark.md`: the Deep Analysis model benchmark, which did not exist.
+  Multi-turn retention, evidence grounding, and an adversarial scope-escape subset with
+  zero-tolerance security gates. The deterministic detector is measured separately from the model.
+- `docs/footnotes/period-comparison.md`: same-footnote comparison across periods, keyed on a
+  stable topic key rather than a note number, which is not stable across filings.
+- `metric_definitions/item_disclosure_exclusions.yaml`: the Item 408 and Item 1C exclusion list
+  that canonicalization stage 2 reads. It was referenced by the algorithm and did not exist.
+- `docs/sprints/SPRINT-0003.md`: the Sprint 3 plan, including a decided fixture strategy.
+- `footnote_source_block`: per-attachment grouping audit columns — `grouping_method`,
+  `grouping_confidence`, `grouping_evidence`, `competing_candidates`, `extraction_run_id`,
+  `grouping_parser_version`, `grouping_decided_at`.
+- `filing`: `completeness_confidence` and `reconciliation_status`.
+- API: `/issuers/{cik}/footnote-topics` and `/issuers/{cik}/footnote-topics/{topic_key}`.
+  Error code `UNSUPPORTED_FILTER`.
+- Architecture tests: anti-vacuity guard, no-empty-stub guard, and a single-home guard for
+  model-visible prompts. Migration tests for the attachment audit and completeness design.
+
+### Changed
+
+- `roadmap.md` rewritten into the thread-first sequence. Sprints 3 to 7 contain every dependency
+  of the vertical slice; breadth work moves to Stage 2. Provider catalog verification, model
+  selection, and cost measurement move from Phase 6 to Sprint 5, which is now an explicit
+  go/no-go on unit economics. The zero-LLM dashboard test lands with the first read endpoint in
+  Sprint 6 rather than at sprint 22.
+- `docs/llm/model-benchmark.md` split into a tier-1 smoke benchmark of 15 footnotes in Sprint 5
+  and the full tier-2 120-fixture program before backfill. A tier-1 pass is provisional and does
+  not select a production model.
+- `docs/footnotes/completeness.md`: eleven of thirteen counters documented as derived rather than
+  stored, with their derivations. Storing a derivable count creates a second source of truth.
+- `docs/footnotes/canonicalization-algorithm.md`: the grouping audit record is recorded on the
+  child block, because stages 3 and 6 to 10 decide per child.
+- ADR-0008 and ADR-0009 moved from ACCEPTED to PROVISIONAL. Both were decided in Sprint 1 with
+  nothing deployable and their implementation phase roughly twenty sprints away.
+- `rules.md` section 5: `bedrock.py` and `deep_analysis/scope.py` marked RESERVED rather than
+  presented as implemented single-home owners.
+- Current test counts corrected to 143 in `README.md`, `docs/testing/strategy.md`,
+  `docs/architecture/deployment.md`, and `techspecs.md`. **Historical counts in
+  `docs/sprints/SPRINT-0001.md` and the 0.1.0 entry below are left unchanged, because they are
+  accurate records of what was true then.**
+- `techspecs.md` section 3.6 corrected: it described the DERA download as PLANNED while
+  section 2 recorded it as executed.
+
+### Removed
+
+- Eighteen packages containing only a docstring: `deep_analysis`, `domain`, `fact_lake`,
+  `filing_acquisition`, `filing_discovery`, `filing_parser`, `financial_metrics`, `fiscal`,
+  `footnote_canonicalizer`, `footnote_extractor`, `issuer_registry`, `metric_definitions`,
+  `retrieval`, `summarization`, `table_parser`, `testing_support`, `validation`, `xbrl`. They
+  reserved names up to twenty sprints ahead of their code and caused two architecture tests to
+  pass while scanning nothing. Reserved names now live in `techspecs.md` section 2 with a status
+  column, and an architecture test prevents the pattern returning.
+- Empty `apps/` and `infrastructure/` directory trees, untracked by Git.
+- `docs/deep-analysis/system-prompt.txt`, a byte-identical duplicate of
+  `prompts/deep-analysis/v1.0.0/system.txt`. Two homes for one model-visible artifact drift, and
+  only `prompts/` was scanned by the architecture tests.
+
+### Data migrations
+
+- `0001_initial_control_plane_schema.py` regenerated in place, adding nine columns. **The
+  migration has never been applied to any database** — verified by connection refused on
+  `127.0.0.1:5432` — so amending it is safe and avoids applying a known-incomplete schema to the
+  live PostgreSQL that Sprint 3 creates. Offline upgrade DDL grew from 653 to 676 lines;
+  downgrade remains 66 lines and symmetric.
+
+### Fixed
+
+- The roadmap's central contradiction: Phase 1 promised a vertical slice at sprints 3 to 5 while
+  its dependencies were scheduled at sprints 8 to 33, and the sprint breakdown silently dropped
+  the dashboard and Deep Analysis deliverables. The slice was described and scheduled nowhere.
+- `classification=changed` was exposed by the API with nothing defining or computing it. It is
+  now specified, and rejected with `UNSUPPORTED_FILTER` until the backing data exists.
 
 ## [0.2.0] — Sprint 2 — 2026-08-01
 

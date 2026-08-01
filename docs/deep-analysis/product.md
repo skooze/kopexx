@@ -1,6 +1,6 @@
 # Deep Analysis Product
 
-IMPLEMENTATION STATUS: PLANNED (Phase 9)
+IMPLEMENTATION STATUS: PLANNED (Sprint 7; FILING scope only, remaining scopes Stage 2 W-6)
 OWNER PACKAGE: `packages/deep_analysis`
 DECISION RECORDS: ADR-0012 (session scope), ADR-0013 (content boundary)
 

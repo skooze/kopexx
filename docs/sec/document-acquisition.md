@@ -1,6 +1,6 @@
 # Document Acquisition
 
-IMPLEMENTATION STATUS: PLANNED (Phase 4); URL construction IMPLEMENTED (Sprint 1)
+IMPLEMENTATION STATUS: PLANNED (Sprint 3, inline-XBRL era only; other eras Stage 2 W-2); URL construction IMPLEMENTED (Sprint 1)
 OWNER PACKAGE: `packages/filing_acquisition`
 
 ## The decision table
@@ -104,6 +104,6 @@ plausibly 86,000 to 257,000. Disk is sized at 1 TB rather than to the point esti
 IMPLEMENTED: URL construction across all four eras, empty primary document rejection, both
 accession forms, issuer-versus-agent CIK.
 
-PLANNED Phase 4: era branching against golden fixtures per era, directory-listing rejection at
+PLANNED Sprint 3 and Stage 2 W-2: era branching against golden fixtures per era, directory-listing rejection at
 the acquisition layer, ZIP member assertion, resumability under `kill -9`, and reconciliation of
 acquired accessions against the quarterly master index.

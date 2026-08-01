@@ -289,6 +289,8 @@ def upgrade() -> None:
         sa.Column("footnote_status", sa.String(length=20), nullable=False),
         sa.Column("toc_expected_note_count", sa.Integer(), nullable=True),
         sa.Column("parser_version", sa.String(length=40), nullable=True),
+        sa.Column("completeness_confidence", sa.Numeric(precision=4, scale=3), nullable=True),
+        sa.Column("reconciliation_status", sa.String(length=20), nullable=False),
         sa.Column("raw_sha256", sa.String(length=64), nullable=True),
         sa.Column(
             "created_at",
@@ -311,6 +313,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "processing_state IN ('DISCOVERED', 'QUEUED', 'DOWNLOADING', 'DOWNLOADED', 'PARSING', 'PARSED', 'EXTRACTING_FACTS', 'FACTS_EXTRACTED', 'EXTRACTING_SECTIONS', 'SECTIONS_EXTRACTED', 'EXTRACTING_FOOTNOTES', 'FOOTNOTES_EXTRACTED', 'GROUPING_FOOTNOTES', 'FOOTNOTES_GROUPED', 'VALIDATING_FOOTNOTES', 'FOOTNOTES_VALIDATED', 'SUMMARIZING', 'SUMMARIES_GENERATED', 'VALIDATING_SUMMARIES', 'CALCULATING_METRICS', 'PUBLISHING', 'COMPLETE', 'PARTIAL', 'FAILED', 'REQUIRES_REVIEW')",
             name="ck_filing_processing_state_is_known",
+        ),
+        sa.CheckConstraint(
+            "reconciliation_status IN ('RECONCILED', 'MISMATCH', 'NOT_ATTEMPTED')",
+            name="ck_filing_reconciliation_status_is_known",
         ),
         sa.ForeignKeyConstraint(
             ["amends_filing_id"],
@@ -767,10 +773,36 @@ def upgrade() -> None:
         sa.Column("source_sha256", sa.String(length=64), nullable=True),
         sa.Column("source_anchor", sa.Text(), nullable=True),
         sa.Column(
+            "grouping_method",
+            sa.String(length=30),
+            nullable=True,
+            comment="which stage produced this attachment",
+        ),
+        sa.Column("grouping_confidence", sa.Numeric(precision=4, scale=3), nullable=True),
+        sa.Column(
+            "grouping_evidence",
+            postgresql.JSONB(astext_type=Text()),
+            nullable=True,
+            comment="matched role URI, overlap score, or similarity score",
+        ),
+        sa.Column(
+            "competing_candidates",
+            postgresql.JSONB(astext_type=Text()),
+            nullable=True,
+            comment="alternatives considered and their scores; a tie is never broken silently",
+        ),
+        sa.Column("extraction_run_id", sa.UUID(), nullable=True),
+        sa.Column("grouping_parser_version", sa.String(length=40), nullable=True),
+        sa.Column("grouping_decided_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint(
+            "grouping_method IN ('role_uri', 'toc_reconciliation', 'heading', 'presentation_hierarchy', 'concept_overlap', 'title_similarity', 'filing_order', 'model_adjudication', 'human_review')",
+            name="ck_footnote_source_block_source_block_grouping_method_is_known",
         ),
         sa.ForeignKeyConstraint(
             ["filing_id"],
@@ -785,6 +817,9 @@ def upgrade() -> None:
             ondelete="SET NULL",
         ),
         sa.UniqueConstraint("filing_id", "external_id", name="uq_footnote_source_block_external"),
+    )
+    op.create_index(
+        "ix_footnote_source_block_extraction_run", "footnote_source_block", ["extraction_run_id"]
     )
     op.create_index(
         "ix_footnote_source_block_footnote_id", "footnote_source_block", ["footnote_id"]

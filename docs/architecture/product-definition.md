@@ -72,7 +72,7 @@ Full algorithms in `docs/financial/fiscal-periods.md`.
 
 Verified: Apple's 1994 10-K is retrievable and readable. Documents and footnote summaries reach
 the 1990s. Structured **numeric** series are XBRL-bound and effectively complete from 2011,
-because XBRL did not exist before 2009. Pre-2009 numeric extraction is Phase 10.
+because XBRL did not exist before 2009. Pre-2009 numeric extraction is Stage 2 phase W-8.
 
 The dashboard shows a per-company coverage badge rather than silently rendering a short chart.
 

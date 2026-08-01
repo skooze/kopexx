@@ -18,6 +18,12 @@ Before planning or modifying this repository:
 7. Search the codebase for reusable implementations before writing new ones.
 8. Identify affected tests and documentation.
 9. Do not rely on prior chat history as project memory.
+
+Before running any Git history operation:
+
+10. Read sections 15 through 20 of this file.
+11. Stop and obtain explicit user approval for that specific commit, and separately for
+    that specific push. No flag, setting, or prior approval substitutes for it.
 ```
 
 This repository is the durable project memory. No conversation, ticket, or chat log is
@@ -151,7 +157,7 @@ Violation of this invariant blocks sprint completion. See
 ### Dependency direction
 
 ```
-domain
+pure logic          sec_identity, fiscal
   ^
 parsers / facts / metrics / summaries
   ^
@@ -160,9 +166,14 @@ application services
 api / worker / scheduler
 ```
 
-`packages/domain` must not import FastAPI, SQLAlchemy sessions, boto3, Redis clients, S3
-clients, or HTTP route objects. Infrastructure adapters may depend on domain interfaces;
-the domain never depends on infrastructure.
+Pure-logic packages must not import FastAPI, SQLAlchemy sessions, boto3, Redis clients, S3
+clients, HTTP clients, or route objects. Infrastructure adapters may depend on pure-logic
+interfaces; pure logic never depends on infrastructure.
+
+`tests/architecture/test_architecture.py` enforces this against a named list of pure-logic
+packages, and fails if a listed package does not exist. An earlier version scanned a
+`packages/domain` directory that contained only a docstring, so it passed without reading a
+single import.
 
 Circular imports are prohibited. Cross-package private imports (importing a name not exported
 through a package's `__init__.py`) are prohibited.
@@ -205,11 +216,11 @@ Before writing a new function:
 | CIK normalization | `packages/sec_identity/cik.py` |
 | Accession normalization | `packages/sec_identity/accession.py` |
 | SEC URL construction | `packages/sec_identity/urls.py` |
-| Fiscal period logic | `packages/fiscal/` |
+| Fiscal period logic | `packages/fiscal/` — RESERVED, not yet created |
 | Model invocation | `packages/llm_gateway/` |
-| Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only |
+| Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, not yet created |
 | Cost calculation | `packages/llm_gateway/cost_calculator.py` |
-| Scope validation | `packages/deep_analysis/scope.py` |
+| Scope validation | `packages/deep_analysis/scope.py` — RESERVED, not yet created |
 
 Reuse must be domain-driven. Do not create abstraction layers that exist only to be layers.
 
@@ -281,8 +292,8 @@ LLM-MAINTENANCE:
 Every TODO must state reason, owner or issue reference, intended resolution, and whether it
 blocks production. Speculative TODOs are prohibited.
 
-    # TODO(ROADMAP-P5-03, blocks-production=no): role URI grouping is verified on one
-    # filing only. Validate across 25 issuers before Phase 5 scale-out.
+    # TODO(ROADMAP-W3-03, blocks-production=no): role URI grouping is verified on one
+    # filing only. Validate across 25 issuers before Stage 2 W-3 scale-out.
 
 ---
 
@@ -380,6 +391,7 @@ After every sprint, update every affected file among:
 
 ```
 rules.md
+CLAUDE.md
 roadmap.md
 techspecs.md
 CHANGELOG.md
@@ -391,6 +403,8 @@ docs/data-dictionary/README.md
 prompt documentation
 docs/api/openapi.yaml
 ```
+
+Section 18 makes this a commit-time gate, not only a post-sprint obligation.
 
 Use only these implementation-status values:
 
@@ -438,6 +452,7 @@ documentation disagree.
 6. Update README and runbooks.
 7. Verify no stale documentation contradicts the code.
 8. Record remaining risks and identify the next sprint.
+9. Prepare the commit-approval report required by section 15 and stop. Do not commit.
 
 ### Definition of done
 
@@ -448,12 +463,351 @@ introduced, no architectural invariant was violated, and rollback implications a
 
 Writing code is not completion.
 
+Committing is not part of completion. A sprint reaches technical completion, then stops for
+explicit commit approval under section 15. See section 20.
+
 ---
 
-## 15. Exception and ADR Process
+## 15. COMMIT-AUTHORIZATION-INVARIANT
+
+```
+No LLM agent, automation, script, or development assistant may create, amend, squash, rebase,
+merge, cherry-pick, tag, delete, rewrite, or push Git history without first receiving explicit
+user authorization for that specific operation.
+```
+
+Violation of this invariant is a governance failure, not a process preference.
+
+### The permission flag does not authorize Git operations
+
+`--dangerously-skip-permissions` permits tool execution without repeated operating-system,
+shell-command, or file-edit approval prompts. It does **not** authorize:
+
+```
+creating a commit          amending a commit         merging
+rebasing                   cherry-picking            tagging
+pushing                    force-pushing             rewriting history
+deleting branches          deleting tags
+```
+
+It does not override this rule. The same applies to any pre-approved Git entry in
+`.claude/settings.local.json` or an equivalent tool-permission file: a tool-layer permission
+suppresses the *prompt*, never the *authorization requirement* defined here.
+
+### Permissions that do not imply Git authorization
+
+None of the following authorizes a commit or a push, individually or in combination:
+
+```
+edit files                 run commands              implement a sprint
+run tests                  modify documentation      prepare a commit
+proceed with development   work autonomously         complete a task
+finish a sprint            scaffold the repository   publish the project
+prepare files for GitHub
+```
+
+### The commit-approval report
+
+Before every proposed commit the agent stops and provides:
+
+```
+Repository path
+Current branch
+Whether the repository has any existing commits
+Current HEAD, if one exists
+Current remotes
+Intended remote, if relevant
+git status --short
+Files proposed for inclusion
+Files intentionally excluded
+Summary of changes
+Proposed commit subject
+Proposed commit body
+Commit kind: initial | new ordinary | amendment | merge | squash | cherry-pick | rebase-related
+Validation commands executed
+Result of every validation command
+Checks that could not run
+Exact reason for every skipped check
+Known warnings
+Known unresolved issues
+Whether unrelated working-tree changes exist
+Whether a push is also being requested
+Proposed push remote and branch, when applicable
+```
+
+The agent then asks, verbatim:
+
+```
+Do you approve creating this commit?
+```
+
+The commit may be created only after an unambiguous affirmative answer to that specific
+proposed commit.
+
+### Approval does not generalize
+
+Approval for one commit does not authorize any later commit. Approval to create a commit does
+not authorize pushing it. Unless the user explicitly approves both together, the agent asks
+separately:
+
+```
+Do you approve pushing commit <SHA> to <remote>/<branch>?
+```
+
+A push may occur only after an unambiguous affirmative answer for that specific push.
+
+### Never treated as authorization
+
+```
+silence                              a prior commit approval
+a prior push approval                general permission to proceed
+general permission to work autonomously
+permission to finish a sprint        permission to edit the repository
+permission to prepare the project for GitHub
+--dangerously-skip-permissions       a pre-approved Git entry in a settings file
+```
+
+### First commit
+
+If the repository has no commits, these rules apply unchanged to the first commit. The agent
+prepares and validates the proposed initial commit, presents the commit-approval report, and
+waits for explicit approval before creating it.
+
+---
+
+## 16. PRE-COMMIT-VALIDATION-INVARIANT
+
+```
+No commit may be proposed until every known and applicable repository validation check has
+been executed.
+```
+
+### Discovering the current suite
+
+The agent discovers the validation suite by inspecting the repository, not by trusting a
+remembered list:
+
+```
+rules.md          CLAUDE.md         README.md         Makefile
+pyproject.toml    package.json      CI workflows      test configuration
+sprint records    runbooks          validation scripts
+build scripts     container configuration             developer documentation
+```
+
+An old hardcoded list must never override newer checks present in the repository.
+
+### Required coverage
+
+Every known applicable form of: unit, integration, contract, smoke, golden, property,
+architecture, security, migration, and upgrade/downgrade migration tests; schema validation;
+prompt validation; LLM content-boundary validation; regression tests; formatting; linting;
+static analysis; type checking; secret scanning; dependency vulnerability scanning;
+documentation validation; documentation-link validation; generated-file consistency checks;
+build validation; frontend and backend build checks; container build or validation;
+CI-equivalent checks; and any other repository-defined validation.
+
+During development the agent may run focused subsets for speed. **A focused subset never
+replaces the complete pre-commit suite.** Before proposing a commit, the agent runs the
+complete known applicable suite.
+
+### Blocking conditions
+
+A commit may not be proposed or created when any of the following holds:
+
+```
+a required test fails                  formatting fails
+linting fails                          type checking fails
+static analysis fails                  a smoke test fails
+a migration cannot upgrade as required a migration cannot downgrade as required
+schema validation fails                prompt validation fails
+LLM boundary validation fails          secret scanning finds unresolved material
+dependency scanning finds an unresolved blocking issue
+documentation contradicts implementation
+generated artifacts are stale          a build fails
+the working tree contains unexplained changes
+a required check was silently skipped
+the validation environment is broken and the result is unknown
+```
+
+### Gates may not be weakened to pass
+
+Tests and validation gates may not be disabled, deleted, weakened, marked skipped, excluded
+from coverage, bypassed, or rewritten solely to make a commit pass.
+
+Correcting a demonstrably incorrect test or rule is permitted. The commit report must then
+disclose: the original test or rule, why it was incorrect, what changed, why the replacement
+still protects the intended behavior, and which tests validate the correction.
+
+Never use any of the following to bypass a validation failure without separate explicit
+authorization:
+
+```
+--no-verify              disabled Git hooks        test exclusions
+coverage exclusions      changed CI rules          suppressed errors
+ignored type failures    skipped migrations        disabled scanners
+reduced quality thresholds
+```
+
+### When a check genuinely cannot run
+
+If a required check cannot run because of a real external dependency or environment
+limitation, the agent does **not** create the commit automatically. It reports the exact
+command, the exact failure or blocker, which behavior remains unverified, and the risk of
+committing anyway. It then asks whether to resolve the blocker, defer the commit, or approve a
+one-commit exception.
+
+An exception applies only to the exact proposed commit. A material exception is recorded in
+the commit report, the current sprint record, `CHANGELOG.md` when appropriate, and the relevant
+risk, issue, or known-limitation documentation.
+
+---
+
+## 17. TEST-DISCOVERY-INVARIANT
+
+Before proposing a commit, compare the locally executed suite against every applicable CI
+workflow. The local pre-commit suite must include every applicable check CI is expected to run.
+
+When CI contains a check that cannot be reproduced locally, the agent must disclose the check,
+explain why it cannot run locally, and state that the proposed commit is **not yet fully
+CI-validated**. It must not describe such a commit as fully validated.
+
+When a new test, linter, scanner, schema check, build step, migration check, or validation
+command is introduced, update all applicable documentation and automation:
+
+```
+rules.md        README.md       techspecs.md        relevant runbooks
+CI configuration                sprint records      developer-command documentation
+```
+
+Future agents discover the current suite from repository sources, never from an outdated
+static list carried forward in conversation.
+
+---
+
+## 18. DOCUMENTATION-SYNCHRONIZATION-INVARIANT
+
+Before proposing a commit, verify that every affected project-memory document accurately
+reflects the current implementation. This extends section 13 with a commit-time gate.
+
+Review and update when applicable:
+
+```
+rules.md            roadmap.md          techspecs.md        CHANGELOG.md
+current sprint record                   relevant ADRs       README.md
+runbooks            data dictionary     prompt documentation
+API documentation   migration documentation                 deployment documentation
+testing documentation                   operational documentation
+```
+
+A commit may not be proposed while documentation:
+
+```
+describes planned behavior as implemented
+describes implemented behavior as merely planned
+contains stale test counts
+contains stale file paths
+references nonexistent modules as implemented
+contains unresolved references to prior chat messages
+contradicts code or schema behavior
+omits a material architecture or behavior change
+```
+
+Historical sprint records and historical changelog entries remain historically accurate. They
+are not rewritten merely because current totals have changed.
+
+---
+
+## 19. GIT-SAFETY-INVARIANT
+
+### Inspection required before any proposed commit
+
+```
+1.  Inspect the full working tree.
+2.  Review staged changes.
+3.  Review unstaged changes.
+4.  Review untracked files.
+5.  Review the complete staged diff.
+6.  Review the staged filename list.
+7.  Scan for secrets.
+8.  Scan for inappropriate generated data.
+9.  Separate unrelated changes.
+10. Confirm the intended branch.
+11. Confirm the intended remote, if any.
+12. Confirm that no credentials, runtime storage, downloaded archives, model captures, local
+    environment files, or generated datasets are being included unintentionally.
+```
+
+### Never commit
+
+```
+.env                    credentials             API tokens
+AWS credentials         GitHub tokens           private keys
+certificates            local database contents MinIO contents
+Redis data              downloaded SEC archives mirrored DERA packages
+model request or response captures              runtime logs
+coverage output         virtual environments    cache directories
+build output            editor state            local machine configuration
+```
+
+A file is not safe merely because it is already tracked. Verify, do not assume.
+
+### Operations requiring explicit authorization for the exact operation
+
+```
+git commit              git commit --amend      git merge
+git rebase              git cherry-pick         git tag
+git push                git push --force        git push --force-with-lease
+history rewriting       branch deletion         remote branch deletion
+tag deletion            remote tag deletion
+```
+
+Force-push and history-rewriting operations additionally require a separate warning, a
+description of what history will change, a description of who or what may be affected, and
+explicit approval naming that operation.
+
+```
+Ordinary push approval is never force-push approval.
+```
+
+---
+
+## 20. Sprint Completion and Git
+
+A sprint may be technically complete before any commit exists. Completion of the work and
+recording of the work are separate events with separate authorizations.
+
+When sprint work is technically complete:
+
+```
+1.  Update all required documentation.
+2.  Run the complete validation suite.
+3.  Inspect the complete Git working state.
+4.  Prepare the proposed commit report.
+5.  STOP.
+6.  Ask for explicit commit approval.
+7.  Create the commit only after approval.
+8.  Report the resulting commit SHA.
+9.  Ask separately for push approval, unless commit and push were explicitly approved together.
+10. Push only after approval.
+11. Record the commit SHA and push result in the sprint record when appropriate.
+```
+
+Never report any of the following as done before it has actually occurred:
+
+```
+committed    tagged    pushed    published to GitHub    merged    released
+```
+
+---
+
+## 21. Exception and ADR Process
 
 Any deviation from these rules requires an ADR recording status, context, decision,
 alternatives considered, consequences, migration impact, and revisit conditions.
 
 Accepted ADRs are never silently rewritten. Supersede them with a new ADR that references the
 one it replaces.
+
+Sections 15 through 20 are exempt from this process in one direction only: they may be
+strengthened without an ADR, but may not be weakened or removed by any agent under any
+circumstance.

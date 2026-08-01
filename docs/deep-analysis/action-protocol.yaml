@@ -1,6 +1,6 @@
 # Deep Analysis retrieval action protocol.
 #
-# IMPLEMENTATION STATUS: PLANNED (Phase 9)
+# IMPLEMENTATION STATUS: PLANNED (Sprint 7)
 #
 # Native model tool calling is prohibited (ADR-0013) because it requires JSON Schema tool
 # definitions and produces JSON tool arguments. Retrieval is therefore either

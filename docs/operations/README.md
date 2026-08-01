@@ -1,6 +1,6 @@
 # Operations
 
-IMPLEMENTATION STATUS: PLANNED (Phase 7 onward); structured logging IMPLEMENTED (Sprint 1)
+IMPLEMENTATION STATUS: PLANNED (Sprint 6 onward); structured logging IMPLEMENTED (Sprint 1)
 
 ## Observability
 

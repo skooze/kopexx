@@ -1,6 +1,6 @@
 # Amendments
 
-IMPLEMENTATION STATUS: PLANNED (Phase 4)
+IMPLEMENTATION STATUS: PLANNED (Stage 2 phase W-2)
 DECISION RECORD: `docs/adr/ADR-0010-amendments-as-patches.md`
 
 ## The evidence against the intuitive model

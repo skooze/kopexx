@@ -1,6 +1,6 @@
 # LLM Cost Model
 
-IMPLEMENTATION STATUS: PLANNED (measurement is a blocking gate before Phase 6)
+IMPLEMENTATION STATUS: PLANNED (measured in Sprint 5, which is an explicit go/no-go on unit economics)
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
 
 ## Why the previous estimate was withdrawn

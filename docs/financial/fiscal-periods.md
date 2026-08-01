@@ -1,6 +1,6 @@
 # Fiscal Period Handling
 
-IMPLEMENTATION STATUS: PLANNED (Phase 3)
+IMPLEMENTATION STATUS: PLANNED (Sprint 6)
 OWNER PACKAGE: `packages/fiscal`
 
 Fiscal period handling is where charts silently go wrong. Every rule here exists because a naive

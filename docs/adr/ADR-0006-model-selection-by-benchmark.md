@@ -26,7 +26,7 @@ at or above 95 percent. Among models that pass every gate, the cheapest is selec
 
 The provider catalog, model identifiers, context limits, batch availability, and prices must be
 verified in the target region before any cost commitment. That verification is a blocking gate
-before Phase 6.
+before Sprint 5. Split into a tier-1 smoke benchmark in Sprint 5 and the full tier-2 corpus before backfill; see docs/llm/model-benchmark.md.
 
 ## Alternatives Considered
 

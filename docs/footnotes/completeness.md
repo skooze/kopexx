@@ -1,6 +1,6 @@
 # Footnote Completeness
 
-IMPLEMENTATION STATUS: PLANNED (Phase 1)
+IMPLEMENTATION STATUS: PLANNED (Sprint 4)
 
 ## The requirement
 
@@ -31,23 +31,42 @@ a summary.
 
 ## Tracked counters
 
-Recorded per filing and exposed through the processing-status API.
+Exposed through the processing-status API. **Most are derived, not stored.**
 
-```
-toc_expected_note_count           what the table of contents indicated
-canonical_footnotes_extracted     what grouping produced
-source_blocks_associated          child blocks attached
-source_blocks_orphaned            child blocks with no parent
-tables_associated                 tables attached
-summarization_jobs_created        one per canonical footnote
-summaries_accepted                passed every validation stage
-summaries_failed                  failed and exhausted retries
-summaries_requiring_review        routed to a human
-footnotes_missing_source_data     footnote identified but its text is unavailable
-completeness_confidence           0.0 to 1.0
-extraction_method                 which grouping stage dominated
-reconciliation_status             RECONCILED | MISMATCH | NOT_ATTEMPTED
-```
+A count that can be recomputed from child rows is never also stored on the filing: a stored copy
+is a second source of truth that goes stale the moment a summary is superseded or a block is
+re-attached. Only judgements produced by the extraction run — values with no child rows to
+recompute from — are persisted.
+
+### Derived at query time
+
+| Counter | Derivation |
+|---|---|
+| `canonical_footnotes_extracted` | `COUNT(canonical_footnote WHERE filing_id = F AND is_valid)` |
+| `source_blocks_associated` | `COUNT(footnote_source_block WHERE filing_id = F AND footnote_id IS NOT NULL)` |
+| `source_blocks_orphaned` | `COUNT(footnote_source_block WHERE filing_id = F AND footnote_id IS NULL)` |
+| `tables_associated` | `COUNT(footnote_table WHERE filing_id = F AND footnote_id IS NOT NULL)` |
+| `summarization_jobs_created` | `COUNT(processing_job WHERE filing_id = F AND type = 'summarize_footnote')` |
+| `summaries_accepted` | `COUNT(footnote_summary WHERE ... AND superseded_at IS NULL AND validation_status IN (VALIDATED, VALIDATED_NORMALIZED))` |
+| `summaries_failed` | `COUNT(footnote_summary WHERE ... AND validation_status = 'FAILED')` |
+| `summaries_requiring_review` | `COUNT(footnote_summary WHERE ... AND validation_status = 'REQUIRES_REVIEW')` |
+| `footnotes_missing_source_data` | `COUNT(canonical_footnote WHERE filing_id = F AND text IS NULL)` |
+| `extraction_method` | modal `grouping_method` over the filing's canonical footnotes |
+| `orphan_block_count` | same as `source_blocks_orphaned`; named separately in the invariant above |
+
+### Stored on `filing`
+
+| Column | Why it cannot be derived |
+|---|---|
+| `toc_expected_note_count` | Read from the table of contents at extraction time. Nothing else records what the document claimed |
+| `reconciliation_status` | `RECONCILED` \| `MISMATCH` \| `NOT_ATTEMPTED`. A filing with no parseable TOC is not the same as one that reconciled, and a count cannot distinguish them |
+| `completeness_confidence` | A judgement combining grouping confidences, reconciliation outcome, and source availability. Not a count |
+| `footnote_status` | The computed verdict, materialized so the dashboard does not re-evaluate the full invariant on every read |
+
+> Corrected after the Sprint 2 alignment review. The original text said all thirteen counters
+> were "recorded per filing", while the schema stored two of them. Rather than adding eleven
+> denormalized columns, the derivable ones are now documented as derived and the two genuine
+> gaps were added to the schema.
 
 ## Status values
 

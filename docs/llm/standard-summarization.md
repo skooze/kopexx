@@ -1,6 +1,6 @@
 # Standard Footnote Summarization
 
-IMPLEMENTATION STATUS: PLANNED (Phase 6); the gateway it depends on is IMPLEMENTED
+IMPLEMENTATION STATUS: PLANNED (Sprint 5); the gateway it depends on is IMPLEMENTED
 OWNER PACKAGE: `packages/summarization`
 PROMPTS: `prompts/footnote-summary/v1.0.0/`
 SCHEMA: `docs/llm/summary-schema.yaml`

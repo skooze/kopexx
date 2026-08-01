@@ -72,6 +72,7 @@ PROCESSING_STATES = (
     "REQUIRES_REVIEW",
 )
 FOOTNOTE_STATUSES = ("COMPLETE", "PARTIAL", "REQUIRES_REVIEW", "FAILED", "NOT_STARTED")
+RECONCILIATION_STATUSES = ("RECONCILED", "MISMATCH", "NOT_ATTEMPTED")
 GROUPING_METHODS = (
     "role_uri",
     "toc_reconciliation",
@@ -282,6 +283,17 @@ class Filing(Base, TimestampMixin):
     footnote_status: Mapped[str] = mapped_column(String(20), nullable=False, default="NOT_STARTED")
     toc_expected_note_count: Mapped[int | None] = mapped_column(Integer)
     parser_version: Mapped[str | None] = mapped_column(String(40))
+
+    # docs/footnotes/completeness.md tracks thirteen counters. Eleven are COUNT() queries over
+    # canonical_footnote, footnote_source_block, footnote_table, and footnote_summary, and are
+    # deliberately NOT stored: a stored copy of a derivable count is a second source of truth
+    # that goes stale. These two are judgements produced by the extraction run and cannot be
+    # recomputed from the child rows, so they are stored. See the completeness document for the
+    # full derived-versus-stored table.
+    completeness_confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    reconciliation_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="NOT_ATTEMPTED"
+    )
     raw_sha256: Mapped[str | None] = mapped_column(String(64))
 
     __table_args__ = (
@@ -291,6 +303,9 @@ class Filing(Base, TimestampMixin):
         CheckConstraint("cik ~ '^[0-9]{10}$'", name="cik_is_ten_digits"),
         _enum_check("processing_state", PROCESSING_STATES, "processing_state_is_known"),
         _enum_check("footnote_status", FOOTNOTE_STATUSES, "footnote_status_is_known"),
+        _enum_check(
+            "reconciliation_status", RECONCILIATION_STATUSES, "reconciliation_status_is_known"
+        ),
         _enum_check("era", FILING_ERAS + (None,) if False else FILING_ERAS, "era_is_known"),
         Index("ix_filing_issuer_form_period", "issuer_id", "form", "report_date"),
         Index("ix_filing_processing_state", "processing_state"),
@@ -473,10 +488,31 @@ class FootnoteSourceBlock(Base, TimestampMixin):
     source_sha256: Mapped[str | None] = mapped_column(String(64))
     source_anchor: Mapped[str | None] = mapped_column(Text)
 
+    # The attachment audit record. docs/footnotes/canonicalization-algorithm.md specifies that
+    # every parent-child grouping decision is answerable later: which stage produced it, on what
+    # evidence, against which alternatives. That decision is made PER CHILD BLOCK by stages 3 and
+    # 6 through 10, so it has to live here. Recording it only on the parent footnote, as the
+    # original schema did, cannot answer "why was this block attached to this note".
+    grouping_method: Mapped[str | None] = mapped_column(
+        String(30), comment="which stage produced this attachment"
+    )
+    grouping_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    grouping_evidence: Mapped[dict | None] = mapped_column(
+        JSONB, comment="matched role URI, overlap score, or similarity score"
+    )
+    competing_candidates: Mapped[dict | None] = mapped_column(
+        JSONB, comment="alternatives considered and their scores; a tie is never broken silently"
+    )
+    extraction_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    grouping_parser_version: Mapped[str | None] = mapped_column(String(40))
+    grouping_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     __table_args__ = (
         UniqueConstraint("filing_id", "external_id", name="uq_footnote_source_block_external"),
         Index("ix_footnote_source_block_footnote_id", "footnote_id"),
         Index("ix_footnote_source_block_role_uri", "role_uri"),
+        Index("ix_footnote_source_block_extraction_run", "extraction_run_id"),
+        _enum_check("grouping_method", GROUPING_METHODS, "source_block_grouping_method_is_known"),
         # Finding orphans is a routine completeness query, so it gets a partial index.
         Index(
             "ix_footnote_source_block_orphans",

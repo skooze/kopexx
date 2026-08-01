@@ -1,6 +1,6 @@
 # Metric Normalization
 
-IMPLEMENTATION STATUS: PLANNED (Phase 3)
+IMPLEMENTATION STATUS: PLANNED (Sprint 6)
 OWNER PACKAGES: `packages/metric_definitions`, `packages/financial_metrics`
 DECISION RECORD: `docs/adr/ADR-0011-metric-definition-format.md`
 DEFINITIONS: `metric_definitions/*.yaml`

@@ -90,11 +90,11 @@ Summary of ownership:
 | `listing` | Ticker history | Unique on `(ticker, exchange, effective_start)`, never on ticker |
 | `listing_observation` | Raw snapshots | Append only; never overwritten |
 | `excluded_filer` | Exclusions | Reason always populated |
-| `filing` | Filing metadata | Accession unique |
+| `filing` | Filing metadata | Accession unique; carries `completeness_confidence` and `reconciliation_status`, the two completeness values that cannot be derived from child rows |
 | `filing_document` | Acquired objects | Every row has a sha256 |
 | `filing_section` | Item sections | Carries extraction strategy and confidence |
 | `canonical_footnote` | Footnotes | Unique on `(filing_id, normalized_number)` |
-| `footnote_source_block` | Source blocks | Parent nullable so orphans are visible |
+| `footnote_source_block` | Source blocks | Parent nullable so orphans are visible; carries the per-attachment grouping audit (method, confidence, evidence, competing candidates, run id) |
 | `footnote_table` | Tables | Structure preserved; original HTML retained |
 | `xbrl_fact` | Filed facts | `value_as_filed` append-only, enforced by trigger |
 | `metric_definition` | Curated mappings | Versioned; git commit recorded |
@@ -119,6 +119,15 @@ Summary of ownership:
     footnote_source_block   footnote_id nullable, with a partial index over orphans
     llm_invocation          check constraint restricts content format to plain_text or yaml
     dataset_version         partial unique index over is_current
+    filing                  reconciliation_status constrained to RECONCILED | MISMATCH |
+                            NOT_ATTEMPTED, so "no TOC found" is distinguishable from "reconciled"
+
+### Derived, deliberately not stored
+
+Eleven of the thirteen completeness counters in docs/footnotes/completeness.md are COUNT()
+queries over canonical_footnote, footnote_source_block, footnote_table, and footnote_summary.
+They are not columns. A stored copy of a derivable count is a second source of truth that goes
+stale the moment a summary is superseded or a block is re-attached.
 
 ## Retention
 

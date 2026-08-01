@@ -1,6 +1,6 @@
 # Deep Analysis conversation memory.
 #
-# IMPLEMENTATION STATUS: PLANNED (Phase 9)
+# IMPLEMENTATION STATUS: PLANNED (Sprint 7)
 #
 # Unlimited history is not resent. Each turn assembles:
 #

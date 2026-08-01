@@ -1,8 +1,9 @@
-# Model Benchmark
+# Summarization Model Benchmark
 
-IMPLEMENTATION STATUS: PLANNED (blocking gate before Phase 6)
+IMPLEMENTATION STATUS: smoke benchmark PLANNED (Sprint 5); full benchmark PLANNED (pre-backfill)
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
 GATES: `prompts/footnote-summary/v1.0.0/evaluation.yaml`
+DEEP ANALYSIS MODEL: `docs/llm/analysis-model-benchmark.md` — separate task, separate gates
 
 ## Principle
 
@@ -12,7 +13,57 @@ question about numeric fidelity and instruction following.
 
 Among models passing every gate, the **cheapest** is selected.
 
-## Corpus construction
+---
+
+## Two benchmarks, not one
+
+The full corpus below is a serious measurement program: 120 gold-labelled footnotes, two
+annotators, three-way splits, Wilson intervals. It is the right gate before spending real money
+across ~170,000 filings. It is the **wrong** gate before summarizing a single footnote, because
+it must be built in full before the pipeline produces anything at all.
+
+The evaluation is therefore split.
+
+### Tier 1 — Slice smoke benchmark (Sprint 5)
+
+```
+PURPOSE     Prove the pipeline end to end and measure real cost per footnote.
+CORPUS      The 13 canonical footnotes of Apple's FY2025 10-K, plus 2 deliberately hard
+            cases: the largest note and a routine one-paragraph note.
+LABELS      Figures, units, scales, periods, and signs extracted from the filed source
+            programmatically, then reviewed once by a human. Not full gold labels.
+CANDIDATES  At least 2, spanning 2 capability tiers.
+```
+
+Gates for tier 1 — deliberately narrower than production gates, because 15 footnotes cannot
+establish a rate to three decimal places:
+
+```
+structured_output_validity    == 1.0     every response parses as one YAML 1.2 document
+footnote_omission_rate        == 0.0     13 footnotes in, 13 summaries out
+numeric_fidelity              == 1.0     on 15 items, any error is a real defect
+unit_and_scale_fidelity       == 1.0
+citation_resolvability        == 1.0     every cited source id exists and belongs to that note
+boundary_violations           == 0       no prohibited format in either direction
+```
+
+Tier 1 also **measures and publishes**, replacing the placeholders in `docs/llm/cost-model.md`:
+`T_src`, `T_tbl`, `T_out`, `R_retry`, observed `P_in` and `P_out`, cost per footnote, cost per
+filing, and extrapolated cost per issuer history.
+
+**Passing tier 1 does not select a production model.** It proves the pipeline works, establishes
+real unit economics, and produces the go/no-go the project currently lacks. A tier-1 result is
+always reported as provisional.
+
+### Tier 2 — Full pre-backfill benchmark
+
+Everything below. Required before any multi-issuer backfill and before any cost commitment.
+Its corpus is built incrementally from Sprint 5 onward rather than in one block, so it is ready
+when breadth work begins.
+
+---
+
+## Full corpus construction
 
 Minimum 120 canonical footnotes, stratified across three dimensions simultaneously so that a model
 cannot pass by being good at one industry or one era.

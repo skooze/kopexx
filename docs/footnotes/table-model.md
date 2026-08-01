@@ -1,6 +1,6 @@
 # Footnote Table Model
 
-IMPLEMENTATION STATUS: PLANNED (Phase 5)
+IMPLEMENTATION STATUS: PLANNED (Sprint 4)
 OWNER PACKAGE: `packages/table_parser`
 
 Footnote tables are first-class evidence. A maturity schedule, a tax rate reconciliation, or a

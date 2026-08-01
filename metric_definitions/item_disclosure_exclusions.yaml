@@ -1,0 +1,111 @@
+# Item-disclosure exclusion list for canonical footnote stage 2.
+#
+# STATUS: ACTIVE
+# CONSUMED BY: docs/footnotes/canonicalization-algorithm.md, stage 2 (filing-item exclusion)
+# DECISION RECORD: docs/adr/ADR-0005-canonical-footnote-grouping.md
+#
+# WHY THIS FILE EXISTS
+#
+# The SEC renderer files certain form-item disclosures under menu category "Notes". They are not
+# financial-statement footnotes. They are Regulation S-K item disclosures that happen to be
+# tagged and rendered alongside the notes.
+#
+# Verified on Apple's FY2025 10-K, accession 0000320193-25-000079: 16 candidates carry
+# menucat "Notes", but only 13 are footnotes. The 3 excluded here are the difference between a
+# correct note count and a 23 percent overcount, and between 13 summarization jobs and 16.
+#
+# MAINTENANCE
+#
+# This list drifts as the SEC adds tagging mandates. A "Notes" candidate whose dominant concept
+# sits in an unrecognised namespace is NOT silently included and NOT silently excluded: it is
+# flagged for review. See `unknown_namespace_policy` below.
+#
+# Excluded candidates are never discarded. They are routed to `filing_section` with the item
+# number that produced them, so the disclosure remains retrievable and attributable.
+
+version: "1.0.0"
+effective_from: "2026-08-01"
+
+# Namespaces reserved by the SEC for item disclosures rather than financial-statement notes.
+# A dominant concept in one of these namespaces is sufficient grounds for exclusion.
+excluded_namespaces:
+  - prefix: "ecd"
+    uri: "http://xbrl.sec.gov/ecd/2025"
+    item: "Item 408"
+    description: >-
+      Insider trading arrangements and policies. Required by Regulation S-K Item 408, tagged
+      under the Executive Compensation Disclosure taxonomy. Not a note to the financial
+      statements.
+  - prefix: "cyd"
+    uri: "http://xbrl.sec.gov/cyd/2025"
+    item: "Item 1C"
+    description: >-
+      Cybersecurity risk management, strategy, and governance. Required by Regulation S-K
+      Item 1C. Not a note to the financial statements.
+
+# Title matches, applied after namespace matching, for filings where the namespace signal is
+# absent or ambiguous. Matching is case-insensitive against the normalized title.
+excluded_titles:
+  - match: "insider trading arrangements"
+    item: "Item 408"
+    verified_on: "0000320193-25-000079"
+  - match: "insider trading policies and procedures"
+    item: "Item 408"
+    verified_on: "0000320193-25-000079"
+  - match: "cybersecurity risk management and strategy disclosure"
+    item: "Item 1C"
+    verified_on: "0000320193-25-000079"
+  - match: "cybersecurity risk management, strategy, and governance"
+    item: "Item 1C"
+    verified_on: null
+  - match: "pay versus performance"
+    item: "Item 402(v)"
+    verified_on: null
+  - match: "erisa"
+    item: "Form 11-K"
+    verified_on: null
+
+# Role URI fragments that identify an item disclosure regardless of title wording.
+excluded_role_fragments:
+  - fragment: "InsiderTrading"
+    item: "Item 408"
+  - fragment: "Cybersecurity"
+    item: "Item 1C"
+  - fragment: "PayVersusPerformance"
+    item: "Item 402(v)"
+
+# What to do with a Notes-category candidate whose dominant concept is in a namespace this file
+# does not recognise. Never guess.
+unknown_namespace_policy:
+  action: "flag_for_review"
+  review_state: "REQUIRES_REVIEW"
+  rationale: >-
+    Silently including an unknown disclosure inflates the note count and spends model budget on
+    a non-footnote. Silently excluding it drops a real footnote and violates the every-footnote
+    requirement. Neither failure is acceptable, so an unrecognised namespace stops the filing
+    for a human decision.
+
+# Namespaces that are always financial-statement notes. Present so an unrecognised namespace is
+# genuinely unrecognised rather than merely unlisted.
+known_footnote_namespaces:
+  - prefix: "us-gaap"
+    uri: "http://fasb.org/us-gaap/2025"
+  - prefix: "ifrs-full"
+    uri: "http://xbrl.ifrs.org/taxonomy/2025-03-27/ifrs-full"
+  - prefix: "srt"
+    uri: "http://fasb.org/srt/2025"
+  # Issuer extension namespaces are issuer-specific and cannot be enumerated. A concept in an
+  # extension namespace whose role URI matches no exclusion fragment is treated as a footnote,
+  # because 91.4 percent of distinct tags in the corpus are extensions and excluding them would
+  # discard most real notes.
+  - prefix: "<issuer-extension>"
+    uri: "<issuer-specific>"
+    note: "treated as a footnote unless a role fragment or title match excludes it"
+
+expected_results:
+  - accession: "0000320193-25-000079"
+    issuer: "Apple Inc."
+    candidates_menucat_notes: 16
+    excluded: 3
+    canonical_footnotes: 13
+    child_blocks_attached: 46

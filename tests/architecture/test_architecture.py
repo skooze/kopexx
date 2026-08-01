@@ -21,12 +21,58 @@ def _python_files(root: Path) -> list[Path]:
     return [p for p in root.rglob("*.py") if "__pycache__" not in p.parts]
 
 
+def _real_packages() -> list[Path]:
+    """Package directories that contain a module beyond __init__.py."""
+    found = []
+    for path in PACKAGES.iterdir():
+        if not path.is_dir() or path.name == "__pycache__":
+            continue
+        if any(p.name != "__init__.py" for p in _python_files(path)):
+            found.append(path)
+    return found
+
+
 pytestmark = pytest.mark.architecture
+
+
+def test_architecture_suite_has_something_to_check() -> None:
+    """Anti-vacuity guard.
+
+    Sprint 1 created eighteen packages holding only a docstring. Several architecture tests
+    scanned those empty directories and passed while enforcing nothing. This test fails if the
+    scanned surface ever collapses again, so a green architecture suite cannot mean 'no code'.
+    """
+    packages = _real_packages()
+    assert len(packages) >= 5, (
+        f"architecture tests scan only {len(packages)} substantive package(s); "
+        "the suite is not meaningfully enforcing anything"
+    )
+    assert len(_python_files(PACKAGES)) >= 20, "too few modules scanned for the suite to be live"
+
+
+def test_no_package_is_an_empty_stub() -> None:
+    """A directory holding only __init__.py reserves a name and enforces nothing.
+
+    Create a package when its code arrives, not twenty sprints ahead of it. Reserved names
+    belong in techspecs.md section 2, which carries a status column.
+    """
+    stubs = [
+        str(path.relative_to(REPO_ROOT))
+        for path in PACKAGES.iterdir()
+        if path.is_dir()
+        and path.name != "__pycache__"
+        and all(p.name == "__init__.py" for p in _python_files(path))
+    ]
+    assert not stubs, (
+        "empty package stubs create vacuous architecture tests and inflate the apparent "
+        f"surface of the project: {stubs}"
+    )
 
 
 def test_bedrock_client_not_imported_outside_provider() -> None:
     """SECURITY-INVARIANT: only the provider adapter may construct a provider SDK client."""
     allowed = PACKAGES / "llm_gateway" / "providers"
+    assert allowed.is_dir(), "the provider package must exist for this guard to be live"
     offenders: list[str] = []
     pattern = re.compile(r"^\s*(import\s+boto3|from\s+boto3|import\s+botocore|from\s+botocore)")
     for path in _python_files(PACKAGES):
@@ -68,16 +114,34 @@ def test_sec_identity_logic_has_a_single_home() -> None:
     )
 
 
-def test_domain_layer_has_no_infrastructure_imports() -> None:
-    """Dependency direction: the domain must not import frameworks or SDKs."""
+# Packages that are pure logic and must stay free of infrastructure, per the dependency
+# direction in rules.md section 4. Add to this set as each lower-layer package is created;
+# the test below fails if a listed package is missing, so the list cannot silently go stale.
+PURE_LOGIC_PACKAGES = ("sec_identity",)
+
+
+def test_pure_logic_packages_have_no_infrastructure_imports() -> None:
+    """Dependency direction: lower layers must not import frameworks or SDKs.
+
+    This replaces an earlier test that scanned packages/domain. That directory held only a
+    docstring, so the test passed without reading a single import. It now scans packages that
+    actually contain logic, and fails if a named package does not exist.
+    """
     forbidden = re.compile(r"^\s*(import|from)\s+(fastapi|sqlalchemy|boto3|redis|httpx)\b")
-    domain = PACKAGES / "domain"
     offenders: list[str] = []
-    for path in _python_files(domain):
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if forbidden.match(line):
-                offenders.append(f"{path.relative_to(REPO_ROOT)}:{number}")
-    assert not offenders, f"domain layer imported infrastructure: {offenders}"
+    for name in PURE_LOGIC_PACKAGES:
+        package = PACKAGES / name
+        assert package.is_dir(), (
+            f"{name} is listed as pure logic but does not exist; "
+            "update PURE_LOGIC_PACKAGES rather than letting this guard go vacuous"
+        )
+        modules = _python_files(package)
+        assert modules, f"{name} contains no modules, so this guard would enforce nothing"
+        for path in modules:
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if forbidden.match(line):
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{number}")
+    assert not offenders, f"pure-logic package imported infrastructure: {offenders}"
 
 
 def test_no_prompt_strings_embedded_in_packages() -> None:
@@ -96,8 +160,7 @@ def test_no_prompt_strings_embedded_in_packages() -> None:
 
 def test_prompt_directory_contains_no_markdown() -> None:
     """LLM-SERIALIZATION-INVARIANT: model-visible prompts must not be Markdown."""
-    if not PROMPTS.exists():
-        pytest.skip("prompts directory not yet populated")
+    assert PROMPTS.is_dir(), "prompts/ must exist; a skip here would hide a boundary regression"
     markdown = [str(p.relative_to(REPO_ROOT)) for p in PROMPTS.rglob("*.md")]
     assert not markdown, (
         "model-visible prompt files must be .txt or .yaml, never .md: " + ", ".join(markdown)
@@ -106,8 +169,7 @@ def test_prompt_directory_contains_no_markdown() -> None:
 
 def test_prompts_do_not_request_prohibited_output_formats() -> None:
     """A prompt must never instruct a model to emit JSON, XML, or Markdown."""
-    if not PROMPTS.exists():
-        pytest.skip("prompts directory not yet populated")
+    assert PROMPTS.is_dir(), "prompts/ must exist; a skip here would hide a boundary regression"
     prohibited = re.compile(
         r"(return\s+json|respond\s+in\s+json|json\s+schema|output_config\.format|"
         r"application/json|xml\s+output|markdown\s+table|```)",
@@ -127,9 +189,32 @@ def test_prompts_do_not_request_prohibited_output_formats() -> None:
 
 def test_every_package_exposes_a_public_interface() -> None:
     """Cross-package private imports are prohibited, so each package needs an __init__."""
+    directories = [p for p in PACKAGES.iterdir() if p.is_dir() and p.name != "__pycache__"]
+    assert directories, "no packages found; this guard would enforce nothing"
     missing = [
-        str(p.relative_to(REPO_ROOT))
-        for p in PACKAGES.iterdir()
-        if p.is_dir() and p.name != "__pycache__" and not (p / "__init__.py").exists()
+        str(p.relative_to(REPO_ROOT)) for p in directories if not (p / "__init__.py").exists()
     ]
     assert not missing, f"packages without a public interface: {missing}"
+
+
+def test_model_visible_prompts_have_exactly_one_home() -> None:
+    """A prompt copied into docs/ drifts from the one under prompts/ and nothing notices.
+
+    rules.md section 10 puts prompts under prompts/. Sprint 1 also left a byte-identical copy
+    of the Deep Analysis system prompt in docs/, where no architecture test scans it. Two homes
+    for one model-visible artifact is a drift defect waiting to happen.
+    """
+    canonical = {
+        path.read_text(encoding="utf-8").strip() for path in PROMPTS.rglob("*") if path.is_file()
+    }
+    duplicates = [
+        str(path.relative_to(REPO_ROOT))
+        for path in (REPO_ROOT / "docs").rglob("*")
+        if path.is_file()
+        and path.suffix in {".txt", ".jinja"}
+        and path.read_text(encoding="utf-8").strip() in canonical
+    ]
+    assert not duplicates, (
+        "model-visible prompt content duplicated outside prompts/; "
+        f"delete the copy and reference the canonical file instead: {duplicates}"
+    )

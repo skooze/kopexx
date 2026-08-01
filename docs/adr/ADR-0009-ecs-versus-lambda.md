@@ -1,8 +1,14 @@
 # ADR-0009: Run ingestion and parsing on ECS Fargate, not Lambda
 
-STATUS: ACCEPTED
+STATUS: PROVISIONAL — revisit before implementation in Stage 2 phase W-7
 DATE: 2026-08-01
 SPRINT: 1
+STATUS CHANGED: Sprint 2 alignment review, from ACCEPTED to PROVISIONAL
+
+> Taken in Sprint 1 with no deployable component and no measured workload shape. The choice
+> between long-lived workers and event-driven functions depends on the summarization batch
+> profile measured in Sprint 5, which did not exist when this was decided. Recorded as current
+> intent and re-decided when W-7 begins. See ADR-0015.
 
 ## Context
 

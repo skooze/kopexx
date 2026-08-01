@@ -1,13 +1,45 @@
 # Evaluation specification for the standard footnote summarizer, prompt version 1.0.0.
 #
-# A model may not be promoted to production without passing every gate below on the benchmark
-# corpus. See docs/llm/model-benchmark.md for corpus construction and scoring procedure.
+# TWO TIERS. See docs/llm/model-benchmark.md.
+#
+#   tier 1, smoke     Sprint 5. 15 footnotes from one verified filing. Proves the pipeline and
+#                     measures real cost. Does NOT select a production model.
+#   tier 2, full      Pre-backfill. The 120-footnote corpus below. Required before any
+#                     multi-issuer backfill and before any cost commitment.
+#
+# A model may not be promoted to production without passing every tier-2 gate.
 
 prompt_version: "footnote-summary-v1.0.0"
 schema_version: "footnote-summary-v1.0.0"
 status: PLANNED
 
+smoke_benchmark:
+  tier: 1
+  status: PLANNED
+  target_sprint: 5
+  source_filing: "0000320193-25-000079"
+  minimum_footnotes: 15
+  minimum_candidate_models: 2
+  gates:
+    structured_output_validity: 1.0
+    footnote_omission_rate: 0.0
+    numeric_fidelity: 1.0
+    unit_and_scale_fidelity: 1.0
+    citation_resolvability: 1.0
+    boundary_violations: 0
+  must_publish:
+    - tokens_in_per_footnote
+    - tokens_out_per_footnote
+    - retry_rate
+    - observed_input_price_per_million
+    - observed_output_price_per_million
+    - cost_per_footnote
+    - cost_per_filing
+    - extrapolated_cost_per_issuer_history
+  result_is_provisional: true
+
 corpus:
+  tier: 2
   minimum_footnotes: 120
   industry_coverage:
     - software

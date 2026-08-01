@@ -1,6 +1,6 @@
 # Canonical Footnote Grouping Algorithm
 
-IMPLEMENTATION STATUS: PLANNED (Phase 1 implements stages 1 to 5; Phase 5 implements 6 to 11)
+IMPLEMENTATION STATUS: PLANNED (Sprint 4 implements stages 1 to 5; Stage 2 phase W-3 implements 6 to 11)
 DECISION RECORD: `docs/adr/ADR-0005-canonical-footnote-grouping.md`
 MODEL: `docs/footnotes/canonical-model.md`
 
@@ -159,21 +159,30 @@ stage. A tie is never broken arbitrarily.
 
 ## Audit record
 
-Every grouping decision persists:
+Every grouping decision persists **on the child block**, because stages 3 and 6 through 10 decide
+per child. Columns on `footnote_source_block`:
 
 ```
-canonical_footnote_id      the parent chosen
-source_block_id            the child attached
+footnote_id                the parent chosen; NULL when unattached
+block_id                   the child
 grouping_method            which stage produced it
-confidence                 0.0 to 1.0
-evidence                   the matched role URI, overlap score, or similarity score
+grouping_confidence        0.0 to 1.0
+grouping_evidence          the matched role URI, overlap score, or similarity score
 competing_candidates       what else was considered and its score
 extraction_run_id          which run produced it
-parser_version             the code version
-decided_at                 timestamp
+grouping_parser_version    the code version
+grouping_decided_at        timestamp
 ```
 
+`canonical_footnote` separately carries `grouping_method`, `confidence`, and `grouping_evidence`
+describing how the **parent** was identified in stages 1, 2, 4, and 5. The two are distinct
+decisions and are recorded separately.
+
 This makes any grouping answerable: which stage, on what evidence, against what alternatives.
+
+> Corrected after the Sprint 2 alignment review. The original schema recorded the audit only on
+> the parent, which could not answer "why was this block attached to this note" — the exact
+> question the audit exists to answer.
 
 ---
 

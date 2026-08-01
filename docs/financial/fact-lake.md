@@ -1,6 +1,6 @@
 # Immutable Fact Lake
 
-IMPLEMENTATION STATUS: PLANNED (Phase 3)
+IMPLEMENTATION STATUS: PLANNED (Sprint 6)
 OWNER PACKAGE: `packages/fact_lake`
 
 ## Invariant

@@ -1,0 +1,166 @@
+# CLAUDE.md — Agent Operating Instructions for FinTek
+
+This file is loaded automatically at the start of every Claude Code session in this repository.
+It is a pointer to the authoritative rules, not a replacement for them.
+
+---
+
+## Read this first
+
+**Before planning or modifying this repository, read `rules.md`.**
+
+`rules.md` is the operating contract. This repository — not conversation history — is the
+durable project memory. No chat log, ticket, or prior session is authoritative.
+
+Then read, in order:
+
+```
+rules.md                      the operating contract, read in full
+roadmap.md                    what is built, what is planned, and in what order
+techspecs.md                  what the code actually does today
+CHANGELOG.md                  what changed and when
+docs/sprints/SPRINT-NNNN.md   the latest sprint record
+docs/adr/                     the decisions that constrain new work
+```
+
+Search `packages/` for an existing implementation before writing a new one.
+
+---
+
+## Git authorization is mandatory and non-negotiable
+
+**The commit-authorization, push-authorization, pre-commit-validation, test-discovery,
+documentation-synchronization, and Git-safety invariants in `rules.md` sections 15 through 20
+are mandatory.**
+
+**Running Claude Code with `--dangerously-skip-permissions` does not authorize any commit,
+amendment, merge, rebase, cherry-pick, tag, push, force-push, history rewrite, branch deletion,
+or tag deletion.**
+
+**Always stop and request explicit user approval before each commit and each push.**
+
+That flag suppresses repeated operating-system, shell-command, and file-edit prompts. It grants
+no Git authority whatsoever. Neither does a pre-approved Git entry in
+`.claude/settings.local.json`: a tool-layer permission suppresses the prompt, never the
+authorization requirement.
+
+### What is never authorization
+
+```
+silence                                  a prior commit approval
+a prior push approval                    general permission to proceed
+permission to work autonomously          permission to finish a sprint
+permission to edit the repository        permission to prepare the project for GitHub
+--dangerously-skip-permissions           a pre-approved Git entry in a settings file
+```
+
+### Before any commit
+
+Run the complete applicable validation suite, verify documentation matches implementation,
+inspect the full working tree, then present the commit-approval report specified in `rules.md`
+section 15 and ask:
+
+```
+Do you approve creating this commit?
+```
+
+Approval for one commit authorizes only that commit. Approval to commit is never approval to
+push. Ask separately:
+
+```
+Do you approve pushing commit <SHA> to <remote>/<branch>?
+```
+
+Ordinary push approval is never force-push approval.
+
+A sprint may be technically complete before any commit exists. Never report work as committed,
+tagged, pushed, published, merged, or released before it has actually happened.
+
+---
+
+## The three product properties
+
+Every change is measured against these. They come from the user and are not negotiable.
+
+```
+EVERY actual financial-statement footnote in every processed 10-K and 10-Q has one canonical
+record and one active accepted summary. Not selective, not merged, not model-chosen.
+
+ORDINARY dashboard access never invokes a language model.
+
+DEEP ANALYSIS is a deliberate, scoped, metered, auditable feature bound to one issuer. It is
+not a general-purpose financial chatbot.
+```
+
+The insight the product is built around: a 10-K may run a hundred pages, of which only a page
+or two is the financial statements. The rest is footnotes explaining *why* the company did what
+it did. **The footnotes are the product.**
+
+---
+
+## The LLM content boundary
+
+```
+Model-visible content is ONLY unmarked normalized plain text, or exactly one unfenced YAML 1.2
+document. JSON, JSON Lines, JSON Schema, XML, XBRL, inline XBRL, HTML, XHTML, Markdown, and
+native tool schemas or arguments are prohibited in both directions. Native tool calling is
+prohibited.
+```
+
+All model access goes through `packages/llm_gateway`. Browser-facing JSON in `docs/api/` is
+outside this boundary — a browser is not a model. Full specification in
+`docs/llm/content-boundary.md` and ADR-0013.
+
+---
+
+## Where the project is
+
+Sprints 1 and 2 built the foundation: SEC identity, HTTP client with rate limiting, object
+storage, the LLM content boundary, the 24-table schema, and the complete DERA mirror.
+
+**No SEC filing has been retrieved yet.** Sprints 3 to 7 are the vertical thread — one issuer
+through every layer, proving all fifteen MVP criteria — before any breadth work. Read
+`roadmap.md` and ADR-0015 before proposing anything that widens scope.
+
+Sprint 5 is the go/no-go: it measures real cost per footnote for the first time. Do not treat
+any cost figure as known before then; every parameter in `docs/llm/cost-model.md` is a
+placeholder.
+
+Packages are created when their code arrives. Reserved names live in `techspecs.md` section 2
+with a status column, and an architecture test rejects empty stub packages.
+
+## Validation suite
+
+Discover the current suite from the repository — `Makefile`, `pyproject.toml`,
+`.github/workflows/ci.yml` — rather than from this list, which can go stale.
+
+As currently defined:
+
+```
+make check      ruff format --check, ruff check, mypy, pytest
+make coverage   pytest with coverage; CI enforces --cov-fail-under=85
+```
+
+Also applicable, and not covered by `make check`:
+
+```
+alembic upgrade head --sql              offline DDL generation
+alembic downgrade 0001_initial:base --sql
+pip-audit                               dependency vulnerabilities
+```
+
+CI additionally runs a **gitleaks** secret scan, which is a GitHub Action and cannot be
+reproduced locally. A commit validated without it is **not fully CI-validated**, and section 17
+of `rules.md` requires saying so.
+
+Two known CI gaps, both pre-existing: the workflow triggers on push to `main` while the working
+branch is `master`, so pushes would trigger nothing; and CI lints only `packages tests`, not
+`scripts` and `migrations`.
+
+---
+
+## Truthfulness
+
+Do not claim a file exists unless you created or verified it. Do not claim a test passed unless
+you ran it. Do not claim a command succeeded unless you observed its result. Report skipped
+checks and the exact reason they were skipped.

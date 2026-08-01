@@ -1,23 +1,41 @@
 # Testing Strategy
 
-IMPLEMENTATION STATUS: Sprint 1 layers IMPLEMENTED; later layers PLANNED
+IMPLEMENTATION STATUS: unit, integration, architecture, and migration layers IMPLEMENTED;
+golden, property, security, and performance layers PLANNED
 
-## Current state, Sprint 1
+## Current state, after the Sprint 2 alignment review
 
 ```
-104 tests, all passing
- 94% statement coverage across the seven implemented packages
+143 tests collected, 143 passing and 2 skipped
+ 93% statement coverage across the implemented packages
+ 129 test functions; the difference is parametrized cases
 
-tests/unit/test_sec_identity.py        16   CIK, accession, URL construction
-tests/unit/test_configuration.py        6   User-Agent validation, settings guards
-tests/unit/test_sec_client.py           9   throttle classification, rate limiting
-tests/unit/test_dera_notes.py           8   discovery, irregular filenames, resumability
-tests/unit/test_llm_boundary.py        26   content boundary, compiler, gateway
-tests/unit/test_yaml_parser.py         10   safe parsing, identifier preservation
-tests/unit/test_storage.py              6   hashing, object store, traversal
-tests/integration/test_dera_mirror.py   2   discovery plus storage plus ledger
-tests/architecture/test_architecture.py 8   structural invariants from rules.md
+tests/unit/test_llm_boundary.py         25  content boundary, compiler, gateway
+tests/unit/test_migrations.py           17  schema structure, reversibility, attachment audit,
+                                            completeness design, 2 live tests that SKIP
+tests/unit/test_yaml_parser.py          16  safe parsing, identifier preservation, alias bomb
+tests/unit/test_sec_identity.py         15  CIK, accession, URL construction
+tests/unit/test_sec_http_client.py      15  UA, 403 classification, cooldown, content assertions
+tests/architecture/test_architecture.py 11  structural invariants from rules.md
+tests/unit/test_sec_client.py            9  throttle classification, rate limiting
+tests/unit/test_dera_notes.py            7  discovery, irregular filenames, resumability
+tests/unit/test_configuration.py         6  User-Agent validation, settings guards
+tests/unit/test_storage.py               6  hashing, object store, traversal
+tests/integration/test_dera_mirror.py    2  discovery plus storage plus ledger
 ```
+
+### The two skips
+
+`tests/unit/test_migrations.py` contains two live-database tests that skip with an explicit
+reason when no PostgreSQL is reachable. They are the only tests in the suite that have never
+executed. **Sprint 3 makes them run.** A skip is reported as a skip and never counted as a pass.
+
+### Anti-vacuity
+
+`test_architecture_suite_has_something_to_check` and `test_no_package_is_an_empty_stub` exist
+because Sprint 1 created eighteen packages containing only a docstring, and two architecture
+tests scanned those empty directories and passed while enforcing nothing. A green suite must
+mean the invariants held, not that there was nothing to check.
 
 ## Layers
 

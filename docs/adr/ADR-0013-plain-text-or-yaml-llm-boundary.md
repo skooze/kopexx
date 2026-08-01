@@ -145,7 +145,7 @@ Token cost falls because keys are not repeated per record and prose is not escap
 is readable, which makes prompt debugging tractable. One parser and one validator cover every
 model interaction. Provider structured-output and tool-calling features are unavailable to us, so
 schema conformance is enforced by our own validation after parsing. A payload compiler must exist
-before any model integration, which is why it is Sprint 1 work rather than Phase 6 work.
+before any model integration, which is why it is Sprint 1 work rather than Sprint 5 work.
 
 ## Testing
 

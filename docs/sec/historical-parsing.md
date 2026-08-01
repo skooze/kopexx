@@ -1,6 +1,6 @@
 # Historical Parsing
 
-IMPLEMENTATION STATUS: PLANNED (Phase 4 and Phase 5)
+IMPLEMENTATION STATUS: PLANNED (Stage 2 phases W-2 and W-3)
 OWNER PACKAGE: `packages/filing_parser`
 
 ## Common interface

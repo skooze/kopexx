@@ -1,8 +1,14 @@
 # ADR-0008: Use Terraform for infrastructure as code
 
-STATUS: ACCEPTED
+STATUS: PROVISIONAL — revisit before implementation in Stage 2 phase W-7
 DATE: 2026-08-01
 SPRINT: 1
+STATUS CHANGED: Sprint 2 alignment review, from ACCEPTED to PROVISIONAL
+
+> This decision was taken in Sprint 1 with nothing deployable, no `infrastructure/` contents, and
+> its implementation phase roughly twenty sprints away. It commits to an AWS-specific toolchain
+> long before the constraints that should drive it are known. It is recorded as the current
+> intent, not as a settled constraint, and is re-decided when W-7 begins. See ADR-0015.
 
 ## Context
 

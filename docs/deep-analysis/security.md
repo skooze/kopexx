@@ -1,6 +1,6 @@
 # Deep Analysis Threat Model
 
-IMPLEMENTATION STATUS: PLANNED (Phase 9); boundary controls IMPLEMENTED (Sprint 1)
+IMPLEMENTATION STATUS: PLANNED (Sprint 7); boundary controls IMPLEMENTED (Sprint 1)
 DECISION RECORDS: ADR-0012, ADR-0013
 
 ## Trust boundaries
