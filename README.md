@@ -1,158 +1,156 @@
 # FinTek
 
-A financial filing and historical analysis platform. An investor types a ticker and gets that
-company's SEC filings already digested: deterministic financial charts, and one plain-language
-summary for every financial-statement footnote in every 10-K and 10-Q the company has ever filed.
+FinTek pulls 10-K and 10-Q filings from SEC EDGAR, extracts the financial data and the notes to
+the financial statements, and writes a plain-language summary of every footnote. The summaries
+are generated offline and stored, so browsing the dashboard doesn't call a model. There's also an
+optional Deep Analysis mode: a chat session locked to one issuer and one set of filings, for when
+you want to dig into something specific.
 
-A 10-K may run a hundred pages, of which only a page or two is the financial statements. The rest
-is footnotes explaining *why* the company did what it did. The footnotes are the product.
+Most of a 10-K is footnotes — the explanations behind the numbers, the accounting policy choices,
+the debt covenants, the contingencies. They're the tedious part to read and the hard part to skim.
+Summarizing all of them, rather than the handful a model finds interesting, is the point.
 
----
+**This is under active development and not usable yet.** Filing ingestion, footnote extraction,
+summarization, the dashboard, and Deep Analysis are specified but not built. See below for what
+actually exists.
 
-## Read this before changing anything
-
-```
-1. rules.md            the operating contract
-2. roadmap.md          where the project is and what comes next
-3. techspecs.md        what the code currently does
-4. CHANGELOG.md        what changed and why
-5. docs/sprints/       the latest sprint record
-6. docs/adr/           the decisions and their reasoning
-```
-
-The repository is the durable project memory. No conversation or chat log is authoritative.
-
----
+The repository is published as `kopexx`. FinTek is the project name used throughout the code and
+docs — same thing, and the Python distribution is `fintek`.
 
 ## Status
 
-Sprint 1 complete. Foundation, governance, SEC primitives, and the LLM content boundary.
+Sprint 2 is complete, plus an alignment review and a CI repair. Sprint 3 hasn't started.
+
+What's implemented:
+
+- SEC HTTP client with rate limiting and throttle classification
+- CIK, accession, and URL normalization
+- Object storage with hashing, filesystem backend
+- Configuration with startup validation
+- Structured logging
+- A complete local mirror of the SEC DERA Financial Statement and Notes datasets — 78 packages,
+  25.36 GiB, hash- and CRC-verified
+- The LLM gateway and content boundary, with a mock provider
+- A 24-table PostgreSQL schema and its initial migration
+
+What's next, in [Sprints 3–7](roadmap.md): retrieve one issuer's filings and build reproducible
+fixtures, extract canonical footnotes, run real-model summarization and measure what it costs,
+build the read API and dashboard, then filing-scoped Deep Analysis. The idea is to get one company
+working end to end before widening to the full issuer universe — see
+[ADR-0015](docs/adr/ADR-0015-thread-first-delivery-sequence.md).
+
+What doesn't exist: **no SEC filing has been retrieved yet.** No footnotes extracted, no summaries
+generated, no dashboard, no Deep Analysis, nothing deployed. The migration hasn't been applied to
+a live database — that's the first task in Sprint 3.
+
+Current local validation:
 
 ```
-143 tests passing
- 94% coverage on the seven implemented packages
-ruff format clean, ruff lint clean, mypy clean across 55 source files
+143 tests passing, 2 skipped
+92.94% coverage on the implemented packages (85% gate)
+mypy clean across 45 source files
+ruff format and lint clean
 ```
 
-Ingestion at scale, the fact lake, canonical footnote extraction, summarization, the dashboard,
-and Deep Analysis are specified and not yet built. `techspecs.md` states the status of every
-component.
+The two skips are live-PostgreSQL migration tests; they skip with an explicit reason when no
+database is reachable. Everything else runs without one. CI is green on `main`.
 
----
-
-## Quick start
+## Getting started
 
 ```bash
 make install          # virtualenv and dependencies
-make check            # format, lint, types, tests, migration reversibility
-make up               # postgres, minio, redis
 cp .env.example .env  # then set SEC_USER_AGENT
+make check            # format, lint, types, tests, migration reversibility
 ```
 
-`SEC_USER_AGENT` must identify your application and contain a contact email. Startup fails
-otherwise, deliberately: SEC denylists library-default user agents and answers them with HTTP
-403, so generating that traffic is worse than not starting.
+`make check` is the gate. It's the same set of commands CI runs — the Makefile is the only place
+they're defined, so the two can't drift.
+
+You don't need Docker or a database for the test suite. If you want the local stack (Postgres,
+MinIO, Redis) for migration work, `make up` starts it; that needs the Docker Compose plugin
+installed.
+
+No model credentials are needed either. The default provider is an in-process mock that exercises
+the full gateway path offline.
+
+`SEC_USER_AGENT` is required and startup fails without it. SEC wants a descriptive User-Agent with
+a contact email on every request, and it denylists library defaults like `python-requests/2.31.0`.
+Set something like:
+
+```
+SEC_USER_AGENT="FinTek Research you@example.com"
+```
+
+Details on SEC's access rules and throttling behavior are in
+[docs/sec/access-policy.md](docs/sec/access-policy.md).
+
+To check the DERA mirror without downloading anything:
 
 ```bash
-SEC_USER_AGENT="FinTek Research you@example.com" \
-  python scripts/mirror_dera.py --dry-run
+python scripts/mirror_dera.py --dry-run
 ```
-
-No model credentials are required. The default provider is an in-process mock that exercises the
-full gateway path offline.
-
----
-
-## Three properties that shape everything
-
-### Every footnote gets a summary
-
-Every actual financial-statement footnote in every processed filing has exactly one canonical
-record and exactly one active accepted summary. Routine footnotes get shorter summaries. None is
-omitted because a model judged it immaterial. Completeness is computed and displayed honestly:
-
-```
-Footnotes summarized: 23 of 24 — one footnote is awaiting review
-```
-
-### The dashboard never calls a model
-
-Searching a ticker, opening a filing, changing a timeframe, expanding a footnote, or changing a
-chart is served entirely from stored data. Summarization happens offline. A model provider outage
-is not a product outage.
-
-### Deep Analysis is scoped, metered, and auditable
-
-It is bound to one issuer for its lifetime. The browser sends a session identifier and a message;
-nothing else is trusted. Scope, budgets, and the model are loaded server-side. Retrieval tools
-re-derive their allowlist from the session on every call and do not trust their arguments.
-
----
-
-## The model content boundary
-
-Model-visible content is **unmarked plain text or exactly one unfenced YAML 1.2 document**.
-Markdown, JSON, JSON Schema, XML, XBRL, HTML, and native tool schemas are prohibited in both
-directions. All model access goes through `packages/llm_gateway`.
-
-AWS SDK transport JSON, browser API JSON, and PostgreSQL JSONB are outside this boundary and are
-permitted. The distinction is between the envelope and the content.
-
-Two verified facts drive the details. YAML 1.2 does not coerce `yes`, `no`, `on`, `off` into
-booleans, where YAML 1.1 does, so `ruamel.yaml` in pure safe mode is used. And YAML 1.2 parses an
-unquoted `0000320193` as the integer `320193`, destroying a CIK, so every identifier is quoted.
-
-See `docs/llm/content-boundary.md` and ADR-0013.
-
----
 
 ## Layout
 
 ```
-packages/          8 implemented; reserved names listed in techspecs.md section 2
-  sec_identity       CIK, accession, and URL construction — the single home
-  configuration      settings with eager validation
-  sec_client         rate limiting and throttle classification
-  storage            object store and hashing
-  observability      structured logging and correlation
-  dera_notes         SEC dataset discovery and mirror ledger
-  llm_gateway        the model content boundary
-  persistence        the PostgreSQL control-plane schema
-prompts/           versioned .txt and .yaml — never .md
-metric_definitions/  curated concept priority and the item-disclosure exclusions
-tests/             unit, integration, architecture, and fixtures
-docs/              specification documents, 15 ADRs, runbooks
-migrations/        Alembic; the initial control-plane migration
-scripts/           operational entry points
+packages/            eight implemented libraries: SEC identity and HTTP,
+                     storage, configuration, observability, DERA discovery,
+                     the LLM gateway, and the database schema
+migrations/          Alembic
+prompts/             versioned prompt files, .txt and .yaml
+metric_definitions/  curated concept priorities and footnote exclusions
+scripts/             operational entry points
+tests/               unit, integration, and architecture
+docs/                specs, ADRs, runbooks, sprint records
 ```
 
----
+Packages are created when their code is written, not ahead of it. Reserved names and their target
+sprints are listed in [techspecs.md](techspecs.md), section 2.
 
-## Verified findings this design rests on
+## Design constraints
 
-Everything below was confirmed by live measurement against SEC endpoints, not recalled.
+A few things are load-bearing, and changing them will break assumptions elsewhere.
 
-| Finding | Consequence |
-|---|---|
-| Apple's FY2025 10-K has **13** footnotes, not the 58 TextBlock facts | The unit of work, and therefore cost, was corrected 4.5-fold |
-| Role URI attached 46 of 46 child blocks on that filing | Deterministic grouping is possible; breadth validation still required |
-| SEC throttling is a **403 with an HTML body**, not a 429 | Retry logic keyed on status code silently drops filings |
-| Backoff from 1 second **extends** a rate block | The only correct response is a 600-second cooldown |
-| `python-requests/2.31.0` receives 403 | User-Agent validation must fail closed at startup |
-| A 30-request burst at 88/s all returned 200 | Never size a fetcher from burst behaviour |
-| `filings.recent` caps at 1,000 entries | Reading only it silently truncates history |
-| CIK padding is **inverted** between SEC hosts | One normalization module owns both forms |
-| The accession prefix can be a **filing agent**, not the issuer | Building an Archives path from it 404s |
-| `companyfacts` drops dimensional facts and all extension concepts | It cannot be the primary fact source |
-| A `10-K/A` can be 545 KB against a 14 MB original | Amendments are patches, never replacements |
-| No Q4 10-Q exists | Q4 must be derived, and labelled as derived |
-| DuckDB cannot open a file another process holds read-write | Serving reads immutable versioned Parquet |
-| Apple's 1994 10-K is retrievable, PEM-armored, 240,556 characters | All-time coverage is achievable |
+**Every canonical footnote gets a stored summary.** Not the material ones, not a merged summary —
+every one. Filings with incomplete coverage are shown as incomplete rather than rounded up.
+[docs/footnotes/completeness.md](docs/footnotes/completeness.md)
 
----
+**Normal dashboard reads don't invoke a model.** Searching, opening a filing, changing a
+timeframe, expanding a footnote — all served from stored data. Summarization is an offline batch
+job. [docs/dashboard/ux-specification.md](docs/dashboard/ux-specification.md)
+
+**Deep Analysis is scoped and metered.** A session is bound to one issuer and one corpus for its
+lifetime. The client sends a session ID and a message; scope and budgets are loaded server-side.
+[docs/deep-analysis/product.md](docs/deep-analysis/product.md) and
+[security.md](docs/deep-analysis/security.md)
+
+**Model-visible content is plain text or one unfenced YAML 1.2 document.** No JSON, Markdown, XML,
+or native tool schemas in either direction. Transport JSON and browser API JSON are outside this
+boundary and fine. [docs/llm/content-boundary.md](docs/llm/content-boundary.md) and
+[ADR-0013](docs/adr/ADR-0013-plain-text-or-yaml-llm-boundary.md)
+
+**Filed SEC documents and deterministic facts are the source of truth.** Summaries are an index
+into the filings, not evidence. Any number shown to a user traces back to a specific accession,
+concept, and period. See `rules.md`, section 2.
+
+Some of these are enforced by tests in `tests/architecture/`.
+
+## Documentation
+
+- [rules.md](rules.md) — coding standards, architecture rules, and the invariants that block a
+  sprint from being marked complete
+- [roadmap.md](roadmap.md) — what's built, what's next, and in what order
+- [techspecs.md](techspecs.md) — what the code does today, component by component
+- [CHANGELOG.md](CHANGELOG.md) — what changed and why
+- [docs/adr/](docs/adr/) — 15 decision records with the reasoning and the rejected alternatives
+- [docs/sprints/](docs/sprints/) — what each sprint actually delivered, including what didn't work
+- [docs/runbooks/](docs/runbooks/) — operational procedures
 
 ## Contributing
 
-`rules.md` is the contract. In particular: search for an existing implementation before writing a
-new one; never reimplement CIK, accession, fiscal, or cost logic; keep prompts out of application
-code; and never mark a sprint complete while code and documentation disagree.
+Read [CLAUDE.md](CLAUDE.md) and [rules.md](rules.md) first. The short version: search for an
+existing implementation before writing a new one, don't reimplement CIK, accession, fiscal, or
+cost logic outside its owning package, keep prompt text out of application code, run `make check`
+before proposing anything, and update the docs in the same change as the code.
+
+If you add a new validation command, put it in the Makefile so CI picks it up too.
