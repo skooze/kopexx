@@ -1,0 +1,164 @@
+# Canonical footnote summary schema, version footnote-summary-v1.0.0.
+#
+# This is the AUTHORITATIVE field specification. The model receives the shorter output template at
+# prompts/footnote-summary/v1.0.0/output-template.yaml; this document defines validation.
+#
+# Model output is YAML 1.2. Internal validation after parsing uses typed models (Pydantic). A JSON
+# Schema generated from those models is permitted for API documentation and tests, because that is
+# internal and never reaches a model. See ADR-0013.
+
+schema_version: "footnote-summary-v1.0.0"
+
+fields:
+
+  schema_version:
+    type: string
+    required: true
+    note: quoted; must equal the active schema version
+
+  footnote:
+    type: mapping
+    required: true
+    fields:
+      id:     {type: string, required: true, note: must equal the canonical_footnote_id supplied}
+      number: {type: string, required: true, note: quoted; may be "01" or "7A"}
+      title:  {type: string, required: true}
+
+  summary:
+    type: mapping
+    required: true
+    fields:
+      plain_language:
+        type: string
+        required: true
+        min_length: 40
+        note: standalone; readable without the filing
+      purpose:
+        type: string
+        required: true
+      classification:
+        type: enum
+        required: true
+        values: [routine, changed, material]
+      classification_reason:
+        type: string
+        required: true
+
+  financial_relationships:
+    type: sequence
+    required: true
+    note: may be empty; absent is an error, empty is a claim
+    item_fields:
+      statement:
+        type: enum
+        required: true
+        values: [income_statement, balance_sheet, cash_flow_statement, equity_statement, comprehensive_income]
+      line_item:    {type: string, required: true}
+      relationship: {type: string, required: true}
+
+  important_facts:
+    type: sequence
+    required: true
+    item_fields:
+      label:       {type: string, required: true}
+      value:       {type: number, required: true, note: as disclosed; no scaling applied}
+      unit:
+        type: enum
+        required: true
+        values: [USD, USD_thousands, USD_millions, USD_billions, shares, percent, years, count, ratio]
+      scale:       {type: integer, required: true, values: [1, 1000, 1000000]}
+      period_start: {type: string_or_null, required: true, note: quoted date, null for an instant}
+      period_end:   {type: string, required: true, note: quoted date}
+      period_type:  {type: enum, required: true, values: [instant, duration]}
+      source_ids:   {type: sequence_of_string, required: true, min_items: 1}
+
+  period_changes:
+    type: sequence
+    required: true
+    note: entries permitted only when BOTH values appear in supplied content
+    item_fields:
+      metric:        {type: string, required: true}
+      direction:     {type: enum, required: true, values: [increase, decrease, unchanged]}
+      current_value: {type: number, required: true}
+      prior_value:   {type: number, required: true}
+      unit:          {type: enum, required: true}
+      explanation:   {type: string, required: false}
+      source_ids:    {type: sequence_of_string, required: true, min_items: 1}
+
+  topics:
+    type: sequence_of_string
+    required: true
+
+  accounting_policies:
+    type: sequence
+    required: true
+    item_fields:
+      policy:      {type: string, required: true}
+      description: {type: string, required: true}
+      source_ids:  {type: sequence_of_string, required: true, min_items: 1}
+
+  accounting_judgments:
+    type: sequence
+    required: true
+    item_fields:
+      judgment:    {type: string, required: true}
+      description: {type: string, required: true}
+      source_ids:  {type: sequence_of_string, required: true, min_items: 1}
+
+  risks_and_obligations:
+    type: sequence
+    required: true
+    item_fields:
+      type:
+        type: enum
+        required: true
+        values: [refinancing, litigation, contingency, guarantee, concentration, covenant, impairment, tax, other]
+      severity:    {type: enum, required: true, values: [low, medium, high]}
+      description: {type: string, required: true}
+      source_ids:  {type: sequence_of_string, required: true, min_items: 1}
+
+  deep_dive:
+    type: mapping
+    required: true
+    fields:
+      recommended: {type: boolean, required: true}
+      reasons:     {type: sequence_of_string, required: true}
+
+  quality:
+    type: mapping
+    required: true
+    fields:
+      confidence:                {type: number, required: true, range: [0.0, 1.0]}
+      requires_review:           {type: boolean, required: true}
+      ambiguous_items:           {type: sequence_of_string, required: true}
+      missing_information:       {type: sequence_of_string, required: true}
+      unsupported_claims_removed: {type: integer, required: true, minimum: 0}
+
+  source_coverage:
+    type: mapping
+    required: true
+    note: >-
+      Proves every supplied source was read. blocks_referenced below blocks_supplied means part of
+      the footnote was ignored, which FAILS validation.
+    fields:
+      blocks_supplied:   {type: integer, required: true}
+      blocks_referenced: {type: integer, required: true}
+      tables_supplied:   {type: integer, required: true}
+      tables_referenced: {type: integer, required: true}
+
+# Deliberately NOT requested from the model. The application injects these after validation, which
+# removes a hallucination surface and saves output tokens.
+injected_after_validation:
+  - filing.cik
+  - filing.accession
+  - filing.form
+  - filing.filing_date
+  - filing.period_end
+  - model_provider
+  - model_id
+  - prompt_version
+  - generated_at
+
+null_semantics: >-
+  Null means not disclosed. It never means zero. A required sequence that is empty is a positive
+  claim that nothing of that kind exists in the footnote; a missing sequence is a schema error.

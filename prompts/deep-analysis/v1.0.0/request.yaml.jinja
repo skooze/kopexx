@@ -1,0 +1,82 @@
+analysis_request:
+  session_id: "{{ session_id }}"
+  scope_type: {{ scope_type }}
+  turn: {{ turn }}
+{%- if question %}
+  question: |
+{{ question | indent(4, true) }}
+{%- else %}
+  question: null
+  mode: generic_forensic_analysis
+{%- endif %}
+authorized_scope:
+  cik: "{{ cik }}"
+  issuer_name: {{ issuer_name }}
+  period_start: "{{ period_start }}"
+  period_end: "{{ period_end }}"
+  accessions:
+{%- for accession in accessions %}
+    - "{{ accession }}"
+{%- endfor %}
+{%- if conversation_memory %}
+conversation_memory:
+  areas_analyzed:
+{%- for area in conversation_memory.areas_analyzed %}
+    - {{ area }}
+{%- endfor %}
+  established_findings:
+{%- for finding in conversation_memory.established_findings %}
+    - finding: >-
+        {{ finding.text }}
+      source_ids:
+{%- for source_id in finding.source_ids %}
+        - "{{ source_id }}"
+{%- endfor %}
+{%- endfor %}
+  open_questions:
+{%- for question in conversation_memory.open_questions %}
+    - {{ question }}
+{%- endfor %}
+{%- endif %}
+{%- if financial_series %}
+financial_series:
+{%- for metric, series in financial_series.items() %}
+  {{ metric }}:
+    unit: {{ series.unit }}
+    observations:
+{%- for observation in series.observations %}
+      - period_end: "{{ observation.period_end }}"
+        value: {{ observation.value }}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
+{%- if summary_index %}
+summary_index:
+{%- for entry in summary_index %}
+  - footnote_id: "{{ entry.footnote_id }}"
+    accession: "{{ entry.accession }}"
+    period_end: "{{ entry.period_end }}"
+    title: {{ entry.title }}
+    summary: |
+{{ entry.summary | indent(6, true) }}
+{%- endfor %}
+{%- endif %}
+{%- if original_evidence %}
+original_evidence:
+{%- for item in original_evidence %}
+  - source_id: "{{ item.source_id }}"
+    accession: "{{ item.accession }}"
+    source_type: {{ item.source_type }}
+{%- if item.unit %}
+    unit: {{ item.unit }}
+{%- endif %}
+    text: |
+{{ item.text | indent(6, true) }}
+{%- endfor %}
+{%- endif %}
+response_requirements:
+  format: yaml
+  distinguish_facts_calculations_and_interpretation: true
+  cite_material_claims: true
+  remain_within_authorized_scope: true
+  retrieval_rounds_remaining: {{ retrieval_rounds_remaining }}

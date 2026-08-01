@@ -1,0 +1,47 @@
+metric_id: total_debt
+version: "1.0.0"
+display_name: Total Debt
+description: >-
+  Total interest-bearing debt, current plus non-current. Composed rather than taken from a single
+  concept, because most issuers do not tag a total.
+statement: balance_sheet
+period_type: instant
+allowed_units: [USD]
+sign_normalization: as_reported
+composition: sum_of_components
+
+# Composed metrics declare their components explicitly. A missing component is recorded as a
+# comparability warning rather than silently treated as zero, because zero and unknown are
+# different and the difference matters for a leverage ratio.
+components:
+  - component: short_term_debt
+    accepted_concepts:
+      - {taxonomy: us-gaap, concept: ShortTermBorrowings, rank: 1}
+      - {taxonomy: us-gaap, concept: CommercialPaper, rank: 2}
+      - {taxonomy: us-gaap, concept: OtherShortTermBorrowings, rank: 3}
+    required: false
+  - component: current_portion_long_term_debt
+    accepted_concepts:
+      - {taxonomy: us-gaap, concept: LongTermDebtCurrent, rank: 1}
+    required: false
+  - component: long_term_debt
+    accepted_concepts:
+      - {taxonomy: us-gaap, concept: LongTermDebtNoncurrent, rank: 1}
+      - {taxonomy: us-gaap, concept: LongTermDebt, rank: 2}
+    required: true
+
+excluded_concepts:
+  - us-gaap:OperatingLeaseLiability
+  - us-gaap:FinanceLeaseLiability
+  - us-gaap:AccountsPayableCurrent
+
+comparability_warnings:
+  - condition: any_optional_component_missing
+    message: >-
+      One or more debt components were not disclosed for this period. Total debt is the sum of
+      the components that were disclosed and may understate the true total.
+test_fixtures:
+  - cik: "0000320193"
+review_notes: >-
+  Lease liabilities are deliberately excluded. Including them changes leverage ratios materially
+  and makes cross-issuer comparison invalid for periods spanning the ASC 842 transition.

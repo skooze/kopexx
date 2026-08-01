@@ -1,0 +1,30 @@
+metric_id: capital_expenditures
+version: "1.0.0"
+display_name: Capital Expenditures
+description: Cash paid to acquire property, plant, and equipment.
+statement: cash_flow_statement
+period_type: duration
+allowed_duration_months: [3, 6, 9, 12]
+allowed_units: [USD]
+
+# Filed as a negative cash outflow. Display convention is positive magnitude, so normalization
+# flips the sign. FINANCIAL-INVARIANT: the stored fact keeps its filed sign; normalization is a
+# presentation decision recorded on the derived value, never a mutation of the fact.
+sign_normalization: absolute_value
+
+accepted_concepts:
+  - taxonomy: us-gaap
+    concept: PaymentsToAcquirePropertyPlantAndEquipment
+    rank: 1
+  - taxonomy: us-gaap
+    concept: PaymentsToAcquireProductiveAssets
+    rank: 2
+  - taxonomy: us-gaap
+    concept: PaymentsToAcquireOtherPropertyPlantAndEquipment
+    rank: 3
+excluded_concepts:
+  - us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired
+  - us-gaap:PaymentsToAcquireIntangibleAssets
+issuer_overrides: []
+test_fixtures:
+  - cik: "0000320193"

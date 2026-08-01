@@ -1,0 +1,108 @@
+# Output template for the standard canonical-footnote summarizer.
+#
+# The model returns exactly one YAML 1.2 document in this shape, unfenced, with no prose before
+# or after it. Field names and enumerated values are fixed. Quote every identifier, date, period
+# label, and version string.
+#
+# Filing identity is NOT requested from the model. The application injects it deterministically
+# after validation, which removes a hallucination surface and saves output tokens.
+
+schema_version: "footnote-summary-v1.0.0"
+
+footnote:
+  id: "<the canonical_footnote_id supplied in the request>"
+  number: "<the footnote number as displayed in the filing, quoted>"
+  title: <the footnote title as displayed in the filing>
+
+summary:
+  # Standalone prose. An investor reads this without opening the filing.
+  plain_language: >-
+    <concise summary of the complete footnote>
+  # One sentence on what the footnote exists to disclose.
+  purpose: >-
+    <what this footnote covers>
+  # One of: routine | changed | material
+  classification: <routine|changed|material>
+  classification_reason: >-
+    <why that classification, in one or two sentences>
+
+financial_relationships:
+  # Which statements and line items this footnote explains. Empty list if none apply.
+  - statement: <income_statement|balance_sheet|cash_flow_statement|equity_statement|comprehensive_income>
+    line_item: <the line item as named in the filing>
+    relationship: >-
+      <what this footnote tells a reader about that line item>
+
+important_facts:
+  # Values disclosed IN the footnote. Omit rather than estimate. Every entry must cite a source.
+  - label: <what the value represents>
+    value: <numeric value exactly as disclosed, no scaling applied>
+    unit: <USD|USD_millions|USD_thousands|shares|percent|years|count>
+    scale: <1|1000|1000000>
+    period_start: "<YYYY-MM-DD or null for an instant>"
+    period_end: "<YYYY-MM-DD>"
+    period_type: <instant|duration>
+    source_ids:
+      - "<a source block or table id supplied in the request>"
+
+period_changes:
+  # Only when BOTH values are present in the supplied content.
+  - metric: <what changed>
+    direction: <increase|decrease|unchanged>
+    current_value: <numeric>
+    prior_value: <numeric>
+    unit: <unit as above>
+    explanation: >-
+      <what the filing attributes the change to, if it says>
+    source_ids:
+      - "<source id>"
+
+topics:
+  # Lowercase free-text tags used for filtering and retrieval.
+  - <topic>
+
+accounting_policies:
+  # Policies the footnote states. Empty list when none.
+  - policy: <the policy>
+    description: >-
+      <what it means in practice>
+    source_ids:
+      - "<source id>"
+
+accounting_judgments:
+  # Estimates and judgments management discloses. Empty list when none.
+  - judgment: <the judgment or estimate>
+    description: >-
+      <what is uncertain and how management resolved it>
+    source_ids:
+      - "<source id>"
+
+risks_and_obligations:
+  - type: <refinancing|litigation|contingency|guarantee|concentration|covenant|impairment|tax|other>
+    severity: <low|medium|high>
+    description: >-
+      <the obligation or risk disclosed>
+    source_ids:
+      - "<source id>"
+
+deep_dive:
+  recommended: <true|false>
+  reasons:
+    - <why an investor might want to investigate further>
+
+quality:
+  confidence: <0.0 to 1.0>
+  requires_review: <true|false>
+  ambiguous_items:
+    - <anything you could not resolve from the supplied content>
+  missing_information:
+    - <information the footnote refers to but does not supply>
+  unsupported_claims_removed: <integer count of claims you dropped for lack of support>
+
+source_coverage:
+  # Proves every supplied source was read. blocks_referenced below blocks_supplied means part of
+  # the footnote was ignored, which fails validation.
+  blocks_supplied: <integer>
+  blocks_referenced: <integer>
+  tables_supplied: <integer>
+  tables_referenced: <integer>

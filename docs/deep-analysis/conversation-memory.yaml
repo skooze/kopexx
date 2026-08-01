@@ -1,0 +1,74 @@
+# Deep Analysis conversation memory.
+#
+# IMPLEMENTATION STATUS: PLANNED (Phase 9)
+#
+# Unlimited history is not resent. Each turn assembles:
+#
+#   system prompt + immutable session scope + structured memory + recent turns
+#   + retrieved evidence + current question
+#
+# Structured memory is what makes a long session coherent without resending everything.
+#
+# INVARIANT: an unsupported model claim is NEVER promoted into established_findings. Memory is
+# a record of what was established with evidence, not a record of what was said.
+
+schema_version: "conversation-memory-v1.0.0"
+
+memory:
+  areas_analyzed:
+    # Topics already covered, so a later turn does not redo them.
+    - debt and refinancing
+    - operating cash flow quality
+
+  established_findings:
+    # Only findings that carried a resolvable citation when they were made.
+    - finding: >-
+        Operating cash flow declined between fiscal 2024 and fiscal 2025 primarily because of
+        working-capital movements rather than a change in profitability.
+      source_ids:
+        - "ocf-note-2025-para-3"
+        - "fact-ocf-fy2025"
+      established_at_turn: 2
+      confidence: high
+
+  open_questions:
+    - Whether the receivables increase reflects a change in customer payment terms.
+
+  user_requested_focus:
+    - refinancing risk
+
+  rejected_scope_changes:
+    # Recorded so the model does not retry a refused direction, and so abuse is visible.
+    - requested: Microsoft comparison
+      turn: 3
+      reason: outside authorized issuer scope
+
+  definitions:
+    # Terms fixed earlier in the session so later turns stay consistent.
+    - term: near-term maturities
+      definition: obligations due within twelve months of the most recent balance-sheet date
+
+  calculation_explanations:
+    - metric: total_debt_change
+      explanation: >-
+        Total debt at the latest period end minus total debt at the earliest period end in scope,
+        divided by the earliest value.
+      input_fact_ids:
+        - "fact-total-debt-fy2021"
+        - "fact-total-debt-fy2025"
+
+compaction:
+  # Memory is bounded. When it exceeds the configured token budget it is compacted, never
+  # truncated arbitrarily.
+  trigger_tokens: 8000
+  procedure:
+    - retain every established_finding that carries a resolvable citation
+    - merge duplicate areas_analyzed entries
+    - retain the most recent five rejected_scope_changes and count the rest
+    - retain every definition
+    - summarize calculation_explanations older than ten turns into a single entry
+    - never drop open_questions without answering or explicitly retiring them
+  invariants:
+    - a finding is never retained after its citation stops resolving
+    - compaction never invents a finding that was not already established
+    - compaction is deterministic given the same input

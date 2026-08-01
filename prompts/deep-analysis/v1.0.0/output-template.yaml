@@ -1,0 +1,93 @@
+# Deep Analysis output template.
+#
+# The model returns exactly one YAML 1.2 document, unfenced, in one of two shapes.
+#
+# Shape A: an analysis, when the supplied evidence is sufficient.
+# Shape B: a retrieval request, when it is not and rounds remain.
+#
+# The server ignores any cik, ticker, accession, or scope the model places in a retrieval
+# request. Scope is loaded from the session record. A retrieval request naming another issuer is
+# a logged scope violation, not a request to be fulfilled.
+
+# ---------------------------------------------------------------------------------------------
+# Shape A: analysis
+# ---------------------------------------------------------------------------------------------
+response_type: analysis
+
+scope:
+  cik: "<the authorized cik, echoed>"
+  period_start: "<YYYY-MM-DD>"
+  period_end: "<YYYY-MM-DD>"
+
+executive_finding: >-
+  <the single most important conclusion, in one or two sentences>
+
+filing_facts:
+  # What the company stated. Every entry cites supplied evidence.
+  - statement: >-
+      <what the filing says>
+    source_ids:
+      - "<source id>"
+
+calculated_metrics:
+  # Arithmetic over filed facts. Inputs are named so the calculation can be reproduced.
+  - metric: <name>
+    value: <numeric>
+    unit: <USD|USD_millions|percent|ratio|shares>
+    period_start: "<YYYY-MM-DD or null>"
+    period_end: "<YYYY-MM-DD>"
+    calculation: >-
+      <the formula in words>
+    calculation_source_ids:
+      - "<source id of each input>"
+
+interpretations:
+  # Your judgment, explicitly labeled as such.
+  - conclusion: >-
+      <what you conclude>
+    confidence: <low|medium|high>
+    supporting_source_ids:
+      - "<source id>"
+    counterarguments:
+      - >-
+        <the strongest case against this conclusion>
+
+risks:
+  - type: <refinancing|liquidity|litigation|concentration|covenant|impairment|tax|accounting|other>
+    severity: <low|medium|high>
+    explanation: >-
+      <the risk, grounded in the filings>
+    source_ids:
+      - "<source id>"
+
+missing_information:
+  - >-
+    <what the authorized corpus does not contain that would change the analysis>
+
+suggested_follow_ups:
+  - <a question answerable within the authorized scope>
+
+quality:
+  confidence: <low|medium|high>
+  evidence_complete: <true|false>
+  scope_compliant: <true|false>
+  used_selected_evidence: <true|false>
+  # true when the analysis reasoned over a selected subset rather than the full corpus, which
+  # must be disclosed to the user.
+
+# ---------------------------------------------------------------------------------------------
+# Shape B: retrieval request
+# ---------------------------------------------------------------------------------------------
+# response_type: retrieval_request
+# retrieval:
+#   operation: <search_authorized_filings|get_authorized_footnote|get_authorized_table|
+#               get_authorized_fact|get_authorized_metric|get_authorized_source_excerpt>
+#   query: <free text, for search operations>
+#   footnote_id: "<for get_authorized_footnote>"
+#   table_id: "<for get_authorized_table>"
+#   metric: <for get_authorized_fact and get_authorized_metric>
+#   period_start: "<YYYY-MM-DD>"
+#   period_end: "<YYYY-MM-DD>"
+#   maximum_results: <integer, server clamps this>
+# reason: >-
+#   <why this evidence is required to answer the question>

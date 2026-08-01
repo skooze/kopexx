@@ -1,0 +1,95 @@
+# Evaluation specification for the standard footnote summarizer, prompt version 1.0.0.
+#
+# A model may not be promoted to production without passing every gate below on the benchmark
+# corpus. See docs/llm/model-benchmark.md for corpus construction and scoring procedure.
+
+prompt_version: "footnote-summary-v1.0.0"
+schema_version: "footnote-summary-v1.0.0"
+status: PLANNED
+
+corpus:
+  minimum_footnotes: 120
+  industry_coverage:
+    - software
+    - industrial
+    - retail
+    - bank
+    - insurer
+    - reit
+    - utility
+    - biotechnology
+    - acquisition_heavy
+  footnote_type_coverage:
+    - significant_accounting_policies
+    - revenue_recognition
+    - debt
+    - credit_facilities
+    - derivatives_and_hedging
+    - fair_value_hierarchy
+    - income_taxes
+    - valuation_allowances
+    - stock_based_compensation
+    - pensions
+    - leases
+    - segment_reporting
+    - variable_interest_entities
+    - noncontrolling_interests
+    - litigation_and_contingencies
+    - impairments
+    - restructuring
+    - going_concern
+    - subsequent_events
+  era_coverage:
+    - inline_xbrl_2019_present
+    - standalone_xbrl_2009_2018
+    - html_no_xbrl_2001_2008
+    - plain_text_pre_2001
+  edge_cases:
+    - very_short_routine_note
+    - exceptionally_large_note
+    - poorly_formatted_html
+    - amendment_partial_content
+    - note_with_no_tables
+    - note_with_many_tables
+
+production_gates:
+  numeric_fidelity_min: 0.995
+  structured_output_validity_min: 0.99
+  citation_accuracy_min: 0.95
+  footnote_omission_rate_max: 0.0
+  unsupported_claim_rate_max: 0.01
+  unit_fidelity_min: 1.0
+  sign_fidelity_min: 1.0
+  scale_fidelity_min: 1.0
+  period_fidelity_min: 0.99
+
+scored_dimensions:
+  - canonical_footnote_coverage
+  - omission_rate
+  - numeric_fidelity
+  - date_fidelity
+  - period_fidelity
+  - unit_fidelity
+  - scale_fidelity
+  - sign_fidelity
+  - citation_precision
+  - citation_recall
+  - financial_relationship_accuracy
+  - material_change_accuracy
+  - accounting_policy_accuracy
+  - risk_identification_recall
+  - structured_output_validity
+  - hallucination_rate
+  - concision
+  - readability
+  - latency_p50_seconds
+  - latency_p95_seconds
+  - retry_rate
+  - cost_per_footnote_usd
+  - cost_per_filing_usd
+  - human_review_rate
+
+serialization_comparison_required: true
+# Every fixture records token counts across serializations so the boundary decision in ADR-0013
+# rests on measurement rather than assertion. The production path selects plain_text or yaml
+# regardless of which tokenizes smallest.

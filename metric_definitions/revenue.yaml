@@ -1,0 +1,59 @@
+# Revenue. Curated concept priority is a financial-accuracy artifact, not configuration.
+# Changing the order below changes reported growth rates. See ADR-0011.
+metric_id: revenue
+version: "1.0.0"
+display_name: Revenue
+description: >-
+  Total revenue from contracts with customers, net of assessed taxes where the issuer reports it
+  that way. Excludes component lines that would double count if summed.
+statement: income_statement
+period_type: duration
+allowed_duration_months: [3, 6, 9, 12]
+allowed_units: [USD]
+sign_normalization: as_reported
+
+# Priority order. Resolution takes facts matching ANY accepted concept for a given period, then
+# selects by most recently filed, then by this rank. It never elects one concept per issuer:
+# Starbucks never uses concept 1 at all, and Gilead and Starbucks both have interior gaps in
+# their otherwise-dominant concept.
+accepted_concepts:
+  - taxonomy: us-gaap
+    concept: RevenueFromContractWithCustomerExcludingAssessedTax
+    rank: 1
+  - taxonomy: us-gaap
+    concept: RevenueFromContractWithCustomerIncludingAssessedTax
+    rank: 2
+  - taxonomy: us-gaap
+    concept: Revenues
+    rank: 3
+  - taxonomy: us-gaap
+    concept: RevenuesNetOfInterestExpense
+    rank: 4
+    applies_to_sic_ranges: ["6000-6799"]   # banks and financials
+  - taxonomy: us-gaap
+    concept: SalesRevenueNet
+    rank: 5
+    deprecated_after: "2018-01-31"
+  - taxonomy: us-gaap
+    concept: RegulatedAndUnregulatedOperatingRevenue
+    rank: 6
+    applies_to_sic_ranges: ["4900-4999"]   # utilities
+
+# Components and known false positives. Including any of these double counts.
+excluded_concepts:
+  - us-gaap:SalesRevenueGoodsNet
+  - us-gaap:SalesRevenueServicesNet
+  - us-gaap:SalesRevenueGoodsGross
+  - us-gaap:OtherSalesRevenueNet
+  - us-gaap:RevenueFromRelatedParties
+  - us-gaap:NetInvestmentIncome
+
+issuer_overrides: []
+test_fixtures:
+  - cik: "0000320193"   # Apple: concept 1 throughout
+  - cik: "0000909832"   # Costco: rank order changes FY2016 growth from 2.2% to 4.4%
+  - cik: "0000882095"   # Gilead: interior gap 2013-2015
+  - cik: "0000829224"   # Starbucks: never uses concept 1
+review_notes: >-
+  Costco fiscal 2016 is the regression case that proves priority order is financial accuracy.
+  Any change to ranks 1 through 3 must re-run that fixture.

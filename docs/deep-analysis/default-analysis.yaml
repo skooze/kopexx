@@ -1,0 +1,78 @@
+# Generic forensic analysis, run when a Deep Analysis session is started with no question.
+#
+# IMPLEMENTATION STATUS: PLANNED (Phase 9)
+#
+# The categories are ordered by how often they change an investment view. The analysis works
+# through them, retrieves original evidence for those with signal, and reports only where the
+# authorized corpus actually supports a finding. Silence on a category means the corpus showed
+# nothing notable, and that is stated rather than left ambiguous.
+
+analysis_version: "generic-forensic-v1.0.0"
+
+prioritization:
+  tier_1_always_examined:
+    - material_period_changes
+    - revenue_trends
+    - margin_trends
+    - earnings_quality
+    - cash_flow_quality
+    - debt_and_liquidity
+  tier_2_examined_when_signal_present:
+    - working_capital_changes
+    - debt_maturity_concentration
+    - refinancing_risk
+    - covenants
+    - dilution
+    - stock_based_compensation
+    - revenue_recognition
+    - accounting_estimates
+    - accounting_policy_changes
+  tier_3_examined_when_disclosed:
+    - acquisitions
+    - divestitures
+    - impairments
+    - restructuring
+    - income_taxes
+    - valuation_allowances
+    - litigation
+    - contingencies
+    - guarantees
+    - lease_obligations
+    - segment_performance
+    - off_balance_sheet_exposure
+  tier_4_synthesis:
+    - management_narrative_versus_financial_facts
+    - areas_deserving_further_investigation
+    - questions_an_experienced_analyst_would_ask_next
+
+evidence_expectations:
+  tier_1: original footnote text or filed facts required for every reported finding
+  tier_2: original evidence required; summary alone is insufficient
+  tier_3: summary may establish presence; original evidence required for any conclusion
+  tier_4: synthesis over findings already established in this analysis
+
+output_separation:
+  # These are reported as distinct sections and never blended.
+  - filing_facts          what the company stated, cited
+  - calculated_metrics    arithmetic over filed facts, inputs cited
+  - interpretations       judgment, with confidence and counterarguments
+  - risks                 with severity and evidence
+  - missing_information   what the corpus cannot answer
+  - suggested_follow_ups  answerable within the existing scope
+
+confidence_rules:
+  high:   multiple independent sources in the authorized corpus agree
+  medium: one source supports it and nothing contradicts it
+  low:    inferred from indirect evidence; the inference chain is stated
+
+counterargument_requirement: >-
+  Every interpretation carries the strongest available counterargument. An interpretation with no
+  counterargument is either a fact, in which case it belongs in filing_facts, or it is
+  insufficiently examined.
+
+prohibited:
+  - personalized investment advice
+  - buy, sell, or hold recommendations
+  - price predictions
+  - conclusions about any issuer outside the authorized scope
+  - filling an evidence gap with plausible reasoning

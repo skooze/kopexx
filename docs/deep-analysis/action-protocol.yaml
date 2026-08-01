@@ -1,0 +1,132 @@
+# Deep Analysis retrieval action protocol.
+#
+# IMPLEMENTATION STATUS: PLANNED (Phase 9)
+#
+# Native model tool calling is prohibited (ADR-0013) because it requires JSON Schema tool
+# definitions and produces JSON tool arguments. Retrieval is therefore either
+# application-orchestrated, which is the default, or driven by this bounded YAML protocol.
+#
+# THE ENFORCEMENT RULE, which is what makes this safe:
+#
+#   The server IGNORES any cik, ticker, accession, footnote_id, or date range the model supplies
+#   for the purpose of widening scope. Scope is loaded from the session record. A model-supplied
+#   identifier is treated as a REQUEST TO SELECT FROM the authorized set, never as a request to
+#   extend it. An identifier outside the allowlist is a logged scope violation.
+
+protocol_version: "deep-analysis-actions-v1.0.0"
+
+server_procedure:
+  - parse the YAML response with the hardened safe parser
+  - confirm response_type is retrieval_request
+  - confirm operation is in the allowlist below
+  - load scope from the session record, ignoring anything the model supplied
+  - intersect any model-supplied identifiers with the authorized allowlist
+  - clamp maximum_results to the server limit
+  - execute the retrieval
+  - record a retrieval_audit row
+  - return a YAML evidence package
+  - decrement retrieval_rounds_remaining
+
+limits:
+  maximum_retrieval_rounds_per_turn: 3
+  maximum_results_per_operation: 20
+  maximum_total_evidence_tokens: 60000
+  maximum_excerpt_characters: 20000
+
+operations:
+
+  search_authorized_filings:
+    description: Full-text and semantic search across authorized filings only.
+    inputs:
+      query: {type: string, required: true, max_length: 500}
+      period_start: {type: date, required: false}
+      period_end: {type: date, required: false}
+      maximum_results: {type: integer, required: false, default: 8, server_max: 20}
+    server_enforced:
+      - cik is taken from the session, never from the request
+      - accession filter is intersected with session.allowed_accessions
+      - period filter is clamped to session.date_start and session.date_end
+    outputs:
+      matches:
+        - footnote_id, accession, period_end, title, score, snippet
+    errors:
+      - SCOPE_VIOLATION      the request named an entity outside the session
+      - LIMIT_EXCEEDED       retrieval rounds exhausted
+    audit_fields: [session_id, operation, query, filter_set, candidate_count, selected_ids, scores, latency_ms]
+
+  get_authorized_footnote:
+    description: Retrieve one canonical footnote with its source blocks.
+    inputs:
+      footnote_id: {type: string, required: true}
+      include_tables: {type: boolean, required: false, default: true}
+    server_enforced:
+      - footnote_id must resolve to a footnote whose filing is in session.allowed_accessions
+      - when session.scope_type is FOOTNOTE, footnote_id must be in session.allowed_footnote_ids
+    outputs:
+      footnote: {id, number, title, accession, period_end}
+      source_blocks: [{id, type, text}]
+      tables: [{id, title, unit, columns, rows}]
+    errors: [SCOPE_VIOLATION, NOT_FOUND]
+
+  get_authorized_table:
+    description: Retrieve one footnote table in structured form.
+    inputs:
+      table_id: {type: string, required: true}
+    server_enforced:
+      - the table's footnote must be within session scope
+    outputs:
+      table: {id, title, unit, scale, columns, rows, period_labels}
+    errors: [SCOPE_VIOLATION, NOT_FOUND]
+
+  get_authorized_fact:
+    description: Retrieve filed facts for one metric and period range.
+    inputs:
+      metric: {type: string, required: true}
+      period_start: {type: date, required: false}
+      period_end: {type: date, required: false}
+    server_enforced:
+      - cik from session; period clamped to session range
+    outputs:
+      observations: [{fact_id, concept, value, unit, period_start, period_end, accession, filed}]
+    errors: [SCOPE_VIOLATION, NOT_FOUND, UNKNOWN_METRIC]
+
+  get_authorized_metric:
+    description: Retrieve a deterministically derived metric series.
+    inputs:
+      metric: {type: string, required: true}
+      period_start: {type: date, required: false}
+      period_end: {type: date, required: false}
+    server_enforced:
+      - cik from session; period clamped to session range
+    outputs:
+      series: [{period_end, value, unit, formula_version, input_fact_ids, comparability_status, derived}]
+    errors: [SCOPE_VIOLATION, UNKNOWN_METRIC]
+
+  get_authorized_source_excerpt:
+    description: Retrieve verbatim text from an authorized source block.
+    inputs:
+      source_id: {type: string, required: true}
+      max_characters: {type: integer, required: false, default: 8000, server_max: 20000}
+    server_enforced:
+      - the source block's filing must be in session.allowed_accessions
+    outputs:
+      source: {id, accession, source_type, text}
+    errors: [SCOPE_VIOLATION, NOT_FOUND]
+
+prohibited_operations:
+  # These do not exist and must never be added. Each would defeat the scope model.
+  - search_all_edgar
+  - fetch_any_ticker
+  - search_web
+  - execute_arbitrary_sql
+  - retrieve_any_document
+  - get_issuer_by_ticker
+
+tests:
+  - test_tool_rejects_accession_outside_allowlist
+  - test_tool_rejects_footnote_outside_footnote_scope
+  - test_model_proposed_cik_is_ignored
+  - test_maximum_results_is_clamped_server_side
+  - test_retrieval_rounds_are_bounded
+  - test_every_retrieval_writes_an_audit_row
+  - test_no_retrieval_returns_foreign_cik

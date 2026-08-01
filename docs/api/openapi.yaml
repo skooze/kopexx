@@ -1,0 +1,493 @@
+openapi: 3.1.0
+
+# IMPLEMENTATION STATUS: PLANNED (Phase 7). No endpoint is implemented.
+#
+# This is browser-facing JSON and is OUTSIDE the LLM content boundary defined in ADR-0013.
+# JSON is correct here. A browser is not a model.
+
+info:
+  title: FinTek API
+  version: 0.1.0
+  description: >-
+    SEC filing data, deterministic financial metrics, canonical footnote summaries, and scoped
+    Deep Analysis. Dashboard endpoints never invoke a language model.
+
+servers:
+  - url: https://api.fintek.example/api/v1
+    description: production
+  - url: http://localhost:8000/api/v1
+    description: local
+
+tags:
+  - name: issuers
+  - name: filings
+  - name: footnotes
+  - name: analysis
+  - name: admin
+
+paths:
+
+  /issuers/search:
+    get:
+      tags: [issuers]
+      summary: Search issuers by ticker or name
+      description: >-
+        Returns only issuers in the active universe, which means issuers with at least one
+        historical 10-K or 10-Q. A ticker that never filed one does not appear.
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
+        - {name: as_of, in: query, required: false, schema: {type: string, format: date},
+           description: Resolve ticker as of this date. Tickers are reused by different issuers.}
+        - {name: limit, in: query, schema: {type: integer, default: 20, maximum: 100}}
+      responses:
+        "200":
+          description: Matches, possibly empty
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: "#/components/schemas/IssuerSummary"}
+        "409": {$ref: "#/components/responses/AmbiguousTicker"}
+        "429": {$ref: "#/components/responses/RateLimited"}
+
+  /issuers/{cik}:
+    get:
+      tags: [issuers]
+      parameters: [{$ref: "#/components/parameters/Cik"}]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Issuer"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /issuers/{cik}/filings:
+    get:
+      tags: [issuers]
+      parameters:
+        - {$ref: "#/components/parameters/Cik"}
+        - {$ref: "#/components/parameters/Range"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [filings, coverage]
+                properties:
+                  filings:
+                    type: array
+                    items: {$ref: "#/components/schemas/FilingSummary"}
+                  coverage: {$ref: "#/components/schemas/Coverage"}
+                  next_cursor: {type: [string, "null"]}
+
+  /issuers/{cik}/financials:
+    get:
+      tags: [issuers]
+      summary: Deterministic metric time series for charting
+      description: >-
+        Served entirely from published datasets. No model call occurs. A derived fourth quarter is
+        flagged, and any comparability caveat is attached to the observation rather than hidden.
+      parameters:
+        - {$ref: "#/components/parameters/Cik"}
+        - {$ref: "#/components/parameters/Range"}
+        - {name: metrics, in: query, required: true,
+           schema: {type: array, items: {type: string}}, style: form, explode: false}
+        - {name: frequency, in: query,
+           schema: {type: string, enum: [annual, quarterly], default: annual}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FinancialSeriesResponse"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+
+  /filings/{accession}:
+    get:
+      tags: [filings]
+      parameters: [{$ref: "#/components/parameters/Accession"}]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Filing"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /filings/{accession}/footnotes:
+    get:
+      tags: [footnotes]
+      summary: Every canonical footnote for a filing, with its stored summary
+      parameters:
+        - {$ref: "#/components/parameters/Accession"}
+        - {name: topic, in: query, schema: {type: string}}
+        - {name: classification, in: query,
+           schema: {type: string, enum: [routine, changed, material]}}
+        - {name: deep_dive_recommended, in: query, schema: {type: boolean}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [footnotes, coverage]
+                properties:
+                  footnotes:
+                    type: array
+                    items: {$ref: "#/components/schemas/CanonicalFootnote"}
+                  coverage: {$ref: "#/components/schemas/Coverage"}
+
+  /footnotes/{footnote_id}:
+    get:
+      tags: [footnotes]
+      parameters:
+        - {name: footnote_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CanonicalFootnoteDetail"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /filings/{accession}/processing-status:
+    get:
+      tags: [filings]
+      description: >-
+        Distinguishes "we do not have this filing" from "we have it and processing is incomplete".
+        Collapsing those is how a dashboard tells a user a company reported nothing.
+      parameters: [{$ref: "#/components/parameters/Accession"}]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProcessingStatus"}
+
+  /analysis/sessions:
+    post:
+      tags: [analysis]
+      summary: Create a Deep Analysis session
+      description: >-
+        Scope is computed server-side from the requested entry point and is IMMUTABLE thereafter.
+        Subsequent turns send only session_id and message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope_type]
+              properties:
+                scope_type: {type: string, enum: [FOOTNOTE, FILING, TIMEFRAME]}
+                footnote_id: {type: string, format: uuid}
+                accession: {type: string}
+                cik: {type: string}
+                range: {type: string, enum: [current_year, previous_year, 5y, 10y, all]}
+                question: {type: string, maxLength: 2000}
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AnalysisSession"}
+        "429": {$ref: "#/components/responses/QuotaExceeded"}
+
+  /analysis/sessions/{session_id}/messages:
+    post:
+      tags: [analysis]
+      description: >-
+        The request body carries ONLY a message. CIK, tickers, accessions, footnote identifiers,
+        scope, model, and budgets are loaded from the server-side session. Additional properties
+        are REJECTED, not ignored, so a tampering attempt is visible.
+      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              additionalProperties: false
+              properties:
+                message: {type: string, minLength: 1, maxLength: 4000}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AnalysisResponse"}
+        "403": {$ref: "#/components/responses/ScopeViolation"}
+        "429": {$ref: "#/components/responses/BudgetExhausted"}
+    get:
+      tags: [analysis]
+      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items: {$ref: "#/components/schemas/AnalysisMessage"}
+
+  /analysis/sessions/{session_id}:
+    get:
+      tags: [analysis]
+      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AnalysisSession"}
+    delete:
+      tags: [analysis]
+      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      responses:
+        "204": {description: Closed}
+
+components:
+
+  parameters:
+    Cik:
+      name: cik
+      in: path
+      required: true
+      schema: {type: string, pattern: "^[0-9]{10}$"}
+      description: Ten-digit zero-padded CIK. Leading zeros are significant.
+    Accession:
+      name: accession
+      in: path
+      required: true
+      schema: {type: string, pattern: "^[0-9]{10}-[0-9]{2}-[0-9]{6}$"}
+      description: Dashed accession. The prefix may belong to a filing agent, not the issuer.
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      schema: {type: string}
+    Range:
+      name: range
+      in: query
+      schema: {type: string, enum: [current_year, previous_year, 5y, 10y, all], default: 5y}
+      description: >-
+        Ranges are expressed in the ISSUER'S fiscal years, not calendar years. Current year may be
+        partial.
+    Cursor:
+      name: cursor
+      in: query
+      schema: {type: string}
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    NotFound:
+      description: Not found
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    AmbiguousTicker:
+      description: The ticker resolves to more than one issuer; details carry candidates
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    ScopeViolation:
+      description: The request falls outside the session's authorized scope
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    RateLimited:
+      description: Rate limited
+      headers:
+        Retry-After: {schema: {type: integer}}
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    QuotaExceeded:
+      description: Per-principal quota exhausted
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    BudgetExhausted:
+      description: Session budget exhausted
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+
+  schemas:
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string, description: Safe to display; never carries filing or model content}
+            request_id: {type: string}
+            details: {type: object}
+
+    IssuerSummary:
+      type: object
+      properties:
+        cik: {type: string}
+        name: {type: string}
+        ticker: {type: string}
+        exchange: {type: string}
+        former_names: {type: array, items: {type: string}}
+
+    Issuer:
+      allOf:
+        - {$ref: "#/components/schemas/IssuerSummary"}
+        - type: object
+          properties:
+            sic: {type: string}
+            fiscal_year_end: {type: string, description: MMDD; per filing, not stable over time}
+            listings: {type: array, items: {$ref: "#/components/schemas/Listing"}}
+            coverage: {$ref: "#/components/schemas/Coverage"}
+
+    Listing:
+      type: object
+      properties:
+        ticker: {type: string}
+        exchange: {type: string}
+        share_class: {type: string}
+        effective_start: {type: string, format: date}
+        effective_end: {type: [string, "null"], format: date}
+        is_current: {type: boolean}
+
+    FilingSummary:
+      type: object
+      properties:
+        accession: {type: string}
+        form: {type: string}
+        filing_date: {type: string, format: date}
+        report_date: {type: string, format: date}
+        fiscal_year: {type: integer}
+        fiscal_period: {type: string}
+        is_amendment: {type: boolean}
+        amends_accession: {type: [string, "null"]}
+        footnote_status: {type: string, enum: [COMPLETE, PARTIAL, REQUIRES_REVIEW, FAILED]}
+        sec_url: {type: string, format: uri}
+
+    Filing:
+      allOf:
+        - {$ref: "#/components/schemas/FilingSummary"}
+        - type: object
+          properties:
+            sections: {type: array, items: {$ref: "#/components/schemas/FilingSection"}}
+            coverage: {$ref: "#/components/schemas/Coverage"}
+
+    FilingSection:
+      type: object
+      properties:
+        item_number: {type: string}
+        heading: {type: string}
+        extraction_strategy: {type: string}
+        confidence: {type: number}
+        available: {type: boolean}
+
+    Coverage:
+      type: object
+      description: Honest processing state. Partial coverage is never presented as complete.
+      properties:
+        canonical_footnotes_extracted: {type: integer}
+        toc_expected_note_count: {type: [integer, "null"]}
+        summaries_accepted: {type: integer}
+        summaries_requiring_review: {type: integer}
+        source_blocks_orphaned: {type: integer}
+        status: {type: string, enum: [COMPLETE, PARTIAL, REQUIRES_REVIEW, FAILED]}
+        display_text: {type: string, example: "Footnotes summarized: 23 of 24"}
+        structured_data_from: {type: [string, "null"], format: date,
+                               description: XBRL-bound; earlier documents exist without facts}
+
+    CanonicalFootnote:
+      type: object
+      properties:
+        footnote_id: {type: string, format: uuid}
+        number: {type: string}
+        title: {type: string}
+        sequence: {type: integer}
+        classification: {type: string, enum: [routine, changed, material]}
+        summary: {type: string}
+        topics: {type: array, items: {type: string}}
+        deep_dive_recommended: {type: boolean}
+        sec_rendering_url: {type: string, format: uri}
+        summary_status: {type: string}
+
+    CanonicalFootnoteDetail:
+      allOf:
+        - {$ref: "#/components/schemas/CanonicalFootnote"}
+        - type: object
+          properties:
+            financial_relationships: {type: array, items: {type: object}}
+            important_facts: {type: array, items: {type: object}}
+            period_changes: {type: array, items: {type: object}}
+            risks_and_obligations: {type: array, items: {type: object}}
+            source_blocks: {type: array, items: {type: object}}
+            tables: {type: array, items: {type: object}}
+
+    FinancialSeriesResponse:
+      type: object
+      properties:
+        cik: {type: string}
+        frequency: {type: string}
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              metric: {type: string}
+              unit: {type: string}
+              observations:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    period_end: {type: string, format: date}
+                    fiscal_year: {type: integer}
+                    fiscal_period: {type: string}
+                    value: {type: [number, "null"]}
+                    is_derived: {type: boolean, description: true for a computed fourth quarter}
+                    comparability_status: {type: string}
+                    warnings: {type: array, items: {type: string}}
+                    source_fact_ids: {type: array, items: {type: string}}
+
+    ProcessingStatus:
+      type: object
+      properties:
+        accession: {type: string}
+        state: {type: string}
+        coverage: {$ref: "#/components/schemas/Coverage"}
+        last_updated: {type: string, format: date-time}
+
+    AnalysisSession:
+      type: object
+      properties:
+        session_id: {type: string}
+        scope_type: {type: string, enum: [FOOTNOTE, FILING, TIMEFRAME]}
+        issuer: {type: object, properties: {cik: {type: string}, name: {type: string}}}
+        scope_badge: {type: string, example: "Apple Inc. — fiscal 2021 to 2026"}
+        status: {type: string}
+        budgets_remaining:
+          type: object
+          properties:
+            turns: {type: integer}
+            input_tokens: {type: integer}
+            output_tokens: {type: integer}
+            cost_usd: {type: number}
+        expires_at: {type: string, format: date-time}
+
+    AnalysisMessage:
+      type: object
+      properties:
+        role: {type: string, enum: [user, assistant]}
+        content: {type: string}
+        citations: {type: array, items: {type: object}}
+        created_at: {type: string, format: date-time}
+
+    AnalysisResponse:
+      type: object
+      properties:
+        executive_finding: {type: string}
+        filing_facts: {type: array, items: {type: object}}
+        calculated_metrics: {type: array, items: {type: object}}
+        interpretations: {type: array, items: {type: object}}
+        risks: {type: array, items: {type: object}}
+        missing_information: {type: array, items: {type: string}}
+        suggested_follow_ups: {type: array, items: {type: string}}
+        used_selected_evidence: {type: boolean}
+        budgets_remaining: {type: object}
