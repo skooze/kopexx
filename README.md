@@ -1,6 +1,6 @@
-# FinTek
+# Kopexx
 
-FinTek pulls 10-K and 10-Q filings from SEC EDGAR, extracts the financial data and the notes to
+Kopexx pulls 10-K and 10-Q filings from SEC EDGAR, extracts the financial data and the notes to
 the financial statements, and writes a plain-language summary of every footnote. The summaries
 are generated offline and stored, so browsing the dashboard doesn't call a model. There's also an
 optional Deep Analysis mode: a chat session locked to one issuer and one set of filings, for when
@@ -13,9 +13,6 @@ Summarizing all of them, rather than the handful a model finds interesting, is t
 **This is under active development and not usable yet.** Filing ingestion, footnote extraction,
 summarization, the dashboard, and Deep Analysis are specified but not built. See below for what
 actually exists.
-
-The repository is published as `kopexx`. FinTek is the project name used throughout the code and
-docs — same thing, and the Python distribution is `fintek`.
 
 ## Status
 
@@ -78,7 +75,7 @@ a contact email on every request, and it denylists library defaults like `python
 Set something like:
 
 ```
-SEC_USER_AGENT="FinTek Research you@example.com"
+SEC_USER_AGENT="Kopexx Research you@example.com"
 ```
 
 Details on SEC's access rules and throttling behavior are in
