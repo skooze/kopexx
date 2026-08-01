@@ -37,6 +37,52 @@ because Sprint 1 created eighteen packages containing only a docstring, and two 
 tests scanned those empty directories and passed while enforcing nothing. A green suite must
 mean the invariants held, not that there was nothing to check.
 
+## One suite, two callers
+
+The Makefile is the **single definition** of every validation command. CI invokes the same
+targets rather than restating them, so the local pre-commit suite and GitHub Actions cannot
+diverge. `rules.md` section 17 requires this reconciliation; before it existed, CI checked
+`packages tests` while local validation checked `packages tests scripts migrations`.
+
+| Target | Covers |
+|---|---|
+| `make fmt-check` / `make lint` | `packages tests scripts migrations` |
+| `make typecheck` | `packages scripts migrations` |
+| `make test-unit` / `test-integration` / `test-architecture` | the three layers separately, as CI runs them |
+| `make migration-check` | offline Alembic upgrade and downgrade generation |
+| `make coverage` | the suite with the 85 percent gate |
+| `make check` | everything above except coverage |
+
+**`tests` is deliberately excluded from type checking.** The test suite reaches into SQLAlchemy
+internals where `Model.__table__` is typed as `FromClause`, producing six errors that are typing
+friction rather than defects. Adding blanket ignores to make them disappear would weaken the
+check for the source code that matters. This is recorded rather than hidden.
+
+Tools resolve from `./.venv/bin` when it exists and from `PATH` otherwise, so the same target
+works locally and on a CI runner.
+
+## Security scanning
+
+Two scans, both enforcing, both reproducible locally with the identical command:
+
+```
+gitleaks git . --log-opts="--all --full-history" --redact --exit-code 1
+gitleaks dir . --redact --exit-code 1
+pip-audit --skip-editable
+```
+
+Gitleaks is a **pinned CLI binary, 8.30.1, verified by SHA-256 checksum** — not a GitHub Action.
+The action was replaced after the first CI run, where it derived a commit range from the push
+event, resolved it to the nonexistent parent of the root commit, scanned zero bytes, and failed.
+
+What is scanned: **all reachable commits** (`--all --full-history`) **and the working tree**. Not
+a commit range. `--redact` keeps any finding out of the log; `--exit-code 1` fails the job on a
+finding. A "zero bytes scanned" result is treated as a failure to scan, never as a pass.
+
+`pip-audit` is enforcing rather than advisory. `--skip-editable` excludes the local `fintek`
+install, which is not on PyPI and was the reason the check was previously suppressed with
+`|| true`.
+
 ## Layers
 
 ### Unit

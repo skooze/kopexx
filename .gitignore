@@ -11,6 +11,12 @@ var/
 .env
 .DS_Store
 
+# Packaging artifacts. `pip install -e .` now succeeds, so every developer and every CI job
+# produces these. They are build output, never source.
+*.egg-info/
+build/
+dist/
+
 # DERA mirror payloads: 25.36 GiB of SEC packages. The ledger and manifest ARE tracked
 # (they are the provenance record); the .zip payloads are not.
 var/dera/packages/

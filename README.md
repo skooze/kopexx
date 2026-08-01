@@ -44,7 +44,7 @@ component.
 
 ```bash
 make install          # virtualenv and dependencies
-make check            # format, lint, types, tests
+make check            # format, lint, types, tests, migration reversibility
 make up               # postgres, minio, redis
 cp .env.example .env  # then set SEC_USER_AGENT
 ```

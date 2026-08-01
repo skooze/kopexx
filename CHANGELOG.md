@@ -8,9 +8,70 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
-Sprint 2 alignment review: a product-alignment audit against the fifteen core product
-requirements, a Git governance amendment, and the resulting planning corrections. No feature
-code was added. Not yet committed.
+Two entries: the Sprint 2 alignment review (committed as `275db19`), and the CI repair that
+followed the first GitHub Actions run.
+
+---
+
+### CI repair — not yet committed
+
+The repository's first Actions run failed in both jobs. Neither failure was caused by the commit
+that triggered it; both were latent defects that had never executed because the workflow triggers
+on push to `main`, the branch was `master`, and no remote existed.
+
+#### Fixed
+
+- **`pip install -e ".[dev]"` could never succeed.** Setuptools flat-layout auto-discovery aborts
+  with `Multiple top-level packages discovered` because the repository root holds `prompts`,
+  `artifacts`, `migrations`, `metric_definitions`, `docs`, and `tests` alongside `packages`.
+  `pyproject.toml` now declares explicit discovery, `include = ["packages*"]`, plus an explicit
+  `[build-system]`. Verified: editable install succeeds in a clean virtualenv, all nine
+  subpackages import, and none of the six non-package directories is packaged.
+- **Three runtime dependencies were undeclared.** `sqlalchemy`, `alembic`, and `psycopg[binary]`
+  are imported by `packages/persistence`, `migrations/`, and the migration tests but were absent
+  from `[project].dependencies`. The install failure had masked this: fixing discovery alone would
+  have moved the failure to the test step with `ModuleNotFoundError: sqlalchemy`. Proven by
+  simulating the CI dependency set before declaring them.
+- **Gitleaks had never scanned anything.** The action derived a commit range from the push event,
+  which on a first push resolved to `<root>^` — the parent of the root commit, which cannot exist.
+  It errored having scanned `~0 bytes` and failed the job. Replaced with a pinned CLI binary
+  (8.30.1, SHA-256 verified) invoked over **all reachable commits** and **the working tree**,
+  never an event-derived range. Checkout now uses `fetch-depth: 0`; it was `1`, which cannot be
+  scanned for history at all.
+- **CI validated narrower paths than local validation.** CI checked `packages tests` while local
+  validation checked `packages tests scripts migrations`. The Makefile is now the single
+  definition of every command and CI invokes those targets, so the two cannot drift. `rules.md`
+  section 17 required this reconciliation.
+- **The dependency scan was silently suppressed.** `pip-audit --strict || true` swallowed every
+  result. `--strict` errors on `fintek` itself, which is an editable local install and not on
+  PyPI; `--skip-editable` is the correct exclusion. The gate is now enforcing. Verified: exits 0
+  on the current dependency set and exits 1 against a deliberately vulnerable pin.
+
+#### Added
+
+- `docs/runbooks/ci-failure.md` — reproducing each failure locally, and what not to do about it.
+- `make migration-check` — offline Alembic upgrade and downgrade, now part of `make check`.
+- A CI step asserting the installed distribution actually imports.
+- `workflow_dispatch` trigger, and an explicit least-privilege `permissions: contents: read`.
+
+#### Changed
+
+- Type checking covers `packages scripts migrations`, 45 source files. `tests` is excluded
+  deliberately and the reason is recorded: it reaches into SQLAlchemy internals where
+  `Model.__table__` is typed as `FromClause`, and blanket ignores would weaken the check for the
+  source that matters.
+- `CLAUDE.md`, `techspecs.md`, `README.md`, `docs/testing/strategy.md`, and
+  `docs/architecture/deployment.md` updated. The recorded warnings that CI cannot install the
+  project, that gitleaks cannot run locally, and that CI omits `scripts` and `migrations` are
+  removed **because they are no longer true**. The `master` branch warning is removed because the
+  branch is now `main`.
+
+---
+
+### Sprint 2 alignment review — committed as `275db19`
+
+A product-alignment audit against the fifteen core product requirements, a Git governance
+amendment, and the resulting planning corrections. No feature code was added.
 
 ### Added
 

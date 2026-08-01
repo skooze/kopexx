@@ -1,9 +1,18 @@
 name: ci
 
+# Every validation command here is defined once, in the Makefile. CI invokes those targets rather
+# than repeating them, so the local pre-commit suite and this workflow cannot drift apart.
+# rules.md section 17 requires that reconciliation.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# Least privilege. Neither job writes to the repository, opens issues, or publishes packages.
+permissions:
+  contents: read
 
 jobs:
   quality:
@@ -15,56 +24,103 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Explicit package discovery lives in pyproject.toml. Automatic flat-layout discovery
+      # cannot work here: the repository root holds several non-Python top-level directories.
       - name: Install
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Verify the distribution imports
+        run: python -c "import packages; print(packages.__file__)"
+
       - name: Format check
-        run: ruff format --check packages tests
+        run: make fmt-check
 
       - name: Lint
-        run: ruff check packages tests
+        run: make lint
 
       - name: Type check
-        run: mypy packages --ignore-missing-imports
+        run: make typecheck
 
       - name: Unit tests
-        run: pytest tests/unit -q
+        run: make test-unit
 
       - name: Integration tests
-        run: pytest tests/integration -q
+        run: make test-integration
 
       # Enforces the structural invariants in rules.md, including the LLM content boundary:
-      # no provider SDK outside the provider adapter, no Markdown prompt files, and no prompt
-      # instructing a model to emit a prohibited format.
+      # no provider SDK outside the provider adapter, no Markdown prompt files, no prompt
+      # instructing a model to emit a prohibited format, and no empty package stubs.
       - name: Architecture tests
-        run: pytest tests/architecture -q
+        run: make test-architecture
+
+      # Offline DDL generation. Needs no database; proves the migration is reversible.
+      - name: Migration reversibility
+        run: make migration-check
 
       - name: Coverage
-        run: |
-          pytest tests -q \
-            --cov=packages.sec_identity --cov=packages.configuration \
-            --cov=packages.sec_client --cov=packages.storage \
-            --cov=packages.llm_gateway --cov=packages.dera_notes \
-            --cov=packages.observability \
-            --cov-report=term --cov-fail-under=85
+        run: make coverage
 
   security:
     runs-on: ubuntu-latest
+    env:
+      # Pinned release, verified by checksum below. A moving tag would let the scanner change
+      # under us without review.
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
     steps:
+      # SECURITY-INVARIANT: fetch-depth 0. A shallow clone cannot be scanned for secrets in
+      # history, and the first CI run checked out with depth 1.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL "$url" -o gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar xzf gitleaks.tar.gz gitleaks
+          ./gitleaks version
+
+      # Scans ALL REACHABLE COMMITS via --log-opts "--all --full-history", not the push event's
+      # commit range. The previous configuration used that range, which on a first push resolved
+      # to the nonexistent parent of the root commit; gitleaks errored having scanned ~0 bytes
+      # and the job failed without ever inspecting the repository.
+      #
+      # --redact keeps any finding out of the log. --exit-code 1 makes a finding fail the job.
+      - name: Secret scan - full git history
+        run: |
+          set -euo pipefail
+          ./gitleaks git . \
+            --log-opts="--all --full-history" \
+            --redact \
+            --no-banner \
+            --exit-code 1
+
+      # Second pass over the checked-out working tree. History and tree can differ, and a
+      # tracked file is what an attacker actually reads.
+      - name: Secret scan - working tree
+        run: |
+          set -euo pipefail
+          ./gitleaks dir . \
+            --redact \
+            --no-banner \
+            --exit-code 1
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      # Enforcing, not advisory. The previous `|| true` existed because `--strict` errors on
+      # fintek itself, which is an editable local install and not on PyPI. --skip-editable is
+      # the correct exclusion, so the gate can now fail the job on a real advisory instead of
+      # swallowing every result. Verified: exits 0 on the current dependency set, and exits 1
+      # against a deliberately vulnerable pin.
       - name: Dependency vulnerability scan
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip pip-audit
-          pip-audit --strict || true   # advisory until the dependency set stabilises
+          pip-audit --skip-editable

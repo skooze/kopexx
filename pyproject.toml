@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fintek"
 version = "0.1.0"
@@ -7,10 +11,35 @@ dependencies = [
     "ruamel.yaml>=0.18",
     "pydantic>=2.7",
     "httpx>=0.27",
+    # sqlalchemy and alembic are imported by packages/persistence, migrations/, and the
+    # migration tests. They were omitted from this list until the first CI run, where the
+    # package-discovery failure masked the fact that an install without them cannot import
+    # packages.persistence at all.
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    # The control plane speaks postgresql+psycopg. Without a driver the application cannot
+    # connect, so this is a runtime dependency rather than a development convenience.
+    "psycopg[binary]>=3.1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5", "mypy>=1.10"]
+
+# Explicit package discovery. Automatic flat-layout discovery fails here because the repository
+# root holds several non-Python top-level directories -- prompts, artifacts, migrations,
+# metric_definitions, docs, tests -- and setuptools refuses to guess between them. It also picked
+# up the gitignored var/ directory locally, which CI never saw, so the failure was not even
+# reproducible across environments.
+#
+# packages/ is the only importable tree: it and all nine subpackages carry __init__.py, and every
+# import in the codebase is of the form `packages.<name>`. `packages*` therefore covers exactly
+# the distribution, and nothing else is packaged.
+#
+# No package-data configuration is needed: packages/ contains zero non-.py files. Prompts, metric
+# definitions, and migrations are loaded from the repository by path, not as package resources.
+[tool.setuptools.packages.find]
+include = ["packages*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

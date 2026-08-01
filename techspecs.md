@@ -4,12 +4,33 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 2 alignment review
+LAST SYNCHRONIZED WITH CODE: CI repair, after the Sprint 2 alignment review
 VERIFICATION: 143 tests passing and 2 skipped, 93 percent coverage on implemented packages, ruff
-format and lint clean, mypy clean across 41 source files.
+format and lint clean across `packages tests scripts migrations`, mypy clean across 45 source
+files in `packages scripts migrations`, editable install succeeding in a clean environment,
+offline Alembic upgrade and downgrade, gitleaks 8.30.1 clean over all reachable history and the
+working tree, and pip-audit clean.
 
-The source-file count fell from 59 to 41 because the alignment review removed eighteen packages
-that contained only a docstring. See ADR-0015.
+The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
+contained only a docstring (ADR-0015), then rose to 45 because type checking now also covers
+`scripts` and `migrations`.
+
+## Build and packaging
+
+`pyproject.toml` declares explicit setuptools discovery: `[tool.setuptools.packages.find]` with
+`include = ["packages*"]`. Automatic flat-layout discovery cannot work in this repository — the
+root holds `prompts`, `artifacts`, `migrations`, `metric_definitions`, `docs`, and `tests`, and
+setuptools refuses to guess. It additionally picked up the gitignored `var/` directory in a local
+checkout, so the failure was not even reproducible across environments.
+
+`packages/` is the only importable tree: it and all nine subpackages carry `__init__.py`, and
+every import in the codebase has the form `packages.<name>`. No package-data configuration is
+needed because `packages/` contains zero non-`.py` files; prompts, metric definitions, and
+migrations are loaded from the repository by path rather than as package resources.
+
+Runtime dependencies are `ruamel.yaml`, `pydantic`, `httpx`, `sqlalchemy`, `alembic`, and
+`psycopg[binary]`. The last three were omitted until the first CI run: the package-discovery
+failure masked the fact that an install without them cannot import `packages.persistence`.
 
 ---
 

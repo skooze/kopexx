@@ -134,28 +134,39 @@ with a status column, and an architecture test rejects empty stub packages.
 Discover the current suite from the repository — `Makefile`, `pyproject.toml`,
 `.github/workflows/ci.yml` — rather than from this list, which can go stale.
 
-As currently defined:
+**The Makefile is the single definition of the suite. CI invokes the same targets**, so local
+validation and GitHub Actions cannot drift apart. Never write a validation command directly into
+the workflow.
 
 ```
-make check      ruff format --check, ruff check, mypy, pytest
-make coverage   pytest with coverage; CI enforces --cov-fail-under=85
+make check            fmt-check, lint, typecheck, test, migration-check
+make coverage         tests with coverage and the 85% gate
+make migration-check  offline alembic upgrade and downgrade generation
 ```
 
-Also applicable, and not covered by `make check`:
+Paths, defined once in the Makefile:
 
 ```
-alembic upgrade head --sql              offline DDL generation
-alembic downgrade 0001_initial:base --sql
-pip-audit                               dependency vulnerabilities
+PY_PATHS     packages tests scripts migrations     format and lint
+MYPY_PATHS   packages scripts migrations           type check
 ```
 
-CI additionally runs a **gitleaks** secret scan, which is a GitHub Action and cannot be
-reproduced locally. A commit validated without it is **not fully CI-validated**, and section 17
-of `rules.md` requires saying so.
+`tests` is excluded from type checking on purpose: it exercises SQLAlchemy internals where
+`Model.__table__` is typed as `FromClause`, and silencing that with blanket ignores would weaken
+the check for the source that matters.
 
-Two known CI gaps, both pre-existing: the workflow triggers on push to `main` while the working
-branch is `master`, so pushes would trigger nothing; and CI lints only `packages tests`, not
-`scripts` and `migrations`.
+Not covered by `make check`, run before proposing a commit:
+
+```
+pip-audit --skip-editable                 dependency vulnerabilities, enforcing
+gitleaks git . --log-opts="--all --full-history" --redact --exit-code 1
+gitleaks dir . --redact --exit-code 1
+```
+
+**Gitleaks is a pinned CLI binary (8.30.1, checksum-verified), not a GitHub Action**, so the same
+command runs locally and in CI. Install it from the official release if you need to reproduce the
+security job. It scans all reachable commits plus the working tree; it does not use the push
+event's commit range, which cannot resolve on a first push.
 
 ---
 
