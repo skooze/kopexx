@@ -1,5 +1,6 @@
 """SEC HTTP access with mandatory rate control and throttle classification."""
 
+from .client import FetchResult, SecHttpClient
 from .errors import (
     DirectoryListingError,
     SecClientError,
@@ -19,6 +20,8 @@ from .throttle import (
 
 __all__ = [
     "Clock",
+    "FetchResult",
+    "SecHttpClient",
     "DirectoryListingError",
     "FakeClock",
     "SecClientError",

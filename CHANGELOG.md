@@ -10,7 +10,68 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ### Added
 
-Nothing since Sprint 1.
+Nothing since Sprint 2.
+
+## [0.2.0] — Sprint 2 — 2026-08-01
+
+Discharges URGENT-01 and establishes the database schema.
+
+### Added
+
+- `packages/sec_client.client`: the SEC HTTP client. Built on the Sprint 1 limiter and throttle
+  classifier. Streams to disk while hashing, and rejects rather than stores an HTML error page, a
+  directory listing, wrong ZIP magic bytes, a body shorter than its declared Content-Length, a ZIP
+  with no members, or a ZIP whose member fails CRC. Writes to a temporary path and renames only
+  after every assertion passes.
+- `scripts/mirror_dera.py`: the live DERA mirror, with size probe, dry run, monthly-only, and full
+  modes. Produces a manifest and reconciles discovered against persisted.
+- `packages/persistence`: the PostgreSQL control-plane schema. 24 tables, 36 indexes, 93
+  constraints.
+- `migrations/versions/0001_initial_control_plane_schema.py`: the initial migration, including a
+  BEFORE UPDATE trigger on `xbrl_fact` that enforces append-only at the database level.
+- `scripts/generate_initial_migration.py`: deterministic migration generation from model metadata,
+  used because Alembic autogenerate requires a live database and this environment has none.
+- 33 tests: 15 for the HTTP client, 14 for migrations, 4 for YAML library identity and alias
+  bounding.
+
+### Changed
+
+- Roadmap URGENT-01 moved to COMPLETE with completion evidence. Risk R-01 CLOSED.
+- Phase 0 marked COMPLETE.
+
+### Fixed
+
+- **Unbounded YAML alias expansion.** The Sprint 1 parser enforced size, depth, collection, and
+  scalar limits AFTER parsing, which is useless against alias expansion because the allocation
+  happens during parsing. Measured: a five-line document with nine anchors each referencing the
+  previous nine expanded to 59,049 leaf nodes; two further levels exhaust memory. A pre-parse
+  anchor and alias budget now rejects it. Found by the Sprint 2 YAML verification, not by review.
+
+### Security
+
+- YAML alias bomb protection, as above.
+- The append-only guarantee on filed facts moved from a code comment to a database trigger, so it
+  holds against a direct SQL session rather than only against application code.
+- `llm_invocation` carries a check constraint restricting content format to plain_text or yaml,
+  putting the LLM serialization invariant in the schema.
+
+### Data migrations
+
+- `0001_initial_control_plane_schema`. Verified by offline DDL generation in both directions.
+  **Not yet applied to a live database**; see known issues.
+
+### Operational changes
+
+- **The DERA mirror is complete.** 78 of 78 discoverable packages held locally, 25.36 GiB, zero
+  failures. The twelve monthly packages with no quarterly consolidation were secured first.
+  `docs/runbooks/dera-mirror.md` records the run and the idempotency proof.
+
+### Documentation
+
+- ADR-0013 now pins the YAML parser (ruamel.yaml 0.19.1, YAML 1.2 core, pure safe mode) and
+  documents the alias bound with its measurement.
+- `techspecs.md`, `roadmap.md`, `docs/data-dictionary/README.md`, `docs/sec/dera-notes.md`, and
+  `docs/runbooks/dera-mirror.md` synchronized with the implementation.
 
 ## [0.1.0] — Sprint 1 — 2026-08-01
 

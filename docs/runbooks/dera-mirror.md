@@ -13,13 +13,36 @@ unreachable** if deleted before its quarterly consolidation is published.
 There is no recovery. If a monthly is lost, that period's footnote text and facts are gone from
 this source.
 
+## Status: mirrored 2026-08-01
+
+The emergency mirror is COMPLETE. All 78 currently discoverable packages are held locally.
+
+    listing     https://www.sec.gov/data-research/sec-markets-data/financial-statement-notes-data-sets
+    discovered  78   (66 quarterly, 12 monthly)
+    persisted   78
+    failed      0
+    bytes       27,228,877,737  (25.36 GiB)
+    manifest    var/dera/manifest.json
+    ledger      var/dera/ledger.json
+
+The gap this run closed: quarterly coverage ends at 2025q2, while monthlies run 2025_07 through
+2026_06. Twelve months of data had NO quarterly consolidation and were reachable only as
+monthlies. Those twelve were downloaded first, in a separate 74-second run, before the bulk.
+
 ## Normal operation
 
-The mirror is resumable and idempotent. A completed run downloads nothing.
+The mirror is resumable and idempotent. A completed run downloads nothing and re-hashes every
+file on disk rather than trusting the ledger.
 
 ```
-python scripts/mirror_dera.py
+python scripts/mirror_dera.py --size-only     probe sizes, download nothing
+python scripts/mirror_dera.py --dry-run       discover and report
+python scripts/mirror_dera.py --only-monthly  the irreplaceable packages first
+python scripts/mirror_dera.py                 everything not already held
 ```
+
+Verified idempotent: a second full run reported 78 discovered, 0 downloaded, 78 already present,
+0 failed, in 82 seconds.
 
 ## Symptom: discovery returns nothing
 

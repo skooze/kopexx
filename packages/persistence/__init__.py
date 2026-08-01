@@ -1,0 +1,62 @@
+"""PostgreSQL persistence layer.
+
+ARCHITECTURE: an infrastructure adapter. `packages/domain` must never import it.
+"""
+
+from .base import Base, TimestampMixin, new_uuid
+from .models import (
+    AnalysisMessage,
+    AnalysisSession,
+    CanonicalFootnote,
+    ConversationMemory,
+    DatasetVersion,
+    DeraPackageRecord,
+    DerivedMetric,
+    ExcludedFiler,
+    Filing,
+    FilingAmendment,
+    FilingDocument,
+    FilingSection,
+    FootnoteSourceBlock,
+    FootnoteSummary,
+    FootnoteTable,
+    Issuer,
+    IssuerFormerName,
+    Listing,
+    ListingObservation,
+    LlmInvocation,
+    MetricDefinition,
+    ProcessingJob,
+    PromptVersion,
+    XbrlFact,
+)
+
+__all__ = [
+    "AnalysisMessage",
+    "AnalysisSession",
+    "Base",
+    "CanonicalFootnote",
+    "ConversationMemory",
+    "DatasetVersion",
+    "DeraPackageRecord",
+    "DerivedMetric",
+    "ExcludedFiler",
+    "Filing",
+    "FilingAmendment",
+    "FilingDocument",
+    "FilingSection",
+    "FootnoteSourceBlock",
+    "FootnoteSummary",
+    "FootnoteTable",
+    "Issuer",
+    "IssuerFormerName",
+    "Listing",
+    "ListingObservation",
+    "LlmInvocation",
+    "MetricDefinition",
+    "ProcessingJob",
+    "PromptVersion",
+    "TimestampMixin",
+    "XbrlFact",
+    "new_uuid",
+]

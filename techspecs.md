@@ -4,9 +4,9 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 1
-VERIFICATION: 104 tests passing, 94 percent coverage on implemented packages, ruff format and
-lint clean, mypy clean across 55 source files.
+LAST SYNCHRONIZED WITH CODE: Sprint 2
+VERIFICATION: 137 tests passing and 2 skipped, 95 percent coverage on implemented packages, ruff
+format and lint clean, mypy clean across 59 source files.
 
 ---
 
@@ -44,11 +44,14 @@ outbound side effect is a model invocation, which is metered and audited.
 | SEC identity normalization | `sec_identity` | IMPLEMENTED |
 | Configuration and User-Agent validation | `configuration` | IMPLEMENTED |
 | Rate limiting and throttle classification | `sec_client` | IMPLEMENTED |
-| SEC HTTP client | `sec_client` | PLANNED (Sprint 2) |
+| SEC HTTP client | `sec_client` | IMPLEMENTED |
 | Object storage and hashing | `storage` | IMPLEMENTED (filesystem); S3 PLANNED |
 | Structured logging and correlation | `observability` | IMPLEMENTED |
 | DERA discovery and mirror ledger | `dera_notes` | IMPLEMENTED |
-| DERA download and TSV load | `dera_notes` | PLANNED (Sprint 2) |
+| DERA bulk download | `dera_notes` + `sec_client` | IMPLEMENTED and EXECUTED (78/78 packages) |
+| DERA TSV load | `dera_notes` | PLANNED (Sprint 3) |
+| PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
+| Alembic migration | `migrations` | IMPLEMENTED (offline-verified; live apply BLOCKED) |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
 | Bedrock provider adapter | `llm_gateway/providers` | PLANNED (Phase 6) |
 | Issuer registry | `issuer_registry` | PLANNED (Phase 2) |
@@ -136,7 +139,7 @@ startup by design.
 
 UNIT TESTS. 6 in `tests/unit/test_configuration.py`.
 
-### 3.3 `packages/sec_client` — rate limiting and classification IMPLEMENTED; HTTP client PLANNED
+### 3.3 `packages/sec_client` — IMPLEMENTED (limiter and classifier Sprint 1; HTTP client Sprint 2)
 
 RESPONSIBILITY. Pace all SEC traffic and classify refusals correctly.
 
@@ -208,7 +211,68 @@ INVARIANTS.
 
 UNIT TESTS. 8. INTEGRATION TESTS. 2, covering idempotency and full provenance.
 
-### 3.7 `packages/llm_gateway` — IMPLEMENTED
+### 3.7 `packages/sec_client.client` — IMPLEMENTED (Sprint 2)
+
+RESPONSIBILITY. The only component permitted to issue HTTP requests to an SEC host.
+
+PUBLIC INTERFACE. `SecHttpClient(user_agent, limiters, cooldown_seconds, ...)` with `get_text`,
+`head`, `download(url, destination, expect_zip)`, and `FetchResult`.
+
+INVARIANTS. Every request passes the shared limiter and carries the validated User-Agent. A
+rate-threshold 403 triggers a full 600-second cooldown, never exponential backoff. An
+undeclared-automation 403 raises immediately and is never retried. A download writes to a
+temporary path and is renamed only after every assertion passes.
+
+CONTENT ASSERTIONS, all rejecting rather than storing: HTML page where content was expected,
+directory listing, wrong magic bytes for an expected ZIP, body shorter than its declared
+Content-Length, ZIP with no members, ZIP whose member fails CRC.
+
+FAILURE MODES. `SecRateLimitedError` retryable; `SecUndeclaredAutomationError` never;
+`SecNotFoundError` permanent; `DirectoryListingError` permanent; `SecTransientError` retryable
+with bounded backoff.
+
+SCALING. Single-process. The in-process limiter means exactly one client may run at a time,
+because the SEC limit is aggregate across machines. The Redis-backed limiter is required before
+multi-process ingestion and is BLOCKING for Phase 4.
+
+TESTS. 15 in `tests/unit/test_sec_http_client.py` using `httpx.MockTransport`, including a test
+asserting the cooldown is exactly one 600-second pause rather than a backoff sequence.
+
+PROVEN IN PRODUCTION. Executed the full DERA mirror: 78 packages, 27,228,877,737 bytes, zero
+failures, zero throttle events.
+
+### 3.8 `packages/persistence` — IMPLEMENTED (Sprint 2)
+
+RESPONSIBILITY. The PostgreSQL control-plane schema.
+
+SCOPE. 24 tables, 36 indexes, 93 constraints. Issuer identity with temporal validity, filings and
+documents and sections and amendments, canonical footnotes with source blocks and tables, the
+append-only fact lake, metric definitions and derived values, versioned summaries, the ingest
+ledger, the DERA mirror ledger, Deep Analysis sessions and messages and memory, model invocation
+audit, prompt registry, and the dataset version pointer.
+
+PROHIBITED DEPENDENCIES. `packages/domain` must never import this package. Dependency flows
+domain <- persistence.
+
+KEY ENFORCEMENT.
+- `xbrl_fact` carries a BEFORE UPDATE trigger rejecting any change to a filed value, unit, scale,
+  concept, or period. The guarantee holds against a direct SQL session, not only against
+  application code.
+- `listing` is unique on `(ticker, exchange, effective_start)`, never on ticker alone.
+- `footnote_summary` has a partial unique index giving exactly one active version per footnote.
+- `footnote_source_block.footnote_id` is nullable, with a partial index over orphans, so an
+  ungrouped block is a visible defect rather than a silent loss.
+- `llm_invocation` has a check constraint restricting content format to plain_text or yaml.
+
+MIGRATION. `migrations/versions/0001_initial_control_plane_schema.py`. Generated deterministically
+from the model metadata by `scripts/generate_initial_migration.py`, because Alembic autogenerate
+requires a live database and this environment has none.
+
+TESTS. 14 in `tests/unit/test_migrations.py`. Twelve structural tests run everywhere; two live
+tests SKIP with an explicit reason when no PostgreSQL is reachable, so a missing database never
+masquerades as a pass.
+
+### 3.9 `packages/llm_gateway` — IMPLEMENTED
 
 RESPONSIBILITY. The only path from FinTek to a language model. Owns payload compilation, boundary
 validation, budget enforcement, provider invocation, response validation, safe parsing, cost
@@ -230,11 +294,17 @@ are: model-visible content is plain text or one unfenced YAML 1.2 document; only
 produces it; exact bodies are preserved; budgets are checked before invocation; every identifier
 is quoted.
 
-TWO VERIFIED FACTS THE DESIGN RESTS ON.
+YAML PARSER, PINNED. ruamel.yaml 0.19.1, `YAML(typ="safe", pure=True)`, YAML 1.2 core schema,
+VersionedResolver, on Python 3.14.6. PyYAML is not used because it implements YAML 1.1.
+
+THREE VERIFIED FACTS THE DESIGN RESTS ON.
 - YAML 1.2 does not coerce `yes`, `no`, `on`, `off` to booleans; YAML 1.1 does. `ruamel.yaml` in
   pure safe mode is used for exactly this reason.
 - YAML 1.2 parses an unquoted `0000320193` as the integer `320193`, destroying a CIK. Identifiers
   are always quoted, and `require_string` refuses an identifier that arrived unquoted.
+- Alias expansion was UNBOUNDED before Sprint 2. A five-line document expanded to 59,049 leaf
+  nodes. A pre-parse anchor and alias budget now rejects it, because a post-parse check runs after
+  the allocation has already happened.
 
 UNIT TESTS. 36 across boundary and parser suites.
 
@@ -319,7 +389,8 @@ enforcement before spend, and audit persistence of exact model bodies.
 ## 9. Known defects and limitations
 
 1. The rate limiter is in-process. Multi-process ingestion requires the Redis-backed bucket
-   because the SEC limit is aggregate across machines. BLOCKING for Phase 4.
+   because the SEC limit is aggregate across machines. BLOCKING for Phase 4. The Sprint 2 mirror
+   ran as a single process precisely because of this.
 2. Canonical grouping by role URI is verified on exactly one filing. Breadth validation across
    25 issuers and four eras precedes scale-out. BLOCKING for Phase 5.
 3. Token estimation is a character-ratio heuristic, adequate for budget guards and relative
@@ -329,3 +400,8 @@ enforcement before spend, and audit persistence of exact model bodies.
    See ADR-0014.
 6. `packages/sec_identity/accession.py` sits at 79 percent statement coverage, the lowest of the
    implemented modules; the uncovered lines are error branches on malformed input.
+7. The Alembic migration has NOT been applied to a live PostgreSQL. This environment has no
+   PostgreSQL and its Docker daemon cannot start containers, so upgrade and downgrade were
+   verified by offline DDL generation and by structural tests only. The two live tests skip with
+   an explicit reason. BLOCKING for Phase 3, and the first thing to run wherever a database
+   exists.

@@ -1,6 +1,7 @@
 # DERA Financial Statement and Notes Data Sets
 
-IMPLEMENTATION STATUS: discovery and ledger IMPLEMENTED (Sprint 1); bulk download and load PLANNED (Sprint 2)
+IMPLEMENTATION STATUS: discovery, ledger, and bulk mirror IMPLEMENTED and EXECUTED (Sprint 2).
+All 78 packages held locally, 25.36 GiB. TSV loading PLANNED (Sprint 3).
 OWNER PACKAGE: `packages/dera_notes`
 DECISION RECORD: `docs/adr/ADR-0001-dera-notes-primary-source.md`
 RUNBOOK: `docs/runbooks/dera-mirror.md`

@@ -19,6 +19,7 @@ leading zeros that make it a valid CIK. Every identifier we emit is quoted by th
 from __future__ import annotations
 
 import io
+import re
 from typing import Any, Final
 
 from ruamel.yaml import YAML
@@ -32,6 +33,23 @@ MAX_DEPTH: Final[int] = 32
 MAX_COLLECTION_SIZE: Final[int] = 10_000
 MAX_SCALAR_LENGTH: Final[int] = 1_000_000
 MAX_DOCUMENTS: Final[int] = 1
+
+# SECURITY-INVARIANT: alias expansion must be bounded BEFORE parsing.
+#
+# YAML aliases expand multiplicatively. Measured during Sprint 2: a five-line document with nine
+# anchors each referencing the previous nine expanded to 59,049 leaf nodes. Adding two more levels
+# exhausts memory. The post-parse size limits below cannot help, because by the time they run the
+# expansion has already been allocated.
+#
+# None of our model-output schemas uses aliases at all, so the bound is deliberately low. A false
+# rejection is a loud, cheap failure; an unbounded expansion is a denial of service.
+MAX_ANCHORS: Final[int] = 16
+MAX_ALIASES: Final[int] = 16
+
+# Conservative textual detection. Over-counting causes a safe rejection; under-counting would
+# admit the bomb, so the patterns intentionally do not try to exclude quoted contexts.
+_ANCHOR_PATTERN: Final = re.compile(r"(?:^|[\s\[{,])&[A-Za-z_][\w.-]*")
+_ALIAS_PATTERN: Final = re.compile(r"(?:^|[\s\[{,])\*[A-Za-z_][\w.-]*")
 
 
 def _new_loader() -> YAML:
@@ -71,6 +89,26 @@ def _check_limits(node: Any, depth: int = 0) -> None:
             )
 
 
+def _check_alias_budget(text: str) -> None:
+    """Reject an alias bomb before the parser can expand it.
+
+    Runs on the raw source, because expansion happens during parsing and any post-parse check is
+    already too late.
+    """
+    anchors = len(_ANCHOR_PATTERN.findall(text))
+    if anchors > MAX_ANCHORS:
+        raise YamlSafetyError(
+            f"yaml document declares {anchors} anchors, exceeding {MAX_ANCHORS}; "
+            "alias expansion is bounded to prevent memory exhaustion"
+        )
+    aliases = len(_ALIAS_PATTERN.findall(text))
+    if aliases > MAX_ALIASES:
+        raise YamlSafetyError(
+            f"yaml document uses {aliases} aliases, exceeding {MAX_ALIASES}; "
+            "alias expansion is bounded to prevent memory exhaustion"
+        )
+
+
 def parse_yaml(text: str) -> Any:
     """Parse exactly one YAML 1.2 document from untrusted model output.
 
@@ -82,6 +120,8 @@ def parse_yaml(text: str) -> Any:
     encoded_length = len(text.encode("utf-8"))
     if encoded_length > MAX_INPUT_BYTES:
         raise YamlSafetyError(f"yaml payload of {encoded_length} bytes exceeds {MAX_INPUT_BYTES}")
+
+    _check_alias_budget(text)
 
     loader = _new_loader()
     try:

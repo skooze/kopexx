@@ -1,7 +1,7 @@
 # roadmap.md — FinTek Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Sprint 1)
-LAST UPDATED: Sprint 1
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Sprint 2)
+LAST UPDATED: Sprint 2
 
 ---
 
@@ -32,6 +32,9 @@ did, and that is what investors actually need. The footnotes are the product.
 | DERA link discovery and mirror ledger | IMPLEMENTED |
 | LLM gateway, YAML boundary, payload compiler, boundary validator | IMPLEMENTED |
 | Mock model provider | IMPLEMENTED |
+| SEC HTTP client | IMPLEMENTED |
+| DERA live mirror | COMPLETE (78/78 packages, 25.36 GiB) |
+| PostgreSQL schema and initial migration | IMPLEMENTED |
 | Bedrock provider adapter | PLANNED |
 | Filing discovery at scale | PLANNED |
 | Document acquisition | PLANNED |
@@ -50,9 +53,16 @@ did, and that is what investors actually need. The footnotes are the product.
 ID:              URGENT-01
 DESCRIPTION:     Mirror the SEC DERA Financial Statement and Notes datasets.
 PRIORITY:        P0
-STATUS:          IN_PROGRESS (discovery implemented; bulk download not yet executed)
+STATUS:          COMPLETE  (Sprint 2, 2026-08-01)
 OWNER:           unassigned
 TARGET SPRINT:   2
+COMPLETION EVIDENCE:
+    78 of 78 discoverable packages persisted, 0 failed, 27,228,877,737 bytes (25.36 GiB).
+    Every package SHA-256 recorded and CRC-validated via zipfile.testzip().
+    Second full run: 0 downloaded, 78 already present. Idempotency proven.
+    Manifest: var/dera/manifest.json   Ledger: var/dera/ledger.json
+    The twelve monthly packages with no quarterly consolidation (2025_07 through 2026_06)
+    were secured first, in a separate run, before the bulk.
 ```
 
 The SEC retains only a rolling twelve months of monthly NOTES packages and deletes them once
@@ -60,12 +70,8 @@ consolidated into quarterly packages. Data currently reachable only as a monthly
 permanently unreachable if deleted before its quarterly consolidation is published. This is the
 only task in the project with an external deadline.
 
-ACCEPTANCE CRITERIA: every currently listed monthly and quarterly NOTES package is downloaded,
-hashed, recorded in the mirror ledger, and verified restorable. Re-running the mirror downloads
-nothing new.
-
-EVIDENCE REQUIRED: mirror ledger rows with URL, SHA-256, byte size, retrieval timestamp, and
-dataset period for every package.
+ACCEPTANCE CRITERIA: MET. Every listed monthly and quarterly package downloaded, hashed, recorded,
+and validated. Re-running downloads nothing.
 
 ---
 
@@ -98,7 +104,7 @@ documentation obligations, risks, and exit criteria.
 
 ### Phase 0 — Urgent Preservation and Project Foundation
 
-STATUS: COMPLETE (delivered in Sprint 1, except the bulk DERA download itself)
+STATUS: COMPLETE (Sprint 1 foundation; Sprint 2 discharged the DERA mirror and added the schema)
 
 OBJECTIVE. Establish durable project memory and the safety-critical primitives that everything
 else depends on, and begin preserving data that is disappearing.
@@ -280,8 +286,8 @@ earlier phase depends on it.
 | Sprint | Objective | Status |
 |---|---|---|
 | 1 | Foundation, governance, SEC primitives, LLM boundary controls | COMPLETE |
-| 2 | Execute DERA mirror download; PostgreSQL schema and migrations | NOT STARTED |
-| 3 | Filing discovery and acquisition for one CIK | NOT STARTED |
+| 2 | Execute DERA mirror download; PostgreSQL schema and migrations | COMPLETE |
+| 3 | DERA TSV loading; filing discovery and acquisition for one CIK | NOT STARTED |
 | 4 | Fact loading and canonical footnote grouping for one filing | NOT STARTED |
 | 5 | Summarization of every canonical footnote for one filing | NOT STARTED |
 
@@ -291,7 +297,7 @@ earlier phase depends on it.
 
 | ID | Risk | Severity | Mitigation | Status |
 |---|---|---|---|---|
-| R-01 | DERA monthly packages deleted before mirroring | HIGH | URGENT-01 in Sprint 2 | OPEN |
+| R-01 | DERA monthly packages deleted before mirroring | HIGH | URGENT-01 discharged in Sprint 2; all 78 packages held locally | CLOSED |
 | R-02 | Role-URI grouping verified on one filing only | HIGH | Phase 5 breadth validation across 25 issuers | OPEN |
 | R-03 | Pre-2009 filings have no role URIs | MEDIUM | Text-only grouping with lower confidence, surfaced in UI | OPEN |
 | R-04 | Bedrock catalog and pricing unverified | MEDIUM | Blocking gate before Phase 6 cost commitment | OPEN |

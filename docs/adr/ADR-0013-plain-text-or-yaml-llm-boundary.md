@@ -66,19 +66,62 @@ Five serialization contexts exist and only the first is constrained by this ADR.
 
 ## YAML specifics
 
-YAML 1.2 core schema, parsed with ruamel.yaml in pure safe mode. PyYAML is not used: it
-implements YAML 1.1, whose boolean resolver converts the bare scalars yes, no, on, and off into
-booleans. A footnote field whose value is the word "no" would silently become False. Verified
-during Sprint 1.
+### Parser selection, pinned
+
+    library      ruamel.yaml
+    version      0.19.1  (floor pinned at 0.18 by test)
+    mode         YAML(typ="safe", pure=True)
+    schema       YAML 1.2 core
+    resolver     VersionedResolver
+    python       3.14.6
+
+`pure=True` forces the Python implementation, whose resolver behaviour is pinnable; the C loader
+is not used because its behaviour is harder to guarantee across builds.
+
+PyYAML is deliberately NOT used. It implements YAML 1.1, whose boolean resolver converts the bare
+scalars yes, no, on, and off into booleans. A footnote field whose value is the word "no" would
+silently become False. Verified Sprint 1, re-verified Sprint 2:
+
+    a: yes  ->  'yes'  (str)      under YAML 1.2 core
+    b: no   ->  'no'   (str)
+    c: on   ->  'on'   (str)
+    d: off  ->  'off'  (str)
+
+Covered by `test_yaml_12_does_not_coerce_yes_no_on_off` and
+`test_yaml_library_is_ruamel_with_yaml_12_semantics`.
 
 Identifiers are always quoted. YAML 1.2 parses an unquoted 0000320193 as the integer 320193,
 destroying the leading zeros that make it a valid CIK. Verified during Sprint 1. The serializer
 quotes a defined set of identifier keys automatically, and the parser refuses to return an
 identifier that arrived unquoted rather than coercing it back.
 
-The parser enforces limits on input size, nesting depth, collection size, scalar length, and
-document count, rejects duplicate keys, and permits no custom tags or arbitrary object
-construction.
+### Resource limits
+
+    input size        4 MiB
+    nesting depth     32
+    collection size   10,000
+    scalar length     1,000,000
+    documents         1
+    anchors           16      pre-parse
+    aliases           16      pre-parse
+    duplicate keys    rejected
+    custom tags       rejected
+
+### The alias bound, added in Sprint 2
+
+The original limits ran AFTER parsing and were therefore useless against alias expansion, which
+happens during parsing. Measured on the Sprint 1 parser: a five-line document with nine anchors,
+each referencing the previous nine, expanded to 59,049 leaf nodes. Two further levels exhaust
+memory.
+
+The guard is a pre-parse textual scan of the raw source, because by the time a post-parse check
+runs the allocation has already occurred. Detection deliberately does not attempt to exclude
+quoted contexts: over-counting causes a safe, loud rejection, while under-counting would admit
+the bomb.
+
+None of our model-output schemas uses aliases, so the bound is set low. Covered by
+`test_yaml_parser_rejects_excessive_aliases`, `test_yaml_parser_rejects_excessive_anchors`, and
+`test_yaml_parser_allows_a_small_number_of_aliases`.
 
 ## Alternatives Considered
 

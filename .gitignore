@@ -10,3 +10,11 @@ var/
 *.partial
 .env
 .DS_Store
+
+# DERA mirror payloads: 25.36 GiB of SEC packages. The ledger and manifest ARE tracked
+# (they are the provenance record); the .zip payloads are not.
+var/dera/packages/
+var/*.sql
+var/*.err
+var/dera/*.log
+var/dera_landing.html

@@ -1,6 +1,9 @@
 # Data Dictionary
 
-IMPLEMENTATION STATUS: schema PLANNED (Sprint 2). This document defines it before it is built.
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2).
+
+24 tables, 36 indexes, 93 constraints. Models in `packages/persistence/models.py`; migration in
+`migrations/versions/0001_initial_control_plane_schema.py`.
 
 ## Conventions
 
@@ -77,7 +80,8 @@ Every citation names one of these plus an identifier, so a claim's provenance is
 
 ## Tables
 
-Full column definitions in the migration. Summary of ownership:
+24 tables. Full column definitions in `packages/persistence/models.py` and the initial migration.
+Summary of ownership:
 
 | Table | Owns | Key invariant |
 |---|---|---|
@@ -102,6 +106,19 @@ Full column definitions in the migration. Summary of ownership:
 | `conversation_memory` | Structured memory | Only evidenced findings |
 | `llm_invocation` | Model audit | Exact request and response URIs and hashes |
 | `prompt_version` | Prompt registry | Content hash recorded |
+| `dera_package` | DERA mirror ledger | Monthly rows retained after quarterly consolidation |
+| `dataset_version` | Published Parquet pointer | Partial unique index: at most one current |
+| `filing_amendment` | Amendment relationships | Amendment is never its own target |
+
+### Enforcement highlights
+
+    xbrl_fact               BEFORE UPDATE trigger rejects any change to a filed value, unit,
+                            scale, concept, or period. Append a new observation instead.
+    listing                 unique on (ticker, exchange, effective_start), never on ticker
+    footnote_summary        partial unique index gives exactly one active version per footnote
+    footnote_source_block   footnote_id nullable, with a partial index over orphans
+    llm_invocation          check constraint restricts content format to plain_text or yaml
+    dataset_version         partial unique index over is_current
 
 ## Retention
 
