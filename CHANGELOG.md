@@ -8,7 +8,45 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
-### Post-Sprint-4 hardening (not yet committed)
+### Documentation synchronization after Sprint 4
+
+Project memory had drifted behind the code. `rules.md` sections 13 and 18 make synchronization a
+commit-time gate, and it had not been applied since Sprint 3 — so the repository, which is supposed
+to be the durable memory, described a project two sprints younger than the one on disk.
+
+Nothing in this change touches code, schema, migrations, or a measured result. It is a correction
+to the record.
+
+#### Fixed
+
+- **`CLAUDE.md` said "No SEC filing has been retrieved yet."** This file is loaded at the start of
+  every session, so it was the most costly stale sentence in the repository: a new agent began with
+  a false picture of the project. Sprint 3 retrieved four filings and Sprint 4 extracted their
+  footnotes.
+- **`README.md` listed canonical footnote extraction under "What does not exist yet."** It is the
+  central deliverable of Sprint 4 and has been production code since `468d0f2`.
+- **The roadmap's Sprint Breakdown table contradicted the rest of the same file** — Sprint 3 as
+  `IN PROGRESS — database blocked`, Sprint 4 as `NOT STARTED`, while the sprint sections above them
+  recorded both COMPLETE. The table now carries the commit SHA for every completed sprint.
+- **Commit and push results were missing from the sprint records**, which `rules.md` section 20
+  step 11 requires. `SPRINT-0003.md` still said `NOT COMMITTED` for work pushed on 2026-08-01, and
+  `SPRINT-0004.md` had no record of the hardening commit. Both now carry their SHAs.
+- **Six specification documents described implemented behaviour as `PLANNED`** — the canonical
+  model, the canonicalization algorithm, completeness, the table model, filing discovery, and
+  document acquisition. `rules.md` section 18 names this as a blocking condition in both
+  directions.
+- **`rules.md` had no sealed-migration entry for `0002_table_ownership`**, which has been applied
+  to a live database since Sprint 4. Section 8 seals a migration on application; the record simply
+  had not been written. Added, along with the derived-range requirement for `make migration-check`.
+- Stale counts across `techspecs.md`, `README.md`, `docs/testing/strategy.md`, and
+  `docs/architecture/deployment.md`: 337 tests to **626**, 92.73% to **93.45%** coverage, 65 to
+  **82** typed source files, ten to **thirteen** implemented packages.
+- Component reference entries added for `footnote_extractor` and `table_parser`, which had none.
+
+Historical sprint records and historical changelog entries keep their original figures. A count
+that was true when written is not stale, and section 18 says so explicitly.
+
+### Post-Sprint-4 hardening (committed as `1d05199`, pushed to `origin/main`)
 
 Three gaps found by reading the CI log of the Sprint 4 push, not by a failing test. Sprint 4's
 behaviour is unchanged: no canonicalization, ownership, migration, or schema code was touched, and
@@ -173,7 +211,7 @@ Role-URI grouping is measured on one issuer. It is not claimed to be universally
 breadth validation across 25 issuers and four eras is Stage 2 phase W-3.
 
 
-### Sprint 3 — filing discovery and acquisition (not yet committed)
+### Sprint 3 — filing discovery and acquisition (committed as `2672222`, `1e9f343`, `bc9aeb6`)
 
 **The first SEC filings have been retrieved.** Requirement 1 of fifteen had not started before
 this; the repository now holds four real Apple filings with full provenance.
@@ -423,7 +461,7 @@ followed the first GitHub Actions run.
 
 ---
 
-### CI repair — not yet committed
+### CI repair — committed as `7ebfb82`
 
 The repository's first Actions run failed in both jobs. Neither failure was caused by the commit
 that triggered it; both were latent defects that had never executed because the workflow triggers

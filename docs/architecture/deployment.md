@@ -7,7 +7,7 @@ DECISION RECORDS: ADR-0008 (Terraform), ADR-0009 (ECS over Lambda)
 
 ```
 docker compose up      postgres, minio, redis
-make check             format, lint, types, 143 tests, migration reversibility
+make check             format, lint, types, 626 tests, migration reversibility
 ```
 
 No model credentials required. The default provider is an in-process mock.

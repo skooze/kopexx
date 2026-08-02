@@ -1,6 +1,6 @@
 # Filing Discovery
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 3, one CIK; universe scale Stage 2 W-1); identity and URL construction IMPLEMENTED (Sprint 1)
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 3) for one CIK; universe scale PLANNED (Stage 2 W-1). Identity and URL construction IMPLEMENTED (Sprint 1)
 OWNER PACKAGE: `packages/filing_discovery`
 
 ## Sources, in order of authority

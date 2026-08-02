@@ -19,8 +19,9 @@ all of them — not the handful a model finds interesting — is the whole idea.
 
 ## Status
 
-Sprint 3 is complete. Filings are retrieved and preserved with provenance, and their numeric facts
-are loaded into PostgreSQL and reconciled against the source.
+Sprint 4 is complete. Filings are retrieved and preserved with provenance, their facts loaded into
+PostgreSQL and reconciled, and **every financial-statement footnote in those filings is extracted
+as a canonical record.**
 
 What works:
 
@@ -36,18 +37,22 @@ What works:
   reconciled gap-free against SEC's quarterly index; four preserved in full
 - A DERA fact loader: package selection, parsing, normalization, validation, idempotent
   insertion, and reconciliation. 2,845 facts loaded across those four filings
+- Canonical footnote extraction: **43 footnotes, 117 of 117 child blocks attached, zero orphans**,
+  every attachment recording method, confidence, and evidence. No model participates in any
+  decision
+- Footnote table parsing with cell provenance; table ownership resolved from the filing's own
+  inline-XBRL tagging, 0 unresolved
 
-What does not exist yet: **canonical footnote extraction, summarization, the dashboard, and Deep
-Analysis.** No footnote has been extracted, no summary generated, nothing deployed. Those are
-Sprints 4 through 7 in [roadmap.md](roadmap.md), which takes one company through every layer
-before widening to more.
+What does not exist yet: **summarization, the dashboard, and Deep Analysis.** Nothing is deployed.
+Those are Sprints 5 through 7 in [roadmap.md](roadmap.md), which takes one company through every
+layer before widening.
 
 Current local validation:
 
 ```
-337 tests passing, 0 skipped
-93% coverage on the implemented packages (85% gate)
-mypy clean across 65 source files
+626 tests passing, 0 skipped
+93.45% coverage on the implemented packages (85% gate)
+mypy clean across 82 source files
 ruff format and lint clean
 ```
 

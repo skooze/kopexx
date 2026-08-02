@@ -1,6 +1,6 @@
 # Document Acquisition
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 3, inline-XBRL era only; other eras Stage 2 W-2); URL construction IMPLEMENTED (Sprint 1)
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 3) for the inline-XBRL era only; other eras PLANNED (Stage 2 W-2). URL construction IMPLEMENTED (Sprint 1)
 OWNER PACKAGE: `packages/filing_acquisition`
 
 ## The decision table

@@ -4,8 +4,17 @@ STATUS: COMPLETE — all thirteen acceptance criteria met; see the audit at the 
 DATE: 2026-08-01
 SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
 
-NOT COMMITTED. Sprint completion and committing are separate; `rules.md` section 15 requires
-explicit approval for each commit, and none has been requested or granted for this work.
+COMMITTED as three separately approved commits, each pushed to `origin/main` on 2026-08-01:
+
+```
+2672222   Retrieve and preserve one issuer's filings
+1e9f343   Verify the control-plane schema and secure the DERA monthly archive
+bc9aeb6   Load one issuer's DERA facts and reconcile them
+```
+
+Sprint completion and committing are separate events; `rules.md` section 15 requires explicit
+approval for each commit and section 20 requires each SHA to be recorded here. The work was
+approved and committed in three stages, which is why there are three SHAs rather than one.
 
 ---
 

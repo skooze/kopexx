@@ -31,7 +31,7 @@ SCALING. Read-heavy, cacheable.
 TESTS. Ticker reuse resolution, former-name reconciliation, snapshot union, exclusion
 classification.
 
-## filing_discovery — PLANNED (Sprint 3)
+## filing_discovery — IMPLEMENTED (Sprint 3), one issuer
 
 RESPONSIBILITY. Enumerate every 10-K and 10-Q for covered issuers, across all history.
 INPUTS. `submissions.zip`, per-issuer submissions JSON, `filings.files[]` shards, `master.gz`.
@@ -43,7 +43,7 @@ FAILURE MODES. Missing shard is a hard error, not a silent truncation.
 OBSERVABILITY. Filings discovered per issuer, reconciliation discrepancies, watermark age.
 TESTS. Overflow shard handling, `25-NSE` duplicate rows, reconciliation mismatch.
 
-## filing_acquisition — PLANNED (Sprint 3)
+## filing_acquisition — IMPLEMENTED (Sprint 3), inline-XBRL era only
 
 RESPONSIBILITY. Fetch and preserve source objects using the era decision table.
 INVARIANTS. Era branch chosen from the filing record. Rejection assertions run before persistence.
@@ -53,7 +53,7 @@ match, accession mismatch. All are permanent, none retried.
 SCALING. Bounded by the SEC rate limit, not by workers.
 TESTS. One golden fixture per era; resumability under `kill -9`.
 
-## filing_parser — PLANNED (Sprint 3; other eras Stage 2 W-2)
+## filing_parser — PLANNED (Sprint 5; other eras Stage 2 W-2)
 
 RESPONSIBILITY. Turn a preserved source object into sections, footnote blocks, tables, and facts.
 PUBLIC INTERFACE. The `FilingParser` protocol; five era implementations.
@@ -69,13 +69,39 @@ INVARIANTS. `value_as_filed` is append-only, enforced by trigger. `duration_mont
 ingest. Restatements append.
 TESTS. Update rejection, selection recomputation idempotency, dimensional preservation.
 
-## footnote_canonicalizer — PLANNED (Sprint 4; fallback stages Stage 2 W-3)
+## footnote_extractor — IMPLEMENTED (Sprint 4)
+
+RESPONSIBILITY. Report what a filing contains and decide nothing: renderer report inventory,
+candidate discovery, child-block extraction, and `Note N —` heading parsing.
+PUBLIC INTERFACE. `inventory()`, `candidates()`, `child_blocks()`, `note_headings()`.
+INVARIANTS. No classification, no grouping, no exclusion. Every block keeps its own identity,
+role URI, `menucat`, and hash so grouping can only ever add an edge, never destroy a source.
+FAILURE MODES. Missing `FilingSummary.xml`, unparseable report entry, absent heading block — each
+reported, never inferred around.
+TESTS. 25, against the preserved bytes of all four Apple filings.
+
+## footnote_canonicalizer — IMPLEMENTED (Sprint 4), stages 1-5; fallback stages Stage 2 W-3
 
 RESPONSIBILITY. Produce canonical footnotes and attach every source block and table.
 FULL SPECIFICATION. `docs/footnotes/canonicalization-algorithm.md`.
+PUBLIC INTERFACE. `canonicalize()`, `persist()`, `resolve_table_ownership()`.
 INVARIANTS. Source identity survives grouping. Every decision records stage, confidence, and
 evidence. An unattachable block keeps a null parent and enters review; it is never force-attached.
-TESTS. The Apple 13-footnote and 46-attachment cases; TOC mismatch producing PARTIAL.
+No model participates: every decision is a string comparison or a count, enforced by an AST guard.
+MEASURED. 43 canonical footnotes across four filings, 117 of 117 child blocks attached by role-URI
+prefix at confidence 1.0, zero orphans, zero ambiguous multi-parent matches, zero unresolved
+tables. Persistence is idempotent — a rerun inserts 0 and leaves a byte-identical digest.
+FAILURE MODES. TOC or heading count mismatch produces `PARTIAL`, never a silent `COMPLETE`.
+TESTS. 36 unit, plus offline fixture regressions for the 10-K and each 10-Q with mutation proofs,
+and live persistence tests for idempotency.
+
+## table_parser — IMPLEMENTED (Sprint 4)
+
+RESPONSIBILITY. Row and column structure, header hierarchy, cell provenance, and exact numeric
+text for the tables inside footnotes.
+INVARIANTS. No financial interpretation. **No float conversion of a filed value** — the filed text
+is preserved exactly, because a parse that rounds is a parse that has altered a filed number.
+TESTS. 28, plus the ownership census that assigns every table to its owning footnote.
 
 ## summarization — PLANNED (Sprint 5)
 

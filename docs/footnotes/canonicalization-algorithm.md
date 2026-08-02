@@ -1,6 +1,8 @@
 # Canonical Footnote Grouping Algorithm
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 4 implements stages 1 to 5; Stage 2 phase W-3 implements 6 to 11)
+IMPLEMENTATION STATUS: stages 1 to 5 IMPLEMENTED (Sprint 4); stages 6 to 11 PLANNED (Stage 2 phase
+W-3). The fallback stages remain unwritten because stages 1 to 5 left 0 of 117 child blocks
+unattached on the verified filings — they are built when breadth exposes a case that needs them.
 DECISION RECORD: `docs/adr/ADR-0005-canonical-footnote-grouping.md`
 MODEL: `docs/footnotes/canonical-model.md`
 

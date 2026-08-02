@@ -1,6 +1,9 @@
 # rules.md — Operating Contract for FinTek
 
-STATUS: IMPLEMENTED (this document is authoritative as of Sprint 1)
+STATUS: IMPLEMENTED. Authoritative since Sprint 1 and amended since: sections 15 to 21 by the
+alignment review (`275db19`), the AWS identity and secrets invariant in section 3 by `60f3e00`, and
+the sealed-migration and single-home records in sections 5 and 8 as the code they describe arrived.
+Sections 15 to 20 may be strengthened without an ADR and may never be weakened — section 21.
 
 ---
 
@@ -320,6 +323,10 @@ Before writing a new function:
 | CIK normalization | `packages/sec_identity/cik.py` |
 | Accession normalization | `packages/sec_identity/accession.py` |
 | SEC URL construction | `packages/sec_identity/urls.py` |
+| Footnote candidate and child-block discovery | `packages/footnote_extractor/` |
+| Canonical grouping, exclusion, and completeness | `packages/footnote_canonicalizer/` |
+| Table-to-footnote ownership | `packages/footnote_canonicalizer/` |
+| Footnote table structure and cell provenance | `packages/table_parser/` |
 | Fiscal period logic | `packages/fiscal/` — RESERVED, not yet created |
 | Model invocation | `packages/llm_gateway/` |
 | Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, not yet created |
@@ -426,11 +433,24 @@ blocks production. Speculative TODOs are prohibited.
 ```
 SEALED MIGRATIONS
 
-0001_initial   applied to a live PostgreSQL on 2026-08-01 (Sprint 3). SEALED.
-               scripts/generate_initial_migration.py must never be run again: it rewrites this
-               file in place. It exists only as the record of how the revision was first
-               produced, in an environment that had no database to autogenerate against.
+0001_initial            applied to a live PostgreSQL on 2026-08-01 (Sprint 3). SEALED.
+                        scripts/generate_initial_migration.py must never be run again: it
+                        rewrites this file in place. It exists only as the record of how the
+                        revision was first produced, in an environment that had no database to
+                        autogenerate against.
+
+0002_table_ownership    applied to the same live PostgreSQL on 2026-08-02 (Sprint 4). SEALED.
+                        Adds footnote_table.ownership_kind, ownership_method, and
+                        ownership_evidence, two check constraints, and the unresolved-ownership
+                        index. A change to table ownership is revision 0003, never an edit here.
 ```
+
+**The offline reversibility check must span every revision.** `make migration-check` generates
+`upgrade base:head` and `downgrade head:base`. Both ranges are derived and neither names a revision
+id. Alembic renders only the revisions inside the range it is given, so a hardcoded start silently
+stops covering every migration added after it — which is exactly what happened between `0002`
+arriving and the Sprint 4 closeout: the target exited 0 while generating none of `0002`'s downgrade
+SQL. `tests/unit/test_migrations.py` fails if the recipe names a revision id.
 
 ---
 

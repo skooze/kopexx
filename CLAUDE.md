@@ -139,9 +139,16 @@ outside this boundary — a browser is not a model. Full specification in
 Sprints 1 and 2 built the foundation: SEC identity, HTTP client with rate limiting, object
 storage, the LLM content boundary, the 24-table schema, and the complete DERA mirror.
 
-**No SEC filing has been retrieved yet.** Sprints 3 to 7 are the vertical thread — one issuer
-through every layer, proving all fifteen MVP criteria — before any breadth work. Read
-`roadmap.md` and ADR-0015 before proposing anything that widens scope.
+**Sprint 4 is complete and pushed (`1d05199`). Sprint 5 is next and has not started.**
+
+Sprint 3 retrieved the first filings: 134 Apple filings discovered back to 1994, four preserved
+with provenance, 2,845 DERA facts loaded and reconciled. Sprint 4 turned the footnote thesis into
+production code — 43 canonical footnotes across those four filings, 117 of 117 child blocks
+attached, zero orphans, zero unresolved tables, no model involved in any decision.
+
+**No summary has been generated and nothing is deployed.** Sprints 5 to 7 finish the vertical
+thread — one issuer through every layer, proving all fifteen MVP criteria — before any breadth
+work. Read `roadmap.md` and ADR-0015 before proposing anything that widens scope.
 
 Sprint 5 is the go/no-go: it measures real cost per footnote for the first time. Do not treat
 any cost figure as known before then; every parameter in `docs/llm/cost-model.md` is a
@@ -162,8 +169,12 @@ the workflow.
 ```
 make check            fmt-check, lint, typecheck, test, migration-check
 make coverage         tests with coverage and the 85% gate
-make migration-check  offline alembic upgrade and downgrade generation
+make migration-check  offline alembic generation, base:head and head:base
 ```
+
+Both migration ranges are derived and neither names a revision id. A hardcoded start silently
+stops covering every migration added after it; a test reads the recipe out of the Makefile to
+prevent that returning.
 
 Paths, defined once in the Makefile:
 

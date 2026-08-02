@@ -525,6 +525,33 @@ returns, if `fetch-depth: 0` leaves the security checkout, if permissions widen,
 isolation gate is dropped. Checked on parsed values, never on file text: a comment promising
 `fetch-depth: 0` greps identically to the setting.
 
+### Hardening commit and push
+
+Approved and created as `1d05199e83e77077ab5e2f405794b3e9ffa4dde3` — 10 files, 1,166 insertions,
+18 deletions, no file under `packages/`, `migrations/`, or `scripts/` touched — then separately
+approved and pushed to `origin/main` as an ordinary fast-forward.
+
+Subject: `Harden Sprint 4 regressions and migration validation`
+
+```
+CI run 30752005088      overall success; quality 1m34s, security 18s
+suite                   626 passed, 0 skipped
+coverage                93.45%  (2,978 statements, 195 missed, 85% gate)
+migration generation    upgrade base:head and downgrade head:base, both revisions rendered
+gitleaks                12 commits, 2,317,593 bytes, no leaks; working tree clean, no leaks
+pip-audit               no known vulnerabilities
+node deprecation        none — the notice these runs used to emit is gone
+```
+
+Application database unchanged across the work: `issuer=1 filing=4 xbrl_fact=2845`,
+`canonical_footnote=43`, `llm_invocation=0`. No AWS operation, credential, or SDK. No model
+invocation.
+
+**Disclosure.** The commit required `GIT_AUTHOR_*` and `GIT_COMMITTER_*` to be supplied as
+environment variables for that one invocation, because this host's git config carries `user.name`
+but no `user.email`. The identity used is `FinTek <kevinsmall93@gmail.com>`, matching all eleven
+prior commits. No git config was written, so the next commit on this host needs the same treatment.
+
 ## Next sprint
 
 **SPRINT-0005: real-model summarization, fidelity, and cost.** The go/no-go sprint. Its

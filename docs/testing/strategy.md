@@ -3,33 +3,44 @@
 IMPLEMENTATION STATUS: unit, integration, architecture, and migration layers IMPLEMENTED;
 golden, property, security, and performance layers PLANNED
 
-## Current state, after Sprint 3
+## Current state, after Sprint 4 and its closeout hardening
 
 ```
-337 tests collected, 337 passing, 0 skipped
- 92.73% statement coverage across the implemented packages (85% gate)
+626 tests collected, 626 passing, 0 skipped     517 unit, 44 integration, 65 architecture
+ 93.45% statement coverage across the implemented packages (85% gate)
+        2,978 statements, 195 missed
 
-tests/unit/test_llm_boundary.py         31  content boundary, compiler, gateway
-tests/unit/test_filing_discovery.py     30  overflow, master.gz reconciliation, era, identity
-tests/unit/test_dera_normalize.py       25  version split, period derivation, natural key
-tests/unit/test_sec_identity.py         25  CIK, accession, URL construction
-tests/unit/test_dera_validate.py        18  domain rules mirroring database constraints
-tests/unit/test_migrations.py           17  schema structure, reversibility, 2 LIVE tests
-tests/unit/test_dera_tsv.py             16  quoting disabled, null tokens, exact conversion
-tests/unit/test_filing_fixtures.py      16  fixture manifest hashes, offline reproduction
-tests/unit/test_yaml_parser.py          16  safe parsing, identifier preservation, alias bomb
-tests/unit/test_dera_selection.py       16  package selection, members, dimensions
-tests/unit/test_sec_http_client.py      15  UA, 403 classification, cooldown, content assertions
-tests/integration/test_dera_load.py     13  LIVE: register, load, reconcile, rerun
-tests/unit/test_filing_acquisition.py   12  era routing, strategies, item exclusions
-tests/architecture/test_architecture.py 11  structural invariants from rules.md
-tests/unit/test_sec_client.py            9  throttle classification, rate limiting
-tests/unit/test_dera_report.py           8  load and reconciliation reporting
-tests/unit/test_dera_notes.py            7  discovery, irregular filenames, resumability
-tests/unit/test_configuration.py         6  User-Agent validation, settings guards
-tests/unit/test_storage.py               6  hashing, object store, traversal
-tests/integration/test_dera_mirror.py    2  discovery plus storage plus ledger
+tests/unit/test_ten_q_regression.py           42  the three 10-Qs asserted, plus mutation proofs
+tests/unit/test_table_ownership_regression.py 42  ownership census per filing
+tests/unit/test_footnote_canonicalizer.py     36  stages 1-5, exclusion, audit, completeness
+tests/unit/test_llm_boundary.py               31  content boundary, compiler, gateway
+tests/unit/test_filing_discovery.py           30  overflow, master.gz reconciliation, era
+tests/unit/test_database_isolation.py         30  disposable-target proof, fail-closed paths
+tests/unit/test_table_parser.py               28  rows, headers, cell provenance, exact text
+tests/unit/test_sec_identity.py               25  CIK, accession, URL construction
+tests/unit/test_footnote_extractor.py         25  inventory, candidates, child blocks, headings
+tests/unit/test_dera_normalize.py             25  version split, period derivation, natural key
+tests/unit/test_table_ownership.py            24  tagged spans and the presentation linkbase
+tests/unit/test_migrations.py                 23  structure, reversibility, range derivation,
+                                                  2 LIVE tests
+tests/architecture/test_aws_identity.py       20  no credential shape reaches the repository
+tests/integration/test_canonicalization_persistence.py 19  LIVE: persist, rerun, reconcile
+tests/unit/test_dera_validate.py              18  domain rules mirroring database constraints
+tests/architecture/test_deterministic_extraction.py 17  no model, no network, no issuer branch
+tests/unit/test_yaml_parser.py                16  safe parsing, identifier preservation, alias bomb
+tests/unit/test_filing_fixtures.py            16  fixture manifest hashes, offline reproduction
+tests/unit/test_dera_tsv.py                   16  quoting disabled, null tokens, exact conversion
+tests/unit/test_dera_selection.py             16  package selection, members, dimensions
+tests/integration/test_dera_load.py           13  LIVE: register, load, reconcile, rerun
+tests/architecture/test_architecture.py       11  structural invariants from rules.md
+tests/integration/test_ten_q_persistence.py   10  LIVE: per-quarter idempotency and digests
+tests/architecture/test_ci_workflow.py        10  the workflow parsed, not grepped
+tests/integration/test_dera_mirror.py          2  discovery plus storage plus ledger
 ```
+
+The four files added by the closeout hardening are the last three architecture and integration
+entries plus `test_ten_q_regression.py`. They assert results that already existed and that nothing
+was checking — see "A measured result nobody asserted" below.
 
 ### The skips are gone
 

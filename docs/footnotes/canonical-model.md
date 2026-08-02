@@ -1,6 +1,6 @@
 # The Canonical Footnote Model
 
-IMPLEMENTATION STATUS: PLANNED (model specified; implementation is Sprint 4)
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 4); measured on one issuer, four filings
 DECISION RECORD: `docs/adr/ADR-0005-canonical-footnote-grouping.md`
 ALGORITHM: `docs/footnotes/canonicalization-algorithm.md`
 

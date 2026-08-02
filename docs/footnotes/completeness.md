@@ -1,6 +1,7 @@
 # Footnote Completeness
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 4)
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 4). Extraction completeness is computed and stored;
+summary completeness necessarily reports `PARTIAL` until Sprint 5 generates the first summary.
 
 ## The requirement
 

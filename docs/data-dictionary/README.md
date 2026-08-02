@@ -1,9 +1,10 @@
 # Data Dictionary
 
-IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2).
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2; table-ownership columns added Sprint 4).
 
-24 domain tables. Models in `packages/persistence/models.py`; migration in
-`migrations/versions/0001_initial_control_plane_schema.py`.
+24 domain tables. Models in `packages/persistence/models.py`. Migrations: `0001_initial` (SEALED)
+and `0002_table_ownership`, which added `footnote_table.ownership_kind`, `ownership_method`, and
+`ownership_evidence`, their two check constraints, and the unresolved-ownership index.
 
 ## Conventions
 

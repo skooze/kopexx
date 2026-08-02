@@ -1,7 +1,7 @@
 # roadmap.md — FinTek Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Sprint 3 completion)
-LAST UPDATED: Sprint 3 completion, 2026-08-01
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Sprint 4 closeout hardening)
+LAST UPDATED: 2026-08-02, after `1d05199` was pushed to `origin/main`
 SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
 
 ---
@@ -65,6 +65,8 @@ and nothing else.**
 | Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
 | Canonical footnote grouping, stages 1 to 5 | IMPLEMENTED and MEASURED (Sprint 4; 4 filings, 0 orphans, 0 unresolved tables) |
+| Footnote extraction and table parsing | IMPLEMENTED (Sprint 4) |
+| Offline-fixture regression for all four filings | IMPLEMENTED (Sprint 4 closeout hardening) |
 | Real provider adapter | PLANNED (Sprint 5); AWS identity policy IMPLEMENTED as governance |
 | Summarization pipeline | PLANNED (Sprint 5) |
 | Read API and dashboard | PLANNED (Sprint 6) |
@@ -170,14 +172,15 @@ source manifest. The item-disclosure exclusion list tested against real acquired
 
 DONE SINCE. PostgreSQL 18.4 installed locally, using peer authentication over the Unix socket, so
 no password is stored for local work. Deployed authentication remains an open decision. The migration applies, downgrades, and reapplies against it. Both live
-migration tests now pass rather than skip: the suite reports 203 passed, 0 skipped. URGENT-02
-discharged with a verified second copy on a separate filesystem.
+migration tests now pass rather than skip: the suite reported 203 passed, 0 skipped at that point.
+URGENT-02 discharged with a verified second copy on a separate filesystem.
 
 DONE LAST. The DERA fact load. 2,845 facts across the four filings, from four different packages,
 each load reconciled on nine checks including an exact numeric-total match against PostgreSQL's own
-`sum()`. A rerun re-reads the whole package and inserts nothing. The suite is 337 passed, 0
-skipped, and CI now runs a PostgreSQL service container so the database tests execute there rather
-than skip.
+`sum()`. A rerun re-reads the whole package and inserts nothing. The suite reached 337 passed, 0
+skipped at Sprint 3 completion, and CI now runs a PostgreSQL service container so the database
+tests execute there rather than skip. (Current totals are in `docs/testing/strategy.md`; the
+figures in this entry are the Sprint 3 record and are not restated as sprints add tests.)
 
 CARRIED FORWARD, not blocking. The backup mount is still not persistent across reboots; the exact
 `fstab` entry and validation sequence are in `docs/runbooks/dera-backup-mount.md` and applying it
@@ -373,17 +376,24 @@ task-execution role. This is settled policy rather than a W-7 design decision: `
 
 ## Sprint Breakdown
 
-| Sprint | Objective | Status |
-|---|---|---|
-| 1 | Foundation, governance, SEC primitives, LLM boundary controls | COMPLETE |
-| 2 | Execute DERA mirror download; PostgreSQL schema and migrations | COMPLETE |
-| — | Alignment review; thread-first resequencing; governance amendment | COMPLETE (uncommitted) |
-| 3 | Acquire one issuer's filings; reproducible fixtures | IN PROGRESS — filings retrieved; database blocked |
-| 4 | Canonical-footnote extraction, stages 1–5 | NOT STARTED |
-| 5 | Real-model summarization; fidelity and cost measurement | NOT STARTED |
-| 6 | Dashboard and the zero-LLM read path | NOT STARTED |
-| 7 | Filing-scoped Deep Analysis and cost containment | NOT STARTED |
-| 8+ | Stage 2 widening, order revisited after Sprint 7 | NOT STARTED |
+Every commit below is on `origin/main`. Sprint 3 landed as three commits because its work was
+approved and committed in three stages; that is the record, not a retelling.
+
+| Sprint | Objective | Status | Commits |
+|---|---|---|---|
+| 1 | Foundation, governance, SEC primitives, LLM boundary controls | COMPLETE | `835f21e` |
+| 2 | Execute DERA mirror download; PostgreSQL schema and migrations | COMPLETE | `804efbd` |
+| — | Alignment review; thread-first resequencing; governance amendment | COMPLETE | `275db19` |
+| — | CI repair: package installation and secret scanning | COMPLETE | `7ebfb82` |
+| — | README rewrite and project naming | COMPLETE | `e2b2d1b`, `4222479` |
+| 3 | Acquire one issuer's filings; reproducible fixtures | COMPLETE | `2672222`, `1e9f343`, `bc9aeb6` |
+| — | AWS identity and secret-management governance | COMPLETE | `60f3e00` |
+| 4 | Canonical-footnote extraction, stages 1–5 | COMPLETE | `468d0f2` |
+| — | Sprint 4 closeout hardening: 10-Q regressions, migration range, CI runtimes | COMPLETE | `1d05199` |
+| 5 | Real-model summarization; fidelity and cost measurement | NOT STARTED | — |
+| 6 | Dashboard and the zero-LLM read path | NOT STARTED | — |
+| 7 | Filing-scoped Deep Analysis and cost containment | NOT STARTED | — |
+| 8+ | Stage 2 widening, order revisited after Sprint 7 | NOT STARTED | — |
 
 ---
 
@@ -392,7 +402,7 @@ task-execution role. This is settled policy rather than a W-7 design decision: `
 | ID | Risk | Severity | Mitigation | Status |
 |---|---|---|---|---|
 | R-01 | DERA monthly packages deleted before mirroring | HIGH | URGENT-01 discharged in Sprint 2; all 78 packages held and re-validated | CLOSED |
-| R-02 | Role-URI grouping verified on one filing only | HIGH | W-3 breadth validation across ≥25 issuers. Not blocking Stage 1, which is explicitly one issuer | OPEN |
+| R-02 | Role-URI grouping verified on one issuer only — four filings, one filing agent, one era | HIGH | W-3 breadth validation across ≥25 issuers. Not blocking Stage 1, which is explicitly one issuer | OPEN |
 | R-03 | Pre-2009 filings have no role URIs | MEDIUM | Text-only grouping with lower confidence, surfaced in the UI | OPEN |
 | R-04 | Provider catalog and pricing unverified | HIGH | **Moved forward to Sprint 5** from Phase 6. Blocking gate before any cost commitment | OPEN |
 | R-05 | Item-disclosure exclusion list drifts as SEC adds mandates | MEDIUM | `metric_definitions/item_disclosure_exclusions.yaml` with an unknown-namespace review policy | MITIGATED |
@@ -426,8 +436,11 @@ task-execution role. This is settled policy rather than a W-7 design decision: `
    private issuers filing 20-F. Their exclusion reason is preserved so they can be enabled later.
 2. Any analysis built on the current-listings universe is survivorship-biased until historical
    listing observations accrue.
-3. Canonical grouping confidence is verified on exactly one filing. Do not present the
-   100 percent attachment result as a general guarantee.
+3. Canonical grouping confidence is verified on exactly one issuer: four Apple filings, one filing
+   agent, one era, all inline-XBRL. 117 of 117 child blocks attached with zero orphans across
+   those four, and each filing is now held by an offline fixture regression. That is a stronger
+   result than Sprint 4 opened with and it is still one issuer. Do not present the 100 percent
+   attachment result as a general guarantee; breadth validation is Stage 2 phase W-3.
 4. Structured numeric history is XBRL-bound and effectively complete only from 2011 onward,
    though documents and footnote text reach the 1990s.
 5. No cost figure exists for any part of the corpus. Sprint 5 produces the first measured one.
@@ -465,7 +478,7 @@ Discharged URGENT-01 by mirroring all 78 DERA packages, built the SEC HTTP clien
 it, added the 24-table PostgreSQL control-plane schema and its initial migration, and found and
 fixed an unbounded YAML alias expansion vulnerability. See `docs/sprints/SPRINT-0002.md`.
 
-### Alignment review (COMPLETE, uncommitted)
+### Alignment review (COMPLETE, `275db19`)
 
 A product-alignment review of the repository against the fifteen core product requirements found
 the content aligned and the sequencing materially drifted: the vertical slice was scheduled
@@ -473,3 +486,25 @@ before every capability it depended on. This roadmap is the correction. The revi
 the Git governance amendment in `rules.md` sections 15 to 21, the dashboard UX specification, the
 Deep Analysis model benchmark, the period-comparison specification, the item-disclosure exclusion
 list, and schema corrections for the attachment audit and completeness state.
+
+### Sprint 3 (COMPLETE, `2672222` · `1e9f343` · `bc9aeb6`)
+
+Ended the condition where nothing had been retrieved from EDGAR. Discovered 134 Apple filings back
+to 1994, reconciling gap-free against `master.gz`, and preserved four of them — the FY2025 10-K and
+three 10-Qs — with SHA-256 provenance and offline fixtures. Installed a live PostgreSQL, applied
+the sealed `0001_initial` against it, and ran the two live migration tests that had never once
+executed. Loaded 2,845 DERA facts across those four filings with nine reconciliation checks each.
+Discharged URGENT-02. See `docs/sprints/SPRINT-0003.md`.
+
+### Sprint 4 (COMPLETE, `468d0f2`; hardened by `1d05199`)
+
+Turned the 13-not-58 correction into production code. `footnote_extractor`,
+`footnote_canonicalizer` stages 1 through 5, and `table_parser`, measured against the four
+preserved filings: 43 canonical footnotes, 117 of 117 child blocks attached, zero orphans, zero
+unresolved tables, and every attachment carrying method, confidence, evidence, and competing
+candidates. Migration `0002_table_ownership` added. All 17 acceptance criteria met.
+
+The closeout hardening that followed changed no behaviour and no measured result. It fixed three
+checks that had stopped testing what they reported: the 10-Q results were measured but never
+asserted, `make migration-check` had silently stopped covering `0002`, and CI ran on a deprecated
+Node runtime. See `docs/sprints/SPRINT-0004.md`.

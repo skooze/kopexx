@@ -4,19 +4,21 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 3 complete, including the DERA fact load
-VERIFICATION: 337 tests passing and 0 skipped, 92.73 percent coverage on implemented packages,
-ruff format and lint clean across `packages tests scripts migrations`, mypy clean across 65 source
-files in `packages scripts migrations`, offline Alembic upgrade and downgrade, and pip-audit
-clean.
+LAST SYNCHRONIZED WITH CODE: Sprint 4 complete and hardened, at commit `1d05199`
+VERIFICATION: 626 tests passing and 0 skipped, 93.45 percent coverage on implemented packages,
+ruff format and lint clean across `packages tests scripts migrations`, mypy clean across 82 source
+files in `packages scripts migrations`, offline Alembic upgrade `base:head` and downgrade
+`head:base`, and pip-audit clean. Confirmed in CI run 30752005088 as well as locally.
 
 The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
 contained only a docstring (ADR-0015), rose to 45 when type checking extended to `scripts` and
-`migrations`, reached 53 when filing discovery and acquisition arrived, and is 65 now that the
-DERA loader and the database-isolation guard exist.
+`migrations`, reached 53 when filing discovery and acquisition arrived, 65 with the DERA loader and
+the database-isolation guard, and is 82 now that footnote extraction, canonicalization, and table
+parsing exist.
 
-`packages/` holds ten implemented libraries. Two were added in Sprint 3: `filing_discovery` and
-`filing_acquisition`. `dera_notes` grew from a mirror into a mirror plus a fact loader.
+`packages/` holds thirteen implemented libraries. Two were added in Sprint 3 — `filing_discovery`
+and `filing_acquisition` — and three in Sprint 4: `footnote_extractor`, `footnote_canonicalizer`,
+and `table_parser`. `dera_notes` grew from a mirror into a mirror plus a fact loader.
 
 ## Build and packaging
 

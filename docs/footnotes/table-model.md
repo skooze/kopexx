@@ -1,6 +1,6 @@
 # Footnote Table Model
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 4)
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 4); 174 tables parsed across four filings, 0 unresolved
 OWNER PACKAGE: `packages/table_parser`
 
 Footnote tables are first-class evidence. A maturity schedule, a tax rate reconciliation, or a
