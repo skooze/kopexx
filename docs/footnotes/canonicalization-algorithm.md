@@ -92,6 +92,36 @@ the count. Apple FY2025: 13 headings parsed, matching 13 extracted.
 For pre-2009 filings this stage is the primary mechanism rather than a confirmation, and
 confidence is correspondingly lower.
 
+---
+
+## Implementation status — Sprint 4
+
+**Stages 1 through 5 are IMPLEMENTED** in `packages/footnote_canonicalizer` and measured against
+four preserved Apple filings: 10-K 13 footnotes / 46 of 46 attached / 0 orphans, and each 10-Q 10
+footnotes / 0 orphans.
+
+**Stages 6 through 11 are NOT implemented.** Stage 3 left zero children unattached across all four
+filings, so no fallback could be exercised, and an untestable fallback carries the authority of a
+tested one without the evidence. An architecture test asserts this sprint's code produces none of
+their grouping methods.
+
+Two corrections the implementation forced on this document:
+
+**Stage 4 has no input for these filings.** Apple's 10-K and 10-Qs carry no per-note table of
+contents — the notes section begins directly. The result is `NOT_ATTEMPTED`, which this
+specification already distinguishes from `RECONCILED`, and stage 5 becomes the independent count
+confirmation rather than a redundant one.
+
+**Stage 5's heading pattern must span two elements.** The renderer emits `Note 1 –` and
+`Summary of Significant Accounting Policies` as separate blocks. A pattern requiring both on one
+line matches nothing in this filing.
+
+**Scope of the evidence.** Role-URI grouping is measured on one issuer, in one era. It is not
+established as universally sufficient. Breadth validation across at least 25 issuers and all four
+eras is Stage 2 phase W-3 and remains BLOCKING for scale-out.
+
+---
+
 ## Stage 6 — Presentation-hierarchy fallback
 
 Used when stage 3 leaves a child unattached.

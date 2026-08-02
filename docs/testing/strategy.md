@@ -134,6 +134,22 @@ Two design notes, each from a false result the check produced first:
 
 All four were proven to fire by introducing each defect into the README and observing the failure.
 
+### Determinism is enforced, not assumed
+
+`tests/architecture/test_deterministic_extraction.py` reads the imports and AST of
+`footnote_extractor`, `footnote_canonicalizer`, and `table_parser` and fails on a model SDK, an
+HTTP client, an AWS SDK, an endpoint literal, a credential name, or a call that would reach a
+provider. It also enforces the ownership boundaries — the canonicalizer must not parse tables, the
+extractor must not import grouping policy, the table parser must not convert filed text to a
+number — and asserts that stage 6 through 11 grouping methods are not produced.
+
+One narrow exception, by symbol: `packages.llm_gateway.parse_yaml` is the project's safe YAML
+reader, not a model call, and reading the exclusion definition with it is correct where `yaml.load`
+would open an arbitrary code path.
+
+Three guards proven by mutation: adding `import boto3`, calling `parse_tables` from the
+canonicalizer, and emitting `presentation_hierarchy` each fail the suite.
+
 ### Anti-vacuity
 
 `test_architecture_suite_has_something_to_check` and `test_no_package_is_an_empty_stub` exist

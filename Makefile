@@ -29,7 +29,8 @@ TEST_LOG := .pytest-last-run.log
 COV_PACKAGES := --cov=packages.sec_identity --cov=packages.configuration \
                 --cov=packages.sec_client --cov=packages.storage \
                 --cov=packages.llm_gateway --cov=packages.dera_notes \
-                --cov=packages.observability
+                --cov=packages.observability --cov=packages.footnote_extractor \
+                --cov=packages.footnote_canonicalizer --cov=packages.table_parser
 
 .PHONY: help install fmt fmt-check lint typecheck test test-unit test-integration \
         test-architecture test-security test-no-skips coverage migration-check db-upgrade \

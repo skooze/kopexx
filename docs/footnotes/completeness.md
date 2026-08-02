@@ -68,6 +68,22 @@ recompute from — are persisted.
 > denormalized columns, the derivable ones are now documented as derived and the two genuine
 > gaps were added to the schema.
 
+## Extraction status versus filing status — Sprint 4
+
+`packages/footnote_canonicalizer.evaluate` computes an EXTRACTION status: did every candidate get
+classified and every child block attached. `filing_footnote_status` then combines it with the
+summary count to produce the filing status the dashboard shows.
+
+The distinction matters because summarization does not exist yet. A filing whose extraction is
+flawless has zero accepted summaries, so its filing status is `PARTIAL` — correctly. Reporting
+`COMPLETE` would satisfy an extraction check while breaking the product requirement the status
+exists to express: one active accepted summary per canonical footnote.
+
+Confidence is reduced by each thing that did not confirm: an absent TOC costs 0.05, a TOC mismatch
+0.50, a missing heading confirmation 0.20, each orphan 0.10, a review flag 0.30. Apple's filings
+score 0.950 — the absent TOC only. An unreconciled filing is not as trustworthy as a reconciled
+one even when every count agrees.
+
 ## Status values
 
 | Status | Meaning |

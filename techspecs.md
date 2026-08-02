@@ -81,10 +81,14 @@ outbound side effect is a model invocation, which is metered and audited.
 | Database URL resolution, identity comparison, engine construction | `persistence` | IMPLEMENTED |
 | Destructive-test database isolation | `persistence` + `tests/conftest.py` | IMPLEMENTED |
 | AWS identity and secret-management policy | governance + `tests/architecture` | IMPLEMENTED as governance; no AWS code exists |
-| Alembic migration | `migrations` | IMPLEMENTED and APPLIED to a live PostgreSQL 18.4 |
+| Alembic migration | `migrations` | IMPLEMENTED and APPLIED; `0001_initial` sealed, `0002_table_ownership` added Sprint 4 |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
 | Filing discovery | `filing_discovery` | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | `filing_acquisition` | IMPLEMENTED (Sprint 3) |
+| Footnote extraction: inventory, candidates, headings | `footnote_extractor` | IMPLEMENTED (Sprint 4) |
+| Canonicalization stages 1-5, audit, completeness | `footnote_canonicalizer` | IMPLEMENTED (Sprint 4); stages 6-11 PLANNED |
+| Footnote table structure and cell provenance | `table_parser` | IMPLEMENTED (Sprint 4) |
+| Table-to-footnote ownership via tagged spans and the presentation linkbase | `footnote_canonicalizer` | IMPLEMENTED (Sprint 4); 0 unresolved on 4 filings |
 
 Reserved package names. **These directories do not exist.** Sprint 1 created them containing only
 a docstring, which reserved names up to twenty sprints ahead of their code and caused two
@@ -95,10 +99,7 @@ enforces that no package is an empty stub.
 | Reserved name | Planned path | Sprint |
 |---|---|---|
 | Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |  <!-- constrained by docs/security/aws-identity-and-secrets.md -->
-| Era parsers | `packages/filing_parser` | 3 |
-| Footnote extraction | `packages/footnote_extractor` | 4 |
-| Footnote canonicalization | `packages/footnote_canonicalizer` | 4 |
-| Table parsing | `packages/table_parser` | 4 |
+| Era parsers | `packages/filing_parser` | 5 |
 | Summarization pipeline | `packages/summarization` | 5 |
 | Validation pipeline | `packages/validation` | 5 |
 | Fiscal period logic | `packages/fiscal` | 6 |

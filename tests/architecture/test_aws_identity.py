@@ -38,6 +38,9 @@ POLICY_DOCUMENTS = frozenset(
         "rules.md",
         "docs/security/aws-identity-and-secrets.md",
         "tests/architecture/test_aws_identity.py",
+        # Enforces the same prohibition for the deterministic extraction packages, and therefore
+        # names the same variables. Added when Sprint 4 created it, not to silence a finding.
+        "tests/architecture/test_deterministic_extraction.py",
         "CHANGELOG.md",
     }
 )

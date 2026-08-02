@@ -68,6 +68,47 @@ Both are YAML or plain text. Neither is Markdown, neither is HTML. The payload c
 the row-oriented or record-oriented form by measured token count, and never sends the same table
 twice in one request.
 
+## Implementation status — Sprint 4
+
+`packages/table_parser` is IMPLEMENTED for what the four Apple fixtures require: row and column
+structure, expanded `colspan` and `rowspan`, header hierarchy, cell provenance, and exact numeric
+text. 174 tables and 12,620 cells parsed across the four filings.
+
+**Filed numeric text is preserved as text.** `(1,234)`, `$`, and `1,234` are stored exactly as
+filed. Converting `(1,234)` to `-1234.0` here would bake an interpretation into the extraction
+layer and lose the form every citation has to quote. Interpretation is Sprint 6.
+
+**Spans are expanded, not flattened.** All 62 tables in the FY2025 10-K use `colspan` and 2 use
+`rowspan`. A dropped span collapses a two-level header into one row and misaligns every value
+under it. Expanded copies are marked `is_span_fill` so the original cell is distinguishable.
+
+**Unsupported structure is declared.** A table that cannot be parsed into a grid keeps its raw
+source and reports `UNSUPPORTED`; a ragged grid reports `PARSED_WITH_WARNINGS` and is never padded.
+A silently truncated table looks identical to a small one.
+
+**Ownership is deterministic, through the filing's own tagging.** A table's owner is the note the
+FILER wrapped it in:
+
+```
+table offset -> innermost ix:nonNumeric span -> TextBlock concept
+             -> presentation roles (_pre.xml) -> canonical footnote
+```
+
+A child role resolves through the attachment stage 3 already audited, so ownership reuses one
+decision rather than deriving a second. `ix:continuation` chains are followed: a long note's
+tables frequently sit in a continuation rather than inside the declaring element, and ignoring
+them loses real footnote tables.
+
+A statement carries no TextBlock — the filer tags each figure individually — so it is identified
+by the concepts of the numeric facts inside its own byte range.
+
+Every table receives exactly one of `CANONICAL_FOOTNOTE`, `EXCLUDED_FILING_SECTION`,
+`FINANCIAL_STATEMENT`, `OTHER_FILING_REPORT`, or `UNRESOLVED`, persisted with its evidence by
+migration `0002`. An unresolved footnote table blocks `COMPLETE`.
+
+Measured across the four Apple filings: 174 tables, 60 owned by a named note, 20 statements, 94
+filing furniture, **0 unresolved**.
+
 ## Validation
 
 Row and column counts consistent with the cell set. Every cell resolvable to a row and a column.

@@ -1,0 +1,3874 @@
+{
+ "accession": "0000320193-25-000057",
+ "concept_roles": {
+  "aapl:CashCashEquivalentsAndMarketableSecurities": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "aapl:CashCashEquivalentsAndMarketableSecuritiesCost": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "aapl:CashEquivalentsAndMarketableSecuritiesAccumulatedGrossUnrealizedGainBeforeTax": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "aapl:CashEquivalentsAndMarketableSecuritiesAccumulatedGrossUnrealizedLossBeforeTax": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterFiveThroughTenYearsPercentage": [
+   "http://www.apple.com/role/FinancialInstrumentsAdditionalInformationDetails"
+  ],
+  "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterOneThroughFiveYearsPercentage": [
+   "http://www.apple.com/role/FinancialInstrumentsAdditionalInformationDetails"
+  ],
+  "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterTenYearsPercentage": [
+   "http://www.apple.com/role/FinancialInstrumentsAdditionalInformationDetails"
+  ],
+  "aapl:DisaggregatedNetSalesAndPortionOfNetSalesThatWasPreviouslyDeferredTableTextBlock": [
+   "http://www.apple.com/role/RevenueTables"
+  ],
+  "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "aapl:NumberOfSignificantVendors": [
+   "http://www.apple.com/role/FinancialInstrumentsAdditionalInformationDetails"
+  ],
+  "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossBeforeReclassificationAfterTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossReclassificationAfterTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossafterReclassificationandTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "dei:EntityCommonStockSharesOutstanding": [
+   "http://www.apple.com/role/CoverPage"
+  ],
+  "ecd:Additional402vDisclosureTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:AdjToNonPeoNeoCompFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:AdjToPeoCompFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:AggtErrCompNotYetDeterminedTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/ErrCompDisclosure"
+  ],
+  "ecd:AwardTmgHowMnpiCnsdrdTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/AwardTimingDisclosure"
+  ],
+  "ecd:AwardTmgMethodTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/AwardTimingDisclosure"
+  ],
+  "ecd:AwardTmgMnpiDiscTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/AwardTimingDisclosure"
+  ],
+  "ecd:AwardsCloseToMnpiDiscTableTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/AwardTimingDisclosure"
+  ],
+  "ecd:ChangedPeerGroupFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:CompActuallyPaidVsCoSelectedMeasureTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:CompActuallyPaidVsNetIncomeTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:CompActuallyPaidVsOtherMeasureTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:CompActuallyPaidVsTotalShareholderRtnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:EqtyAwrdsAdjFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:EquityValuationAssumptionDifferenceFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:ErrCompAnalysisTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/ErrCompDisclosure"
+  ],
+  "ecd:ForgoneRecoveryExplanationOfImpracticabilityTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/ErrCompDisclosure"
+  ],
+  "ecd:InsiderTrdPoliciesProcNotAdoptedTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/InsiderTradingPoliciesProc"
+  ],
+  "ecd:MtrlTermsOfTrdArrTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/InsiderTradingArrangements"
+  ],
+  "ecd:NamedExecutiveOfficersFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:NonGaapMeasureDescriptionTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:PeerGroupIssuersFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:PnsnBnftsAdjFnTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:PvpTableTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:RestatementDoesNotRequireRecoveryTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/ErrCompDisclosure"
+  ],
+  "ecd:StkPrcOrTsrEstimationMethodTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/ErrCompDisclosure"
+  ],
+  "ecd:TabularListTableTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "ecd:TotalShareholderRtnVsPeerGroupTextBlock": [
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "us-gaap:AccountsPayableCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:AccountsReceivableNetCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsPropertyPlantandEquipmentNetDetails"
+  ],
+  "us-gaap:AccumulatedOtherComprehensiveIncomeLossNetOfTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:AdditionalFinancialInformationDisclosureTextBlock": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetails"
+  ],
+  "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:AdjustmentsToAdditionalPaidInCapitalSharebasedCompensationRequisiteServicePeriodRecognitionValue": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:AllocatedShareBasedCompensationExpense": [
+   "http://www.apple.com/role/ShareBasedCompensationSummaryofShareBasedCompensationExpenseandtheRelatedIncomeTaxBenefitDetails"
+  ],
+  "us-gaap:Assets": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:AssetsCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:AssetsNoncurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:AvailableForSaleSecuritiesDebtSecurities": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:BasisOfAccountingPolicyPolicyTextBlock": [
+   "http://www.apple.com/role/SummaryofSignificantAccountingPoliciesPolicies"
+  ],
+  "us-gaap:BasisOfPresentationAndSignificantAccountingPoliciesTextBlock": [
+   "http://www.apple.com/role/SummaryofSignificantAccountingPolicies"
+  ],
+  "us-gaap:Cash": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:CashAndCashEquivalentsAtCarryingValue": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:CommercialPaper": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/DebtAdditionalInformationDetails"
+  ],
+  "us-gaap:CommitmentsAndContingencies": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:CommonStockDividendsPerShareDeclared": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:CommonStockParOrStatedValuePerShare": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnauditedParenthetical"
+  ],
+  "us-gaap:CommonStockSharesAuthorized": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnauditedParenthetical"
+  ],
+  "us-gaap:CommonStockSharesIssued": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnauditedParenthetical"
+  ],
+  "us-gaap:CommonStockSharesOutstanding": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnauditedParenthetical"
+  ],
+  "us-gaap:CommonStocksIncludingAdditionalPaidInCapital": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:ComprehensiveIncomeNetOfTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:ConcentrationRiskPercentage1": [
+   "http://www.apple.com/role/FinancialInstrumentsAdditionalInformationDetails"
+  ],
+  "us-gaap:ContractWithCustomerLiability": [
+   "http://www.apple.com/role/RevenueAdditionalInformationDetails"
+  ],
+  "us-gaap:ContractWithCustomerLiabilityCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:ContractWithCustomerLiabilityRevenueRecognized": [
+   "http://www.apple.com/role/RevenueDisaggregatedNetSalesandPortionofNetSalesThatWasPreviouslyDeferredDetails"
+  ],
+  "us-gaap:CostOfGoodsAndServicesSold": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:DebtDisclosureTextBlock": [
+   "http://www.apple.com/role/Debt"
+  ],
+  "us-gaap:DebtSecuritiesAvailableForSaleRestricted": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:DepreciationDepletionAndAmortization": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:DerivativeNotionalAmount": [
+   "http://www.apple.com/role/FinancialInstrumentsNotionalAmountsofDerivativeInstrumentsDetails"
+  ],
+  "us-gaap:DisclosureOfCompensationRelatedCostsShareBasedPaymentsTextBlock": [
+   "http://www.apple.com/role/ShareBasedCompensation"
+  ],
+  "us-gaap:Dividends": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:EarningsPerShareBasic": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/EarningsPerShareComputationofBasicandDilutedEarningsPerShareDetails"
+  ],
+  "us-gaap:EarningsPerShareDiluted": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/EarningsPerShareComputationofBasicandDilutedEarningsPerShareDetails"
+  ],
+  "us-gaap:EarningsPerShareTextBlock": [
+   "http://www.apple.com/role/EarningsPerShare"
+  ],
+  "us-gaap:EmployeeServiceShareBasedCompensationNonvestedAwardsTotalCompensationCostNotYetRecognized": [
+   "http://www.apple.com/role/ShareBasedCompensationAdditionalInformationDetails"
+  ],
+  "us-gaap:EmployeeServiceShareBasedCompensationTaxBenefitFromCompensationExpense": [
+   "http://www.apple.com/role/ShareBasedCompensationSummaryofShareBasedCompensationExpenseandtheRelatedIncomeTaxBenefitDetails"
+  ],
+  "us-gaap:EquitySecuritiesFvNiCost": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:FairValueMeasurementPolicyPolicyTextBlock": [
+   "http://www.apple.com/role/SummaryofSignificantAccountingPoliciesPolicies"
+  ],
+  "us-gaap:FinancialInstrumentsDisclosureTextBlock": [
+   "http://www.apple.com/role/FinancialInstruments"
+  ],
+  "us-gaap:GrossProfit": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:HedgedLiabilityFairValueHedge": [
+   "http://www.apple.com/role/FinancialInstrumentsAdditionalInformationDetails"
+  ],
+  "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:IncomeTaxExpenseBenefit": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:IncomeTaxesPaidNet": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncreaseDecreaseInAccountsPayable": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncreaseDecreaseInAccountsReceivable": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncreaseDecreaseInInventories": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncreaseDecreaseInOtherOperatingAssets": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncreaseDecreaseInOtherOperatingLiabilities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncreaseDecreaseInOtherReceivables": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:IncrementalCommonSharesAttributableToShareBasedPaymentArrangements": [
+   "http://www.apple.com/role/EarningsPerShareComputationofBasicandDilutedEarningsPerShareDetails"
+  ],
+  "us-gaap:InventoryFinishedGoodsNetOfReserves": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsInventoriesDetails"
+  ],
+  "us-gaap:InventoryNet": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsInventoriesDetails"
+  ],
+  "us-gaap:InventoryRawMaterialsAndPurchasedPartsNetOfReserves": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsInventoriesDetails"
+  ],
+  "us-gaap:Liabilities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:LiabilitiesAndStockholdersEquity": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:LiabilitiesCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:LiabilitiesNoncurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:LongTermDebt": [
+   "http://www.apple.com/role/DebtAdditionalInformationDetails"
+  ],
+  "us-gaap:LongTermDebtCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:LongTermDebtFairValue": [
+   "http://www.apple.com/role/DebtAdditionalInformationDetails"
+  ],
+  "us-gaap:LongTermDebtNoncurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:MarketableSecuritiesCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:MarketableSecuritiesNoncurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:NetCashProvidedByUsedInFinancingActivities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:NetCashProvidedByUsedInInvestingActivities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:NetCashProvidedByUsedInOperatingActivities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:NetIncomeLoss": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited",
+   "http://www.apple.com/role/EarningsPerShareComputationofBasicandDilutedEarningsPerShareDetails",
+   "http://xbrl.sec.gov/ecd/role/PvpDisclosure"
+  ],
+  "us-gaap:NonoperatingIncomeExpense": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:NontradeReceivablesCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:OperatingExpenses": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:OperatingIncomeLoss": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/SegmentInformationandGeographicDataInformationbyReportableSegmentDetails",
+   "http://www.apple.com/role/SegmentInformationandGeographicDataReconciliationofSegmentOperatingIncometotheCondensedConsolidatedStatementsofOperationsDetails"
+  ],
+  "us-gaap:OtherAssetsCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:OtherAssetsNoncurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossAfterReclassificationAndTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossBeforeReclassificationAfterTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossReclassificationAfterTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossForeignCurrencyTransactionAndTranslationAdjustmentNetOfTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeLossReclassificationAdjustmentFromAOCIForSaleOfSecuritiesNetOfTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherComprehensiveIncomeUnrealizedHoldingGainLossOnSecuritiesArisingDuringPeriodNetOfTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited"
+  ],
+  "us-gaap:OtherGeneralAndAdministrativeExpense": [
+   "http://www.apple.com/role/SegmentInformationandGeographicDataReconciliationofSegmentOperatingIncometotheCondensedConsolidatedStatementsofOperationsDetails"
+  ],
+  "us-gaap:OtherLiabilitiesCurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:OtherLiabilitiesNoncurrent": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:OtherNoncashIncomeExpense": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PaymentsForProceedsFromOtherInvestingActivities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PaymentsForRepurchaseOfCommonStock": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PaymentsOfDividends": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PaymentsRelatedToTaxWithholdingForShareBasedCompensation": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PaymentsToAcquireAvailableForSaleSecuritiesDebt": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:ProceedsFromPaymentsForOtherFinancingActivities": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:ProceedsFromRepaymentsOfCommercialPaper": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:ProceedsFromSaleOfAvailableForSaleSecuritiesDebt": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:PropertyPlantAndEquipmentGross": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsPropertyPlantandEquipmentNetDetails"
+  ],
+  "us-gaap:PropertyPlantAndEquipmentNet": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsPropertyPlantandEquipmentNetDetails"
+  ],
+  "us-gaap:PropertyPlantAndEquipmentTextBlock": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsTables"
+  ],
+  "us-gaap:ReconciliationOfOperatingProfitLossFromSegmentsToConsolidatedTextBlock": [
+   "http://www.apple.com/role/SegmentInformationandGeographicDataTables"
+  ],
+  "us-gaap:RepaymentsOfLongTermDebt": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:ResearchAndDevelopmentExpense": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/SegmentInformationandGeographicDataReconciliationofSegmentOperatingIncometotheCondensedConsolidatedStatementsofOperationsDetails"
+  ],
+  "us-gaap:RestrictedCashAndCashEquivalents": [
+   "http://www.apple.com/role/FinancialInstrumentsCashCashEquivalentsandMarketableSecuritiesDetails"
+  ],
+  "us-gaap:RetainedEarningsAccumulatedDeficit": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited"
+  ],
+  "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/RevenueDisaggregatedNetSalesandPortionofNetSalesThatWasPreviouslyDeferredDetails",
+   "http://www.apple.com/role/SegmentInformationandGeographicDataInformationbyReportableSegmentDetails"
+  ],
+  "us-gaap:RevenueFromContractWithCustomerTextBlock": [
+   "http://www.apple.com/role/Revenue"
+  ],
+  "us-gaap:RevenueRemainingPerformanceObligationPercentage": [
+   "http://www.apple.com/role/RevenueDeferredRevenueExpectedTimingofRealizationDetails"
+  ],
+  "us-gaap:ScheduleOfCashCashEquivalentsAndShortTermInvestmentsTableTextBlock": [
+   "http://www.apple.com/role/FinancialInstrumentsTables"
+  ],
+  "us-gaap:ScheduleOfCompensationCostForShareBasedPaymentArrangementsAllocationOfShareBasedCompensationCostsByPlanTableTextBlock": [
+   "http://www.apple.com/role/ShareBasedCompensationTables"
+  ],
+  "us-gaap:ScheduleOfEarningsPerShareBasicAndDilutedTableTextBlock": [
+   "http://www.apple.com/role/EarningsPerShareTables"
+  ],
+  "us-gaap:ScheduleOfInventoryCurrentTableTextBlock": [
+   "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetailsTables"
+  ],
+  "us-gaap:ScheduleOfNonvestedRestrictedStockUnitsActivityTableTextBlock": [
+   "http://www.apple.com/role/ShareBasedCompensationTables"
+  ],
+  "us-gaap:ScheduleOfNotionalAmountsOfOutstandingDerivativePositionsTableTextBlock": [
+   "http://www.apple.com/role/FinancialInstrumentsTables"
+  ],
+  "us-gaap:ScheduleOfSegmentReportingInformationBySegmentTextBlock": [
+   "http://www.apple.com/role/SegmentInformationandGeographicDataTables"
+  ],
+  "us-gaap:SegmentReportingDisclosureTextBlock": [
+   "http://www.apple.com/role/SegmentInformationandGeographicData"
+  ],
+  "us-gaap:SellingGeneralAndAdministrativeExpense": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited"
+  ],
+  "us-gaap:ShareBasedCompensation": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsForfeitedInPeriod": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsForfeituresWeightedAverageGrantDateFairValue": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsGrantsInPeriod": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsGrantsInPeriodWeightedAverageGrantDateFairValue": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsNonvestedNumber": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails",
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsNonvestedWeightedAverageGrantDateFairValue": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails",
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriod": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodTotalFairValue": [
+   "http://www.apple.com/role/ShareBasedCompensationAdditionalInformationDetails"
+  ],
+  "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodWeightedAverageGrantDateFairValue": [
+   "http://www.apple.com/role/ShareBasedCompensationRestrictedStockUnitActivityandRelatedInformationDetails"
+  ],
+  "us-gaap:StockIssuedDuringPeriodValueNewIssues": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:StockRepurchasedAndRetiredDuringPeriodShares": [
+   "http://www.apple.com/role/ShareholdersEquityAdditionalInformationDetails"
+  ],
+  "us-gaap:StockRepurchasedAndRetiredDuringPeriodValue": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited",
+   "http://www.apple.com/role/ShareholdersEquityAdditionalInformationDetails"
+  ],
+  "us-gaap:StockholdersEquity": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited",
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+  ],
+  "us-gaap:StockholdersEquityNoteDisclosureTextBlock": [
+   "http://www.apple.com/role/ShareholdersEquity"
+  ],
+  "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/EarningsPerShareComputationofBasicandDilutedEarningsPerShareDetails"
+  ],
+  "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic": [
+   "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+   "http://www.apple.com/role/EarningsPerShareComputationofBasicandDilutedEarningsPerShareDetails"
+  ]
+ },
+ "expected_census": {
+  "accession": "0000320193-25-000057",
+  "canonical_footnote": 11,
+  "excluded_filing_section": 0,
+  "financial_statement": 5,
+  "other_filing_report": 21,
+  "total": 37,
+  "unresolved": 0
+ },
+ "expected_ownership": {
+  "T1": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T10": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T11": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T12": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T13": {
+   "classification": "FINANCIAL_STATEMENT",
+   "owner_role_uri": null
+  },
+  "T14": {
+   "classification": "FINANCIAL_STATEMENT",
+   "owner_role_uri": null
+  },
+  "T15": {
+   "classification": "FINANCIAL_STATEMENT",
+   "owner_role_uri": null
+  },
+  "T16": {
+   "classification": "FINANCIAL_STATEMENT",
+   "owner_role_uri": null
+  },
+  "T17": {
+   "classification": "FINANCIAL_STATEMENT",
+   "owner_role_uri": null
+  },
+  "T18": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/Revenue"
+  },
+  "T19": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/EarningsPerShare"
+  },
+  "T2": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T20": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/FinancialInstruments"
+  },
+  "T21": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/FinancialInstruments"
+  },
+  "T22": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/FinancialInstruments"
+  },
+  "T23": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetails"
+  },
+  "T24": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/CondensedConsolidatedFinancialStatementDetails"
+  },
+  "T25": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/ShareBasedCompensation"
+  },
+  "T26": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/ShareBasedCompensation"
+  },
+  "T27": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/SegmentInformationandGeographicData"
+  },
+  "T28": {
+   "classification": "CANONICAL_FOOTNOTE",
+   "owner_role_uri": "http://www.apple.com/role/SegmentInformationandGeographicData"
+  },
+  "T29": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T3": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T30": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T31": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T32": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T33": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T34": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T35": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T36": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T37": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T4": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T5": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T6": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T7": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T8": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  },
+  "T9": {
+   "classification": "OTHER_FILING_REPORT",
+   "owner_role_uri": null
+  }
+ },
+ "numeric_spans": [
+  {
+   "concept": "dei:EntityCommonStockSharesOutstanding",
+   "start": 103037
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 127141
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 127943
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 128745
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 129548
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 130347
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 130949
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 131551
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 132153
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 132978
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 133638
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 134298
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 134958
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 137023
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 137600
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 138177
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 138755
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 139529
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 140105
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 140681
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 141258
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 142062
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 142697
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 143332
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "start": 143967
+  },
+  {
+   "concept": "us-gaap:GrossProfit",
+   "start": 144794
+  },
+  {
+   "concept": "us-gaap:GrossProfit",
+   "start": 145414
+  },
+  {
+   "concept": "us-gaap:GrossProfit",
+   "start": 146034
+  },
+  {
+   "concept": "us-gaap:GrossProfit",
+   "start": 146654
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 148806
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 149385
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 149964
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 150543
+  },
+  {
+   "concept": "us-gaap:SellingGeneralAndAdministrativeExpense",
+   "start": 151337
+  },
+  {
+   "concept": "us-gaap:SellingGeneralAndAdministrativeExpense",
+   "start": 151925
+  },
+  {
+   "concept": "us-gaap:SellingGeneralAndAdministrativeExpense",
+   "start": 152513
+  },
+  {
+   "concept": "us-gaap:SellingGeneralAndAdministrativeExpense",
+   "start": 153101
+  },
+  {
+   "concept": "us-gaap:OperatingExpenses",
+   "start": 153922
+  },
+  {
+   "concept": "us-gaap:OperatingExpenses",
+   "start": 154548
+  },
+  {
+   "concept": "us-gaap:OperatingExpenses",
+   "start": 155174
+  },
+  {
+   "concept": "us-gaap:OperatingExpenses",
+   "start": 155799
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 157239
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 157809
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 158379
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 158948
+  },
+  {
+   "concept": "us-gaap:NonoperatingIncomeExpense",
+   "start": 159716
+  },
+  {
+   "concept": "us-gaap:NonoperatingIncomeExpense",
+   "start": 160264
+  },
+  {
+   "concept": "us-gaap:NonoperatingIncomeExpense",
+   "start": 160809
+  },
+  {
+   "concept": "us-gaap:NonoperatingIncomeExpense",
+   "start": 161357
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "start": 162141
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "start": 162842
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "start": 163543
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "start": 164243
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "start": 165111
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "start": 165685
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "start": 166259
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "start": 166833
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 167846
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 168698
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 169550
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 170401
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 172741
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 173490
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 174239
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 174987
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 175922
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 176673
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 177424
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 178174
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 180176
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 180780
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 181384
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 181987
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 182777
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 183383
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 183989
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 184594
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 189446
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 190198
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 190950
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 191701
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossForeignCurrencyTransactionAndTranslationAdjustmentNetOfTax",
+   "start": 193348
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossForeignCurrencyTransactionAndTranslationAdjustmentNetOfTax",
+   "start": 193954
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossForeignCurrencyTransactionAndTranslationAdjustmentNetOfTax",
+   "start": 194565
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossForeignCurrencyTransactionAndTranslationAdjustmentNetOfTax",
+   "start": 195175
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossBeforeReclassificationAfterTax",
+   "start": 197348
+  },
+  {
+   "concept": "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossBeforeReclassificationAfterTax",
+   "start": 197951
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossBeforeReclassificationAfterTax",
+   "start": 198554
+  },
+  {
+   "concept": "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossBeforeReclassificationAfterTax",
+   "start": 199184
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossReclassificationAfterTax",
+   "start": 200056
+  },
+  {
+   "concept": "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossReclassificationAfterTax",
+   "start": 200644
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossReclassificationAfterTax",
+   "start": 201250
+  },
+  {
+   "concept": "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossReclassificationAfterTax",
+   "start": 201852
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossAfterReclassificationAndTax",
+   "start": 202738
+  },
+  {
+   "concept": "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossafterReclassificationandTax",
+   "start": 203396
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossCashFlowHedgeGainLossAfterReclassificationAndTax",
+   "start": 204054
+  },
+  {
+   "concept": "aapl:OtherComprehensiveIncomeLossDerivativeInstrumentGainLossafterReclassificationandTax",
+   "start": 204739
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeUnrealizedHoldingGainLossOnSecuritiesArisingDuringPeriodNetOfTax",
+   "start": 207059
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeUnrealizedHoldingGainLossOnSecuritiesArisingDuringPeriodNetOfTax",
+   "start": 207699
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeUnrealizedHoldingGainLossOnSecuritiesArisingDuringPeriodNetOfTax",
+   "start": 208310
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeUnrealizedHoldingGainLossOnSecuritiesArisingDuringPeriodNetOfTax",
+   "start": 208921
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossReclassificationAdjustmentFromAOCIForSaleOfSecuritiesNetOfTax",
+   "start": 209825
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossReclassificationAdjustmentFromAOCIForSaleOfSecuritiesNetOfTax",
+   "start": 210443
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossReclassificationAdjustmentFromAOCIForSaleOfSecuritiesNetOfTax",
+   "start": 211060
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossReclassificationAdjustmentFromAOCIForSaleOfSecuritiesNetOfTax",
+   "start": 211677
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+   "start": 212592
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+   "start": 213273
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+   "start": 213923
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+   "start": 214576
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 216098
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 216681
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 217264
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 217846
+  },
+  {
+   "concept": "us-gaap:ComprehensiveIncomeNetOfTax",
+   "start": 218980
+  },
+  {
+   "concept": "us-gaap:ComprehensiveIncomeNetOfTax",
+   "start": 219945
+  },
+  {
+   "concept": "us-gaap:ComprehensiveIncomeNetOfTax",
+   "start": 220910
+  },
+  {
+   "concept": "us-gaap:ComprehensiveIncomeNetOfTax",
+   "start": 221874
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 226068
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 226857
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 227646
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 228225
+  },
+  {
+   "concept": "us-gaap:AccountsReceivableNetCurrent",
+   "start": 229007
+  },
+  {
+   "concept": "us-gaap:AccountsReceivableNetCurrent",
+   "start": 229587
+  },
+  {
+   "concept": "us-gaap:NontradeReceivablesCurrent",
+   "start": 230374
+  },
+  {
+   "concept": "us-gaap:NontradeReceivablesCurrent",
+   "start": 230952
+  },
+  {
+   "concept": "us-gaap:InventoryNet",
+   "start": 231720
+  },
+  {
+   "concept": "us-gaap:InventoryNet",
+   "start": 232283
+  },
+  {
+   "concept": "us-gaap:OtherAssetsCurrent",
+   "start": 233045
+  },
+  {
+   "concept": "us-gaap:OtherAssetsCurrent",
+   "start": 233615
+  },
+  {
+   "concept": "us-gaap:AssetsCurrent",
+   "start": 234413
+  },
+  {
+   "concept": "us-gaap:AssetsCurrent",
+   "start": 235037
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 236562
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 237144
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentNet",
+   "start": 237939
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentNet",
+   "start": 238519
+  },
+  {
+   "concept": "us-gaap:OtherAssetsNoncurrent",
+   "start": 239302
+  },
+  {
+   "concept": "us-gaap:OtherAssetsNoncurrent",
+   "start": 239875
+  },
+  {
+   "concept": "us-gaap:AssetsNoncurrent",
+   "start": 240697
+  },
+  {
+   "concept": "us-gaap:AssetsNoncurrent",
+   "start": 241324
+  },
+  {
+   "concept": "us-gaap:Assets",
+   "start": 242388
+  },
+  {
+   "concept": "us-gaap:Assets",
+   "start": 243234
+  },
+  {
+   "concept": "us-gaap:AccountsPayableCurrent",
+   "start": 245288
+  },
+  {
+   "concept": "us-gaap:AccountsPayableCurrent",
+   "start": 246062
+  },
+  {
+   "concept": "us-gaap:OtherLiabilitiesCurrent",
+   "start": 246840
+  },
+  {
+   "concept": "us-gaap:OtherLiabilitiesCurrent",
+   "start": 247415
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiabilityCurrent",
+   "start": 248185
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiabilityCurrent",
+   "start": 248772
+  },
+  {
+   "concept": "us-gaap:CommercialPaper",
+   "start": 249554
+  },
+  {
+   "concept": "us-gaap:CommercialPaper",
+   "start": 250120
+  },
+  {
+   "concept": "us-gaap:LongTermDebtCurrent",
+   "start": 250874
+  },
+  {
+   "concept": "us-gaap:LongTermDebtCurrent",
+   "start": 251445
+  },
+  {
+   "concept": "us-gaap:LiabilitiesCurrent",
+   "start": 252249
+  },
+  {
+   "concept": "us-gaap:LiabilitiesCurrent",
+   "start": 252878
+  },
+  {
+   "concept": "us-gaap:LongTermDebtNoncurrent",
+   "start": 254444
+  },
+  {
+   "concept": "us-gaap:LongTermDebtNoncurrent",
+   "start": 255018
+  },
+  {
+   "concept": "us-gaap:OtherLiabilitiesNoncurrent",
+   "start": 255817
+  },
+  {
+   "concept": "us-gaap:OtherLiabilitiesNoncurrent",
+   "start": 256395
+  },
+  {
+   "concept": "us-gaap:LiabilitiesNoncurrent",
+   "start": 257227
+  },
+  {
+   "concept": "us-gaap:LiabilitiesNoncurrent",
+   "start": 257859
+  },
+  {
+   "concept": "us-gaap:Liabilities",
+   "start": 258704
+  },
+  {
+   "concept": "us-gaap:Liabilities",
+   "start": 259326
+  },
+  {
+   "concept": "us-gaap:CommitmentsAndContingencies",
+   "start": 260304
+  },
+  {
+   "concept": "us-gaap:CommitmentsAndContingencies",
+   "start": 260570
+  },
+  {
+   "concept": "us-gaap:CommonStockParOrStatedValuePerShare",
+   "start": 261763
+  },
+  {
+   "concept": "us-gaap:CommonStockParOrStatedValuePerShare",
+   "start": 261906
+  },
+  {
+   "concept": "us-gaap:CommonStockSharesAuthorized",
+   "start": 262102
+  },
+  {
+   "concept": "us-gaap:CommonStockSharesAuthorized",
+   "start": 262261
+  },
+  {
+   "concept": "us-gaap:CommonStockSharesIssued",
+   "start": 262484
+  },
+  {
+   "concept": "us-gaap:CommonStockSharesOutstanding",
+   "start": 262638
+  },
+  {
+   "concept": "us-gaap:CommonStockSharesIssued",
+   "start": 262846
+  },
+  {
+   "concept": "us-gaap:CommonStockSharesOutstanding",
+   "start": 263000
+  },
+  {
+   "concept": "us-gaap:CommonStocksIncludingAdditionalPaidInCapital",
+   "start": 263485
+  },
+  {
+   "concept": "us-gaap:CommonStocksIncludingAdditionalPaidInCapital",
+   "start": 264081
+  },
+  {
+   "concept": "us-gaap:RetainedEarningsAccumulatedDeficit",
+   "start": 264876
+  },
+  {
+   "concept": "us-gaap:RetainedEarningsAccumulatedDeficit",
+   "start": 265467
+  },
+  {
+   "concept": "us-gaap:AccumulatedOtherComprehensiveIncomeLossNetOfTax",
+   "start": 266270
+  },
+  {
+   "concept": "us-gaap:AccumulatedOtherComprehensiveIncomeLossNetOfTax",
+   "start": 266873
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 267715
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 268343
+  },
+  {
+   "concept": "us-gaap:LiabilitiesAndStockholdersEquity",
+   "start": 269493
+  },
+  {
+   "concept": "us-gaap:LiabilitiesAndStockholdersEquity",
+   "start": 270464
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 275421
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 276178
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 276935
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 277692
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 279846
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 280416
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 280986
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 281556
+  },
+  {
+   "concept": "us-gaap:StockIssuedDuringPeriodValueNewIssues",
+   "start": 282341
+  },
+  {
+   "concept": "us-gaap:StockIssuedDuringPeriodValueNewIssues",
+   "start": 282898
+  },
+  {
+   "concept": "us-gaap:StockIssuedDuringPeriodValueNewIssues",
+   "start": 283455
+  },
+  {
+   "concept": "us-gaap:StockIssuedDuringPeriodValueNewIssues",
+   "start": 284012
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 284836
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 285411
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 285986
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 286592
+  },
+  {
+   "concept": "us-gaap:AdjustmentsToAdditionalPaidInCapitalSharebasedCompensationRequisiteServicePeriodRecognitionValue",
+   "start": 287400
+  },
+  {
+   "concept": "us-gaap:AdjustmentsToAdditionalPaidInCapitalSharebasedCompensationRequisiteServicePeriodRecognitionValue",
+   "start": 288047
+  },
+  {
+   "concept": "us-gaap:AdjustmentsToAdditionalPaidInCapitalSharebasedCompensationRequisiteServicePeriodRecognitionValue",
+   "start": 288694
+  },
+  {
+   "concept": "us-gaap:AdjustmentsToAdditionalPaidInCapitalSharebasedCompensationRequisiteServicePeriodRecognitionValue",
+   "start": 289341
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 290211
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 290839
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 291467
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 292095
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 294271
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 294845
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 295415
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 295990
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 296721
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 297286
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 297851
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 298416
+  },
+  {
+   "concept": "us-gaap:Dividends",
+   "start": 299204
+  },
+  {
+   "concept": "us-gaap:Dividends",
+   "start": 299760
+  },
+  {
+   "concept": "us-gaap:Dividends",
+   "start": 300316
+  },
+  {
+   "concept": "us-gaap:Dividends",
+   "start": 300872
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 301694
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 302268
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 302842
+  },
+  {
+   "concept": "us-gaap:AdjustmentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 303448
+  },
+  {
+   "concept": "us-gaap:StockRepurchasedAndRetiredDuringPeriodValue",
+   "start": 304257
+  },
+  {
+   "concept": "us-gaap:StockRepurchasedAndRetiredDuringPeriodValue",
+   "start": 304848
+  },
+  {
+   "concept": "us-gaap:StockRepurchasedAndRetiredDuringPeriodValue",
+   "start": 305439
+  },
+  {
+   "concept": "us-gaap:StockRepurchasedAndRetiredDuringPeriodValue",
+   "start": 306030
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 306841
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 307467
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 308089
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 308715
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 310872
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 311446
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 312020
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 312594
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 313376
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 313959
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 314542
+  },
+  {
+   "concept": "us-gaap:OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+   "start": 315125
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 315960
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 316586
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 317212
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 317838
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 319501
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 320271
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 321041
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "start": 321811
+  },
+  {
+   "concept": "us-gaap:CommonStockDividendsPerShareDeclared",
+   "start": 323472
+  },
+  {
+   "concept": "us-gaap:CommonStockDividendsPerShareDeclared",
+   "start": 324238
+  },
+  {
+   "concept": "us-gaap:CommonStockDividendsPerShareDeclared",
+   "start": 325004
+  },
+  {
+   "concept": "us-gaap:CommonStockDividendsPerShareDeclared",
+   "start": 325769
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "start": 329468
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "start": 330268
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 331861
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 332425
+  },
+  {
+   "concept": "us-gaap:DepreciationDepletionAndAmortization",
+   "start": 333711
+  },
+  {
+   "concept": "us-gaap:DepreciationDepletionAndAmortization",
+   "start": 334297
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensation",
+   "start": 335095
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensation",
+   "start": 335667
+  },
+  {
+   "concept": "us-gaap:OtherNoncashIncomeExpense",
+   "start": 336586
+  },
+  {
+   "concept": "us-gaap:OtherNoncashIncomeExpense",
+   "start": 337157
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInAccountsReceivable",
+   "start": 338410
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInAccountsReceivable",
+   "start": 339005
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInOtherReceivables",
+   "start": 339808
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInOtherReceivables",
+   "start": 340401
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInInventories",
+   "start": 341186
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInInventories",
+   "start": 341743
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInOtherOperatingAssets",
+   "start": 342516
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInOtherOperatingAssets",
+   "start": 343100
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInAccountsPayable",
+   "start": 343880
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInAccountsPayable",
+   "start": 344469
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInOtherOperatingLiabilities",
+   "start": 345279
+  },
+  {
+   "concept": "us-gaap:IncreaseDecreaseInOtherOperatingLiabilities",
+   "start": 345878
+  },
+  {
+   "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+   "start": 346722
+  },
+  {
+   "concept": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+   "start": 347373
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquireAvailableForSaleSecuritiesDebt",
+   "start": 349000
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquireAvailableForSaleSecuritiesDebt",
+   "start": 349594
+  },
+  {
+   "concept": "us-gaap:ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities",
+   "start": 350416
+  },
+  {
+   "concept": "us-gaap:ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities",
+   "start": 351036
+  },
+  {
+   "concept": "us-gaap:ProceedsFromSaleOfAvailableForSaleSecuritiesDebt",
+   "start": 351880
+  },
+  {
+   "concept": "us-gaap:ProceedsFromSaleOfAvailableForSaleSecuritiesDebt",
+   "start": 352478
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+   "start": 353314
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+   "start": 353902
+  },
+  {
+   "concept": "us-gaap:PaymentsForProceedsFromOtherInvestingActivities",
+   "start": 354836
+  },
+  {
+   "concept": "us-gaap:PaymentsForProceedsFromOtherInvestingActivities",
+   "start": 355398
+  },
+  {
+   "concept": "us-gaap:NetCashProvidedByUsedInInvestingActivities",
+   "start": 356206
+  },
+  {
+   "concept": "us-gaap:NetCashProvidedByUsedInInvestingActivities",
+   "start": 356857
+  },
+  {
+   "concept": "us-gaap:PaymentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 358516
+  },
+  {
+   "concept": "us-gaap:PaymentsRelatedToTaxWithholdingForShareBasedCompensation",
+   "start": 359118
+  },
+  {
+   "concept": "us-gaap:PaymentsOfDividends",
+   "start": 359947
+  },
+  {
+   "concept": "us-gaap:PaymentsOfDividends",
+   "start": 360512
+  },
+  {
+   "concept": "us-gaap:PaymentsForRepurchaseOfCommonStock",
+   "start": 361284
+  },
+  {
+   "concept": "us-gaap:PaymentsForRepurchaseOfCommonStock",
+   "start": 361865
+  },
+  {
+   "concept": "us-gaap:RepaymentsOfLongTermDebt",
+   "start": 362810
+  },
+  {
+   "concept": "us-gaap:RepaymentsOfLongTermDebt",
+   "start": 363380
+  },
+  {
+   "concept": "us-gaap:ProceedsFromRepaymentsOfCommercialPaper",
+   "start": 364165
+  },
+  {
+   "concept": "us-gaap:ProceedsFromRepaymentsOfCommercialPaper",
+   "start": 364759
+  },
+  {
+   "concept": "us-gaap:ProceedsFromPaymentsForOtherFinancingActivities",
+   "start": 365538
+  },
+  {
+   "concept": "us-gaap:ProceedsFromPaymentsForOtherFinancingActivities",
+   "start": 366108
+  },
+  {
+   "concept": "us-gaap:NetCashProvidedByUsedInFinancingActivities",
+   "start": 366921
+  },
+  {
+   "concept": "us-gaap:NetCashProvidedByUsedInFinancingActivities",
+   "start": 367577
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+   "start": 368805
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+   "start": 369469
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "start": 370644
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "start": 371541
+  },
+  {
+   "concept": "us-gaap:IncomeTaxesPaidNet",
+   "start": 373398
+  },
+  {
+   "concept": "us-gaap:IncomeTaxesPaidNet",
+   "start": 374167
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 382650
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 383437
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 384221
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 385009
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 385979
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 386581
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 387183
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 387786
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 388752
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 389354
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 389956
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 390559
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 391363
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 391965
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 392567
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 393170
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 393951
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 394554
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 395157
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 395760
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 396815
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 397705
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 398595
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 399485
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiabilityRevenueRecognized",
+   "start": 401300
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiabilityRevenueRecognized",
+   "start": 402097
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiabilityRevenueRecognized",
+   "start": 402894
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiabilityRevenueRecognized",
+   "start": 403690
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiability",
+   "start": 404845
+  },
+  {
+   "concept": "us-gaap:ContractWithCustomerLiability",
+   "start": 405008
+  },
+  {
+   "concept": "us-gaap:RevenueRemainingPerformanceObligationPercentage",
+   "start": 405262
+  },
+  {
+   "concept": "us-gaap:RevenueRemainingPerformanceObligationPercentage",
+   "start": 405494
+  },
+  {
+   "concept": "us-gaap:RevenueRemainingPerformanceObligationPercentage",
+   "start": 405689
+  },
+  {
+   "concept": "us-gaap:RevenueRemainingPerformanceObligationPercentage",
+   "start": 405888
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 411262
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 412027
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 412792
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "start": 413556
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 415576
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 416180
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 416784
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "start": 417387
+  },
+  {
+   "concept": "us-gaap:IncrementalCommonSharesAttributableToShareBasedPaymentArrangements",
+   "start": 418235
+  },
+  {
+   "concept": "us-gaap:IncrementalCommonSharesAttributableToShareBasedPaymentArrangements",
+   "start": 418856
+  },
+  {
+   "concept": "us-gaap:IncrementalCommonSharesAttributableToShareBasedPaymentArrangements",
+   "start": 419477
+  },
+  {
+   "concept": "us-gaap:IncrementalCommonSharesAttributableToShareBasedPaymentArrangements",
+   "start": 420097
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 420957
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 421621
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 422285
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding",
+   "start": 422948
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 424638
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 425387
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 426136
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "start": 426884
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 427829
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 428580
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 429331
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareDiluted",
+   "start": 430081
+  },
+  {
+   "concept": "us-gaap:Cash",
+   "start": 436294
+  },
+  {
+   "concept": "us-gaap:Cash",
+   "start": 438227
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 438970
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCost",
+   "start": 442038
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 442613
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 443217
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent",
+   "start": 443821
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 444412
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 445000
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 445575
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCost",
+   "start": 446374
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 446918
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 447494
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent",
+   "start": 448064
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 448624
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 449209
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 449756
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCost",
+   "start": 450547
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 451174
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 451802
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent",
+   "start": 452424
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 453067
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 453707
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 454306
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 456675
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 457275
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 457864
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 458448
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 459040
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 459597
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 460175
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 460959
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 461558
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 462176
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 462760
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 463351
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 463907
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 464485
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 465277
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 465876
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 466465
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 467049
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 467640
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 468225
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 468772
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 469593
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 470192
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 470809
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 471426
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 472017
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 472605
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 473180
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 473926
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 474492
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 475109
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 475726
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 476284
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 476869
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 477414
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 478198
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 478798
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 479388
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 480003
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 480595
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 481151
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 481730
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 482513
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 483081
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 483699
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 484281
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 484841
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 485426
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 485973
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 486759
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 487359
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 487949
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 488564
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 489156
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 489741
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 490288
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 491083
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 491736
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 492378
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 493045
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 493690
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 494330
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 494961
+  },
+  {
+   "concept": "aapl:CashCashEquivalentsAndMarketableSecuritiesCost",
+   "start": 496099
+  },
+  {
+   "concept": "aapl:CashEquivalentsAndMarketableSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 497072
+  },
+  {
+   "concept": "aapl:CashEquivalentsAndMarketableSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 498044
+  },
+  {
+   "concept": "aapl:CashCashEquivalentsAndMarketableSecurities",
+   "start": 499041
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 500010
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 500976
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 501932
+  },
+  {
+   "concept": "us-gaap:Cash",
+   "start": 507763
+  },
+  {
+   "concept": "us-gaap:Cash",
+   "start": 509696
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 510439
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCost",
+   "start": 513542
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 514086
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 514690
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent",
+   "start": 515294
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 515854
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 516411
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 516986
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCost",
+   "start": 517779
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 518323
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 518900
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent",
+   "start": 519469
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 520029
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 520614
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 521161
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCost",
+   "start": 521949
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 522576
+  },
+  {
+   "concept": "aapl:EquitySecuritiesFVNIAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 523205
+  },
+  {
+   "concept": "us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent",
+   "start": 523826
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 524469
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 525078
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 525677
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 528046
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 528646
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 529235
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 529819
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 530411
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 530968
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 531546
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 532331
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 532930
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 533548
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 534132
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 534723
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 535280
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 535827
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 536619
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 537219
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 537808
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 538392
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 538984
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 539572
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 540151
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 540972
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 541540
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 542157
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 542774
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 543334
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 543891
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 544438
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 545183
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 545783
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 546401
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 547019
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 547611
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 548168
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 548747
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 549532
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 550133
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 550724
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 551340
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 551933
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 552490
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 553070
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 553854
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 554423
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 555042
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 555625
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 556186
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 556772
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 557320
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 558107
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 558708
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 559299
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 559915
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 560508
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 561094
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 561673
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis",
+   "start": 562469
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 563123
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 563766
+  },
+  {
+   "concept": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+   "start": 564434
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 565080
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 565721
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 566353
+  },
+  {
+   "concept": "aapl:CashCashEquivalentsAndMarketableSecuritiesCost",
+   "start": 567671
+  },
+  {
+   "concept": "aapl:CashEquivalentsAndMarketableSecuritiesAccumulatedGrossUnrealizedGainBeforeTax",
+   "start": 568644
+  },
+  {
+   "concept": "aapl:CashEquivalentsAndMarketableSecuritiesAccumulatedGrossUnrealizedLossBeforeTax",
+   "start": 569616
+  },
+  {
+   "concept": "aapl:CashCashEquivalentsAndMarketableSecurities",
+   "start": 570613
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "start": 571582
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "start": 572548
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesNoncurrent",
+   "start": 573504
+  },
+  {
+   "concept": "us-gaap:RestrictedCashAndCashEquivalents",
+   "start": 575109
+  },
+  {
+   "concept": "us-gaap:DebtSecuritiesAvailableForSaleRestricted",
+   "start": 576206
+  },
+  {
+   "concept": "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterOneThroughFiveYearsPercentage",
+   "start": 576770
+  },
+  {
+   "concept": "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterFiveThroughTenYearsPercentage",
+   "start": 577149
+  },
+  {
+   "concept": "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterTenYearsPercentage",
+   "start": 577407
+  },
+  {
+   "concept": "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterOneThroughFiveYearsPercentage",
+   "start": 577675
+  },
+  {
+   "concept": "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterFiveThroughTenYearsPercentage",
+   "start": 578016
+  },
+  {
+   "concept": "aapl:DebtSecuritiesAvailableForSaleMaturityAllocatedAndSingleMaturityDateRollingAfterTenYearsPercentage",
+   "start": 578274
+  },
+  {
+   "concept": "us-gaap:DerivativeNotionalAmount",
+   "start": 585327
+  },
+  {
+   "concept": "us-gaap:DerivativeNotionalAmount",
+   "start": 586104
+  },
+  {
+   "concept": "us-gaap:DerivativeNotionalAmount",
+   "start": 587083
+  },
+  {
+   "concept": "us-gaap:DerivativeNotionalAmount",
+   "start": 587860
+  },
+  {
+   "concept": "us-gaap:DerivativeNotionalAmount",
+   "start": 589612
+  },
+  {
+   "concept": "us-gaap:DerivativeNotionalAmount",
+   "start": 590389
+  },
+  {
+   "concept": "us-gaap:HedgedLiabilityFairValueHedge",
+   "start": 591041
+  },
+  {
+   "concept": "us-gaap:HedgedLiabilityFairValueHedge",
+   "start": 591204
+  },
+  {
+   "concept": "us-gaap:ConcentrationRiskPercentage1",
+   "start": 592013
+  },
+  {
+   "concept": "us-gaap:ConcentrationRiskPercentage1",
+   "start": 592169
+  },
+  {
+   "concept": "aapl:NumberOfSignificantVendors",
+   "start": 593460
+  },
+  {
+   "concept": "us-gaap:ConcentrationRiskPercentage1",
+   "start": 594004
+  },
+  {
+   "concept": "us-gaap:ConcentrationRiskPercentage1",
+   "start": 594419
+  },
+  {
+   "concept": "aapl:NumberOfSignificantVendors",
+   "start": 594878
+  },
+  {
+   "concept": "us-gaap:ConcentrationRiskPercentage1",
+   "start": 595163
+  },
+  {
+   "concept": "us-gaap:ConcentrationRiskPercentage1",
+   "start": 595319
+  },
+  {
+   "concept": "us-gaap:InventoryRawMaterialsAndPurchasedPartsNetOfReserves",
+   "start": 598271
+  },
+  {
+   "concept": "us-gaap:InventoryRawMaterialsAndPurchasedPartsNetOfReserves",
+   "start": 599060
+  },
+  {
+   "concept": "us-gaap:InventoryFinishedGoodsNetOfReserves",
+   "start": 599861
+  },
+  {
+   "concept": "us-gaap:InventoryFinishedGoodsNetOfReserves",
+   "start": 600447
+  },
+  {
+   "concept": "us-gaap:InventoryNet",
+   "start": 601581
+  },
+  {
+   "concept": "us-gaap:InventoryNet",
+   "start": 602530
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentGross",
+   "start": 604892
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentGross",
+   "start": 605662
+  },
+  {
+   "concept": "us-gaap:AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment",
+   "start": 606455
+  },
+  {
+   "concept": "us-gaap:AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment",
+   "start": 607075
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentNet",
+   "start": 608237
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentNet",
+   "start": 609203
+  },
+  {
+   "concept": "us-gaap:CommercialPaper",
+   "start": 611095
+  },
+  {
+   "concept": "us-gaap:CommercialPaper",
+   "start": 611244
+  },
+  {
+   "concept": "us-gaap:LongTermDebt",
+   "start": 611946
+  },
+  {
+   "concept": "us-gaap:LongTermDebt",
+   "start": 612351
+  },
+  {
+   "concept": "us-gaap:LongTermDebtFairValue",
+   "start": 612935
+  },
+  {
+   "concept": "us-gaap:LongTermDebtFairValue",
+   "start": 613090
+  },
+  {
+   "concept": "us-gaap:StockRepurchasedAndRetiredDuringPeriodShares",
+   "start": 614157
+  },
+  {
+   "concept": "us-gaap:StockRepurchasedAndRetiredDuringPeriodValue",
+   "start": 614363
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsNonvestedNumber",
+   "start": 617857
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsNonvestedWeightedAverageGrantDateFairValue",
+   "start": 618706
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsGrantsInPeriod",
+   "start": 619564
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsGrantsInPeriodWeightedAverageGrantDateFairValue",
+   "start": 620424
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriod",
+   "start": 621283
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodWeightedAverageGrantDateFairValue",
+   "start": 622138
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsForfeitedInPeriod",
+   "start": 622999
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsForfeituresWeightedAverageGrantDateFairValue",
+   "start": 623856
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsNonvestedNumber",
+   "start": 624778
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsNonvestedWeightedAverageGrantDateFairValue",
+   "start": 625699
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodTotalFairValue",
+   "start": 626318
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodTotalFairValue",
+   "start": 626570
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodTotalFairValue",
+   "start": 626899
+  },
+  {
+   "concept": "us-gaap:ShareBasedCompensationArrangementByShareBasedPaymentAwardEquityInstrumentsOtherThanOptionsVestedInPeriodTotalFairValue",
+   "start": 627151
+  },
+  {
+   "concept": "us-gaap:AllocatedShareBasedCompensationExpense",
+   "start": 631469
+  },
+  {
+   "concept": "us-gaap:AllocatedShareBasedCompensationExpense",
+   "start": 632245
+  },
+  {
+   "concept": "us-gaap:AllocatedShareBasedCompensationExpense",
+   "start": 633021
+  },
+  {
+   "concept": "us-gaap:AllocatedShareBasedCompensationExpense",
+   "start": 633796
+  },
+  {
+   "concept": "us-gaap:EmployeeServiceShareBasedCompensationTaxBenefitFromCompensationExpense",
+   "start": 634848
+  },
+  {
+   "concept": "us-gaap:EmployeeServiceShareBasedCompensationTaxBenefitFromCompensationExpense",
+   "start": 635634
+  },
+  {
+   "concept": "us-gaap:EmployeeServiceShareBasedCompensationTaxBenefitFromCompensationExpense",
+   "start": 636420
+  },
+  {
+   "concept": "us-gaap:EmployeeServiceShareBasedCompensationTaxBenefitFromCompensationExpense",
+   "start": 637236
+  },
+  {
+   "concept": "us-gaap:EmployeeServiceShareBasedCompensationNonvestedAwardsTotalCompensationCostNotYetRecognized",
+   "start": 637862
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 644583
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 645387
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 646191
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 646995
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 647994
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 648766
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 649538
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 650310
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 652500
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 653304
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 654108
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 654912
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 655911
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 656683
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 657454
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 658226
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 660423
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 661227
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 662031
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 662835
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 663834
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 664605
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 665376
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 666148
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 668337
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 669140
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 669943
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 670747
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 671746
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 672517
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 673288
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 674059
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 676262
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 677065
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 677868
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "start": 678672
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 679671
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 680442
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 681213
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 681984
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 686019
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 686778
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 687537
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 688296
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 689075
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 689652
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 690229
+  },
+  {
+   "concept": "us-gaap:ResearchAndDevelopmentExpense",
+   "start": 690807
+  },
+  {
+   "concept": "us-gaap:OtherGeneralAndAdministrativeExpense",
+   "start": 691584
+  },
+  {
+   "concept": "us-gaap:OtherGeneralAndAdministrativeExpense",
+   "start": 692168
+  },
+  {
+   "concept": "us-gaap:OtherGeneralAndAdministrativeExpense",
+   "start": 692752
+  },
+  {
+   "concept": "us-gaap:OtherGeneralAndAdministrativeExpense",
+   "start": 693336
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 694444
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 695401
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 696358
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "start": 697314
+  }
+ ],
+ "provenance": {
+  "form": "10-Q",
+  "generated_by": "python scripts/build_ownership_fixtures.py",
+  "note": "Derived geometry only: table offsets, tagged-span ranges, and the concept-to-role index. The complete source documents are NOT committed; SEC hosts them authoritatively and the hashes above pin exactly which bytes were read.",
+  "parser_versions": {
+   "canonicalizer": "canonicalizer-1.0.0",
+   "table_parser": "table-parser-1.0.0"
+  },
+  "sources": [
+   {
+    "role": "primary_document",
+    "sha256": "2fd930cba232625de5067cfc04fb106095715b23e34d3a0165e08734c0082083",
+    "size_bytes": 889977,
+    "storage_key": "filings/0000320193/000032019325000057/aapl-20250329.htm"
+   },
+   {
+    "role": "xbrl_package",
+    "sha256": "e76dec64021827d01bf2a76159c17b4760fd23990ef329656a29299d6f8c199e",
+    "size_bytes": 167498,
+    "storage_key": "filings/0000320193/000032019325000057/0000320193-25-000057-xbrl.zip"
+   },
+   {
+    "role": "filing_summary",
+    "sha256": "030bd3b393a7988661e864ab2bd593270efc0d00e11d387d01b29e2abeaf93ed",
+    "size_bytes": 26158,
+    "storage_key": "filings/0000320193/000032019325000057/FilingSummary.xml"
+   }
+  ]
+ },
+ "statement_roles": [
+  "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnaudited",
+  "http://www.apple.com/role/CONDENSEDCONSOLIDATEDBALANCESHEETSUnauditedParenthetical",
+  "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCASHFLOWSUnaudited",
+  "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFCOMPREHENSIVEINCOMEUnaudited",
+  "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFOPERATIONSUnaudited",
+  "http://www.apple.com/role/CONDENSEDCONSOLIDATEDSTATEMENTSOFSHAREHOLDERSEQUITYUnaudited"
+ ],
+ "tables": [
+  {
+   "external_id": "T1",
+   "raw_length": 340,
+   "source_offset": 73055
+  },
+  {
+   "external_id": "T2",
+   "raw_length": 311,
+   "source_offset": 73996
+  },
+  {
+   "external_id": "T3",
+   "raw_length": 308,
+   "source_offset": 74619
+  },
+  {
+   "external_id": "T4",
+   "raw_length": 311,
+   "source_offset": 78149
+  },
+  {
+   "external_id": "T5",
+   "raw_length": 308,
+   "source_offset": 79188
+  },
+  {
+   "external_id": "T6",
+   "raw_length": 3489,
+   "source_offset": 79534
+  },
+  {
+   "external_id": "T7",
+   "raw_length": 311,
+   "source_offset": 83638
+  },
+  {
+   "external_id": "T8",
+   "raw_length": 10075,
+   "source_offset": 84211
+  },
+  {
+   "external_id": "T9",
+   "raw_length": 308,
+   "source_offset": 94338
+  },
+  {
+   "external_id": "T10",
+   "raw_length": 3655,
+   "source_offset": 97657
+  },
+  {
+   "external_id": "T11",
+   "raw_length": 340,
+   "source_offset": 103482
+  },
+  {
+   "external_id": "T12",
+   "raw_length": 16751,
+   "source_offset": 105032
+  },
+  {
+   "external_id": "T13",
+   "raw_length": 61542,
+   "source_offset": 123387
+  },
+  {
+   "external_id": "T14",
+   "raw_length": 35937,
+   "source_offset": 186307
+  },
+  {
+   "external_id": "T15",
+   "raw_length": 47164,
+   "source_offset": 223676
+  },
+  {
+   "external_id": "T16",
+   "raw_length": 53798,
+   "source_offset": 272266
+  },
+  {
+   "external_id": "T17",
+   "raw_length": 47034,
+   "source_offset": 327432
+  },
+  {
+   "external_id": "T18",
+   "raw_length": 24658,
+   "source_offset": 379358
+  },
+  {
+   "external_id": "T19",
+   "raw_length": 22846,
+   "source_offset": 407515
+  },
+  {
+   "external_id": "T20",
+   "raw_length": 71168,
+   "source_offset": 431675
+  },
+  {
+   "external_id": "T21",
+   "raw_length": 70439,
+   "source_offset": 503435
+  },
+  {
+   "external_id": "T22",
+   "raw_length": 7451,
+   "source_offset": 583244
+  },
+  {
+   "external_id": "T23",
+   "raw_length": 6226,
+   "source_offset": 596658
+  },
+  {
+   "external_id": "T24",
+   "raw_length": 6309,
+   "source_offset": 603265
+  },
+  {
+   "external_id": "T25",
+   "raw_length": 10038,
+   "source_offset": 616053
+  },
+  {
+   "external_id": "T26",
+   "raw_length": 9247,
+   "source_offset": 628334
+  },
+  {
+   "external_id": "T27",
+   "raw_length": 41446,
+   "source_offset": 640838
+  },
+  {
+   "external_id": "T28",
+   "raw_length": 14784,
+   "source_offset": 682892
+  },
+  {
+   "external_id": "T29",
+   "raw_length": 22785,
+   "source_offset": 710299
+  },
+  {
+   "external_id": "T30",
+   "raw_length": 23344,
+   "source_offset": 738222
+  },
+  {
+   "external_id": "T31",
+   "raw_length": 10890,
+   "source_offset": 766040
+  },
+  {
+   "external_id": "T32",
+   "raw_length": 8135,
+   "source_offset": 776983
+  },
+  {
+   "external_id": "T33",
+   "raw_length": 17204,
+   "source_offset": 788971
+  },
+  {
+   "external_id": "T34",
+   "raw_length": 9540,
+   "source_offset": 808412
+  },
+  {
+   "external_id": "T35",
+   "raw_length": 13576,
+   "source_offset": 860644
+  },
+  {
+   "external_id": "T36",
+   "raw_length": 7891,
+   "source_offset": 877796
+  },
+  {
+   "external_id": "T37",
+   "raw_length": 2373,
+   "source_offset": 887274
+  }
+ ],
+ "text_block_spans": [
+  {
+   "concept": "us-gaap:BasisOfPresentationAndSignificantAccountingPoliciesTextBlock",
+   "end": 376024,
+   "is_continuation": false,
+   "start": 375811
+  },
+  {
+   "concept": "us-gaap:BasisOfPresentationAndSignificantAccountingPoliciesTextBlock",
+   "end": 378345,
+   "is_continuation": true,
+   "start": 376037
+  },
+  {
+   "concept": "us-gaap:BasisOfAccountingPolicyPolicyTextBlock",
+   "end": 377511,
+   "is_continuation": false,
+   "start": 376067
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerTextBlock",
+   "end": 378729,
+   "is_continuation": false,
+   "start": 378571
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerTextBlock",
+   "end": 406116,
+   "is_continuation": true,
+   "start": 378742
+  },
+  {
+   "concept": "aapl:DisaggregatedNetSalesAndPortionOfNetSalesThatWasPreviouslyDeferredTableTextBlock",
+   "end": 404038,
+   "is_continuation": false,
+   "start": 378772
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareTextBlock",
+   "end": 406919,
+   "is_continuation": false,
+   "start": 406765
+  },
+  {
+   "concept": "us-gaap:ScheduleOfEarningsPerShareBasicAndDilutedTableTextBlock",
+   "end": 430401,
+   "is_continuation": false,
+   "start": 406932
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareTextBlock",
+   "end": 430385,
+   "is_continuation": true,
+   "start": 407060
+  },
+  {
+   "concept": "us-gaap:FinancialInstrumentsDisclosureTextBlock",
+   "end": 430798,
+   "is_continuation": false,
+   "start": 430627
+  },
+  {
+   "concept": "us-gaap:FinancialInstrumentsDisclosureTextBlock",
+   "end": 502883,
+   "is_continuation": true,
+   "start": 430811
+  },
+  {
+   "concept": "us-gaap:ScheduleOfCashCashEquivalentsAndShortTermInvestmentsTableTextBlock",
+   "end": 502865,
+   "is_continuation": false,
+   "start": 431081
+  },
+  {
+   "concept": "us-gaap:FinancialInstrumentsDisclosureTextBlock",
+   "end": 581633,
+   "is_continuation": true,
+   "start": 503306
+  },
+  {
+   "concept": "us-gaap:ScheduleOfCashCashEquivalentsAndShortTermInvestmentsTableTextBlock",
+   "end": 576585,
+   "is_continuation": true,
+   "start": 503358
+  },
+  {
+   "concept": "us-gaap:FairValueMeasurementPolicyPolicyTextBlock",
+   "end": 574684,
+   "is_continuation": false,
+   "start": 574103
+  },
+  {
+   "concept": "us-gaap:FinancialInstrumentsDisclosureTextBlock",
+   "end": 595502,
+   "is_continuation": true,
+   "start": 582056
+  },
+  {
+   "concept": "us-gaap:ScheduleOfNotionalAmountsOfOutstandingDerivativePositionsTableTextBlock",
+   "end": 590717,
+   "is_continuation": false,
+   "start": 582719
+  },
+  {
+   "concept": "us-gaap:AdditionalFinancialInformationDisclosureTextBlock",
+   "end": 595938,
+   "is_continuation": false,
+   "start": 595728
+  },
+  {
+   "concept": "us-gaap:AdditionalFinancialInformationDisclosureTextBlock",
+   "end": 609614,
+   "is_continuation": true,
+   "start": 595951
+  },
+  {
+   "concept": "us-gaap:ScheduleOfInventoryCurrentTableTextBlock",
+   "end": 602906,
+   "is_continuation": false,
+   "start": 596316
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentTextBlock",
+   "end": 609596,
+   "is_continuation": false,
+   "start": 602906
+  },
+  {
+   "concept": "us-gaap:DebtDisclosureTextBlock",
+   "end": 610401,
+   "is_continuation": false,
+   "start": 610263
+  },
+  {
+   "concept": "us-gaap:DebtDisclosureTextBlock",
+   "end": 613286,
+   "is_continuation": true,
+   "start": 610414
+  },
+  {
+   "concept": "us-gaap:StockholdersEquityNoteDisclosureTextBlock",
+   "end": 613690,
+   "is_continuation": false,
+   "start": 613512
+  },
+  {
+   "concept": "us-gaap:StockholdersEquityNoteDisclosureTextBlock",
+   "end": 614914,
+   "is_continuation": true,
+   "start": 613703
+  },
+  {
+   "concept": "us-gaap:DisclosureOfCompensationRelatedCostsShareBasedPaymentsTextBlock",
+   "end": 615338,
+   "is_continuation": false,
+   "start": 615140
+  },
+  {
+   "concept": "us-gaap:DisclosureOfCompensationRelatedCostsShareBasedPaymentsTextBlock",
+   "end": 638408,
+   "is_continuation": true,
+   "start": 615351
+  },
+  {
+   "concept": "us-gaap:ScheduleOfNonvestedRestrictedStockUnitsActivityTableTextBlock",
+   "end": 626113,
+   "is_continuation": false,
+   "start": 615573
+  },
+  {
+   "concept": "us-gaap:ScheduleOfCompensationCostForShareBasedPaymentArrangementsAllocationOfShareBasedCompensationCostsByPlanTableTextBlock",
+   "end": 637603,
+   "is_continuation": false,
+   "start": 627678
+  },
+  {
+   "concept": "us-gaap:SegmentReportingDisclosureTextBlock",
+   "end": 640299,
+   "is_continuation": false,
+   "start": 640114
+  },
+  {
+   "concept": "us-gaap:SegmentReportingDisclosureTextBlock",
+   "end": 697716,
+   "is_continuation": true,
+   "start": 640312
+  },
+  {
+   "concept": "us-gaap:ScheduleOfSegmentReportingInformationBySegmentTextBlock",
+   "end": 682306,
+   "is_continuation": false,
+   "start": 640342
+  },
+  {
+   "concept": "us-gaap:ReconciliationOfOperatingProfitLossFromSegmentsToConsolidatedTextBlock",
+   "end": 697698,
+   "is_continuation": false,
+   "start": 682306
+  }
+ ]
+}

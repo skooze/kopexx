@@ -74,6 +74,31 @@ trigger would reject it.
 **Do not use a DERA `period_start` as a filed date.** Use it to bucket a period. Anything that
 must cite an exact boundary reads from a source that publishes one.
 
+## Footnote extraction conventions — Sprint 4
+
+```
+canonical_footnote.sequence          filed order, 1..N; the idempotency key
+canonical_footnote.normalized_number displayed note number, NULL when the filing shows none
+footnote_source_block.external_id    the renderer position, R9, matching its own file naming
+footnote_source_block.block_type     parent_narrative | details | tables | policies
+footnote_source_block.footnote_id    NULL means ORPHAN, which is a reportable state, not an error
+filing_section.section_type          item_disclosure for an excluded Regulation S-K item
+footnote_table.footnote_id           the owning note; NULL for every non-footnote kind
+footnote_table.ownership_kind        CANONICAL_FOOTNOTE | EXCLUDED_FILING_SECTION
+                                     | FINANCIAL_STATEMENT | OTHER_FILING_REPORT | UNRESOLVED
+footnote_table.ownership_evidence    tagged concept, candidate roles, deterministic reason
+```
+
+`sequence` rather than `normalized_number` is the upsert key. `normalized_number` is nullable, and
+a NULL never conflicts in a unique constraint, so two unnumbered notes would duplicate silently.
+
+`ownership_kind` and `footnote_id` must agree, enforced by a check constraint: a NULL
+`footnote_id` alone cannot distinguish a statement from an excluded disclosure from an unresolved
+table, and only the last is a defect.
+
+Numeric text inside `footnote_table.cells` is the string the filer wrote — `(1,234)`, `$`, commas
+intact. It is never converted to a number at extraction time.
+
 ## State enums
 
 Filing processing: `DISCOVERED`, `QUEUED`, `DOWNLOADING`, `DOWNLOADED`, `PARSING`, `PARSED`,

@@ -64,7 +64,7 @@ and nothing else.**
 | DERA TSV loading, validation, reconciliation | IMPLEMENTED and EXECUTED (Sprint 3; 2,845 facts, 4 filings) |
 | Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
-| Canonical footnote grouping, stages 1 to 5 | PLANNED (Sprint 4) |
+| Canonical footnote grouping, stages 1 to 5 | IMPLEMENTED and MEASURED (Sprint 4; 4 filings, 0 orphans, 0 unresolved tables) |
 | Real provider adapter | PLANNED (Sprint 5); AWS identity policy IMPLEMENTED as governance |
 | Summarization pipeline | PLANNED (Sprint 5) |
 | Read API and dashboard | PLANNED (Sprint 6) |
@@ -214,7 +214,7 @@ EXIT CRITERIA. All of the above, on real fetched data.
 
 ### Sprint 4 — Reproduce and validate canonical-footnote extraction
 
-STATUS: NEXT
+STATUS: COMPLETE — 4 filings, 43 canonical footnotes, 0 orphans; see docs/sprints/SPRINT-0004.md
 DEPENDS ON: Sprint 3, which is COMPLETE
 
 GATE SATISFIED. Every Sprint 3 exit criterion is met and audited in `docs/sprints/SPRINT-0003.md`:

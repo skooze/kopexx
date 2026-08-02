@@ -8,6 +8,132 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
+### Sprint 4 — canonical footnote extraction (not yet committed)
+
+**The 13-not-58 correction is now production code**, measured against four preserved Apple filings
+rather than confirmed by inspection.
+
+#### Added
+
+- `packages/footnote_extractor`: renderer report inventory, candidate discovery, child-block
+  extraction, note-heading parsing. Reports what a filing contains and decides nothing.
+- `packages/footnote_canonicalizer`: stages 1 through 5, item-disclosure exclusion driven by
+  `metric_definitions/item_disclosure_exclusions.yaml`, per-child attachment audit, completeness,
+  and persistence. No model participates; every decision is a string comparison or a count.
+- `packages/table_parser`: row and column structure, header hierarchy, cell provenance, and exact
+  numeric text. No financial interpretation and no float conversion of a filed value.
+- `scripts/canonicalize_footnotes.py`, which orchestrates and holds no parsing or SQL of its own.
+- 121 tests, including a fixture regression test and mutation proofs that it can fail.
+
+#### Measured
+
+| Filing | Cand. | Notes | Excl. | Children | Attached | Orphans | Status |
+|---|---|---|---|---|---|---|---|
+| 10-K FY2025 | 16 | **13** | 3 | 46 | **46** | **0** | `COMPLETE` |
+| 10-Q Q1 | 12 | 10 | 2 | 23 | 23 | **0** | `COMPLETE` |
+| 10-Q Q2 | 12 | 10 | 2 | 23 | 23 | **0** | `COMPLETE` |
+| 10-Q Q3 | 12 | 10 | 2 | 25 | 25 | **0** | `COMPLETE` |
+
+Per-note child distribution for the 10-K matches the specification exactly: 1, 4, 3, 4, 3, 3, 6,
+4, 5, 3, 4, 2, 4. Persisted: 43 canonical footnotes, 160 source blocks with 0 orphans, 174 tables,
+12,620 cells, 9 filing sections. `xbrl_fact` unchanged at 2,845; `llm_invocation` **0**.
+
+**Stage 4 reports `NOT_ATTEMPTED`, not `RECONCILED`.** Apple's filings carry no per-note table of
+contents, so there is nothing to reconcile against. Claiming a match would report a confirmation
+that never happened; stage 5 supplies the independent count instead, and confidence is 0.950
+rather than 1.0 because of it.
+
+#### Fixed
+
+- **A note heading is split across two elements.** The document renders `Note 1 –` and its title
+  separately, so a pattern requiring both on one line finds **zero** headings and stage 5 confirms
+  nothing while reporting success. All 43 headings across the four filings are joined this way.
+- **A closure captured a loop variable and destroyed cell provenance.** Every cell carried down by
+  a rowspan was stamped with the last row index rather than its own — corrupting exactly what the
+  parser exists to preserve.
+- **Spacing rows were reported as malformed tables.** `<tr></tr>` used for vertical space flagged
+  46 of 62 tables as ragged when none was, and defeated header detection on all of them.
+- **The issuer-specific guard missed the defect it was hunting.** Skipping lines beginning with a
+  quote flagged docstring continuation lines; skipping every string token then missed
+  `if cik == "0000320193"`, since the issuer is a string literal. Now an AST walk that exempts
+  docstrings specifically, proven by mutation.
+
+#### Table ownership, and a wrong first answer
+
+Ownership was initially reported unresolvable: attributing a table to a note appeared to need a
+document-offset-to-report map `FilingSummary.xml` does not contain. That assumed the renderer
+inventory was the only route. The filing publishes the relationship itself — a table's owner is
+the note the FILER wrapped it in:
+
+```
+table offset -> innermost ix:nonNumeric span -> TextBlock concept
+             -> presentation roles (_pre.xml) -> canonical footnote
+```
+
+A child role resolves through the attachment stage 3 already audited, so ownership reuses one
+decision rather than deriving a second that could disagree.
+
+**A continuation defect this exposed.** Treating the `ix:nonNumeric` element as the note boundary
+classified 23 of the 10-K's tables. Inline XBRL splits non-contiguous content with `continuedAt`;
+Apple's 10-K has 24 continued TextBlocks and 35 continuation elements, 11 chained onward. The debt
+maturity schedule, the commercial-paper table, and the purchase-obligation table all live in
+continuations. Ignoring them classified those as unowned furniture — a false negative that would
+have silently narrowed what a Sprint 5 summary could be validated against. Resolving the chain
+took footnote-owned tables from 23 to 26.
+
+Statements carry no TextBlock — each figure is tagged individually — so they are identified by the
+concepts of the numeric facts inside their own byte range, separating the five primary statements
+from the 31 layout tables they had been pooled with.
+
+| Filing | Total | Footnote | Excluded | Statement | Other | Unresolved |
+|---|---|---|---|---|---|---|
+| 10-K | 62 | 26 | 0 | 5 | 31 | **0** |
+| 10-Q ×3 | 37/37/38 | 11/11/12 | 0 | 5 each | 21 each | **0** |
+| total | 174 | **60** | 0 | 20 | 94 | **0** |
+
+Zero excluded-section tables is a measurement: the three Item 408 and Item 1C disclosures were
+checked directly and contain no table. The classifier handles the case; this filer does not
+exercise it.
+
+#### Added: migration `0002_table_ownership`
+
+`footnote_table` gains `ownership_kind`, `ownership_method`, and `ownership_evidence`, a check
+constraint restricting the kind, a partial index over unresolved rows, and a constraint requiring
+`ownership_kind = 'CANONICAL_FOOTNOTE'` and a non-null `footnote_id` to agree in both directions.
+A NULL `footnote_id` alone cannot distinguish a statement from an excluded disclosure from an
+unresolved table, and only the last is a defect. `0001_initial` is untouched; the round trip was
+tested against `fintek_test`.
+
+#### Fixed: idempotency was a rewrite, not a no-op
+
+A rerun reported `updated 13 footnotes, 59 blocks`. A full-row digest showed no duplicates and no
+business-field drift — but every rerun stamped a fresh `extraction_run_id` and
+`grouping_decided_at` onto decisions that had not changed, so those fields answered "which run
+last touched this" while their names promise "which run decided this, and when".
+
+Every upsert is now conditional on a value genuinely differing, so an identical rerun performs no
+write at all and the full-row digest — timestamps and run ids included — is byte-identical.
+Correction behaviour is preserved and tested: the condition is on the values, not a flag.
+
+#### Not done, deliberately
+
+- **No migration.** The sealed `0001_initial` already carries every audit column and every
+  uniqueness constraint idempotency needs, verified against the live catalog before the
+  persistence layer was written.
+- **Stages 6 through 11 are not implemented.** Stage 3 left zero children unattached across all
+  four filings, so no fallback could be exercised. An architecture test asserts the later grouping
+  methods are not produced.
+- **`filing_document` registration stays carried forward.** Canonicalization does not need it:
+  input is located through the acquisition manifest and each footnote persists the renderer
+  position, role URI, and inventory hash.
+- **Tables are persisted at filing level, not per note.** Attributing a table to its owning note
+  needs a document-offset-to-report mapping the renderer does not provide. A NULL is honest; a
+  guess would not be.
+
+Role-URI grouping is measured on one issuer. It is not claimed to be universally sufficient;
+breadth validation across 25 issuers and four eras is Stage 2 phase W-3.
+
+
 ### Sprint 3 — filing discovery and acquisition (not yet committed)
 
 **The first SEC filings have been retrieved.** Requirement 1 of fifteen had not started before

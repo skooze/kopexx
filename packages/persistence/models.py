@@ -112,6 +112,13 @@ EXCLUSION_REASONS = (
 FILING_ERAS = ("inline_xbrl", "standalone_xbrl", "html_no_xbrl", "plain_text", "pem_armored")
 ANALYSIS_SCOPES = ("FOOTNOTE", "FILING", "TIMEFRAME")
 SESSION_STATUSES = ("ACTIVE", "IDLE", "EXPIRED", "BUDGET_EXHAUSTED", "CLOSED", "TERMINATED")
+OWNERSHIP_KINDS = (
+    "CANONICAL_FOOTNOTE",
+    "EXCLUDED_FILING_SECTION",
+    "FINANCIAL_STATEMENT",
+    "OTHER_FILING_REPORT",
+    "UNRESOLVED",
+)
 PERIOD_TYPES = ("instant", "duration")
 CADENCES = ("monthly", "quarterly")
 
@@ -560,9 +567,32 @@ class FootnoteTable(Base, TimestampMixin):
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     validation_warnings: Mapped[dict | None] = mapped_column(JSONB)
 
+    # A NULL footnote_id is ambiguous on its own: statement table, excluded item disclosure,
+    # filing furniture, or genuinely unresolved. Only the last is a defect, so the classification
+    # is recorded rather than inferred. Added by migration 0002.
+    ownership_kind: Mapped[str | None] = mapped_column(
+        String(30), comment="how this table relates to the canonical footnote set"
+    )
+    ownership_method: Mapped[str | None] = mapped_column(String(40))
+    ownership_evidence: Mapped[dict | None] = mapped_column(
+        JSONB, comment="tagged concept, candidate presentation roles, deterministic reason"
+    )
+
     __table_args__ = (
         UniqueConstraint("filing_id", "external_id", name="uq_footnote_table_external"),
+        _enum_check("ownership_kind", OWNERSHIP_KINDS, "ownership_kind_is_known"),
+        CheckConstraint(
+            "(ownership_kind = 'CANONICAL_FOOTNOTE' AND footnote_id IS NOT NULL)"
+            " OR (ownership_kind IS DISTINCT FROM 'CANONICAL_FOOTNOTE' AND footnote_id IS NULL)"
+            " OR ownership_kind IS NULL",
+            name="ownership_matches_footnote",
+        ),
         Index("ix_footnote_table_footnote_id", "footnote_id"),
+        Index(
+            "ix_footnote_table_unresolved",
+            "filing_id",
+            postgresql_where=("ownership_kind = 'UNRESOLVED'"),
+        ),
     )
 
 
