@@ -6,7 +6,7 @@ golden, property, security, and performance layers PLANNED
 ## Current state, after Sprint 4 and its closeout hardening
 
 ```
-626 tests collected, 626 passing, 0 skipped     517 unit, 44 integration, 65 architecture
+622 tests collected, 622 passing, 0 skipped     517 unit, 44 integration, 61 architecture
  93.45% statement coverage across the implemented packages (85% gate)
         2,978 statements, 195 missed
 
@@ -125,15 +125,22 @@ command; only the reporting changed.
 Redirect-then-`cat` rather than a pipe, so pytest's exit status is preserved exactly without
 depending on `pipefail` or on which shell make selected.
 
-### Markdown is checked, not eyeballed
+### Markdown is linted, not reviewed
 
-`tests/architecture/test_documentation.py` enforces four things across every repository-owned
+`tests/architecture/test_markdown_lint.py` enforces four things across every repository-owned
 Markdown file: fences are balanced, no heading is trapped inside a code block, relative links
-resolve, and no password-bearing database URL appears in prose. Plus the README's rendered
-headings and its 700-to-1,200-word budget.
+resolve, and no password-bearing database URL appears in prose.
 
 A broken fence has no parse error. An unclosed block swallows every heading, link, and paragraph
 after it, and the document renders on GitHub as one grey slab while looking fine in an editor.
+
+**Nothing asserts what a document says.** The file was previously named for documentation and
+pinned the README's headings and a 700-to-1,200-word budget; both were removed, along with two
+tests that required named phrases to appear in `rules.md` and the AWS identity policy. A test that
+pins prose turns editing prose into a test failure, and it caught nothing — the README rewrite
+that broke it was correct and the test was wrong. Documentation truthfulness is a commit-time
+obligation on the author under `rules.md` section 18. It is not testable, and the attempt cost
+more than it returned.
 
 Two design notes, each from a false result the check produced first:
 

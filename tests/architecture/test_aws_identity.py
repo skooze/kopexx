@@ -352,33 +352,6 @@ def test_credential_field_names_are_centrally_redacted() -> None:
         assert name in REDACTED_FIELDS, f"{name} is not centrally redacted"
 
 
-# --- the policy exists and is reachable ---------------------------------------------------------
-
-
-def test_the_policy_document_exists_and_states_the_rule() -> None:
-    """The invariant in rules.md points here; a dangling pointer is a policy nobody reads."""
-    policy = REPO_ROOT / "docs" / "security" / "aws-identity-and-secrets.md"
-    assert policy.exists()
-    text = policy.read_text(encoding="utf-8")
-    for required in (
-        "default credential provider chain",
-        "task role",
-        "task-execution role",
-        "OpenID Connect",
-        "Secrets Manager",
-        "IAM Roles Anywhere",
-        "trust polic",
-        "least-privilege",
-    ):
-        assert required.lower() in text.lower(), f"policy does not cover: {required}"
-
-
-def test_rules_carries_the_invariant() -> None:
-    text = (REPO_ROOT / "rules.md").read_text(encoding="utf-8")
-    assert "AWS-IDENTITY-AND-SECRETS-INVARIANT" in text
-    assert "docs/security/aws-identity-and-secrets.md" in text
-
-
 def test_the_mock_provider_needs_no_aws_identity() -> None:
     """Sprint 4 must not require AWS authentication, and the default suite never does."""
     from packages.llm_gateway.providers.mock import MockProvider

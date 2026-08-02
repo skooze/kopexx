@@ -4,11 +4,13 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 4 complete and hardened, at commit `1d05199`
-VERIFICATION: 626 tests passing and 0 skipped, 93.45 percent coverage on implemented packages,
+LAST SYNCHRONIZED WITH CODE: Sprint 4 complete and hardened, plus the removal of the
+documentation-content tests
+VERIFICATION: 622 tests passing and 0 skipped, 93.45 percent coverage on implemented packages,
 ruff format and lint clean across `packages tests scripts migrations`, mypy clean across 82 source
 files in `packages scripts migrations`, offline Alembic upgrade `base:head` and downgrade
-`head:base`, and pip-audit clean. Confirmed in CI run 30752005088 as well as locally.
+`head:base`, and pip-audit clean. Run locally; the count drop from 626 to 622 is the four removed
+tests and coverage is unchanged, because none of them exercised a package statement.
 
 The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
 contained only a docstring (ADR-0015), rose to 45 when type checking extended to `scripts` and

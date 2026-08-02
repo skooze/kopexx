@@ -8,6 +8,35 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
+### Removed — tests that asserted documentation content
+
+Four tests asserted that specific prose existed. They are deleted. None of them tested the system;
+each one made editing a document a build failure.
+
+```
+test_the_readme_stays_within_its_length_budget      README is 700-1,200 words
+test_the_readme_renders_the_sections_it_promises    README contains six named headings
+test_the_policy_document_exists_and_states_the_rule eight phrases appear in the AWS policy doc
+test_rules_carries_the_invariant                    two strings appear in rules.md
+```
+
+The word budget was a number with no source: not in `rules.md`, not requested, invented when the
+test was written. It failed twice during the README rewrite, and both times the README was edited
+to satisfy it. The headings test failed when two sections were deliberately removed — the test was
+wrong and the change was correct, which is the whole argument against it.
+
+No rule required any of this. `rules.md` section 18 makes documentation truthfulness a commit-time
+obligation on the author. That is a judgement about meaning; a string match cannot make it and
+should not pretend to.
+
+`tests/architecture/test_documentation.py` is renamed to `test_markdown_lint.py`, which is what the
+four surviving checks are: balanced fences, no heading trapped inside a code block, relative links
+resolve, no password-bearing database URL in prose. They read structure, never meaning. The two
+removed AWS assertions leave the policy document still covered — it is a `POLICY_DOCUMENTS`
+allowlist entry, and `test_the_checks_have_something_to_scan` fails if it disappears.
+
+Suite: 626 to 622. Coverage: 93.45%, unchanged — the four tests exercised no package statement.
+
 ### Documentation synchronization after Sprint 4
 
 Project memory had drifted behind the code. `rules.md` sections 13 and 18 make synchronization a

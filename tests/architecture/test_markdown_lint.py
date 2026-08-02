@@ -1,8 +1,13 @@
-"""Structural checks on the repository's Markdown.
+"""Markdown lint. Structure and credential shape only — never content.
 
 A broken fence is not a typo. An unclosed code block swallows every heading, link, and paragraph
 after it, so a document can look fine in an editor and render on GitHub as one grey slab. Nothing
 in the toolchain notices, because Markdown has no parse errors — it just renders the wrong thing.
+
+Nothing here asserts that a document says a particular thing. A test that pins prose makes editing
+prose a test failure, which is how a README acquires a maintenance cost it never earned. Keeping
+documentation truthful is a commit-time obligation on the author under rules.md section 18, not an
+assertion in this file.
 
 These checks are deterministic and need no network, no renderer, and no linter binary.
 """
@@ -151,31 +156,6 @@ def test_relative_links_resolve() -> None:
                     broken.append(f"{path.relative_to(REPO_ROOT)}:{number}: [{label}]({target})")
 
     assert not broken, f"broken relative link(s): {broken}"
-
-
-def test_the_readme_renders_the_sections_it_promises() -> None:
-    """The sections a reader is told exist must actually be headings, outside any code block."""
-    lines = (REPO_ROOT / "README.md").read_text(encoding="utf-8").splitlines()
-    rendered = {
-        line.strip()
-        for _number, line, inside, _language in _walk(lines)
-        if not inside and HEADING.match(line)
-    }
-    for required in (
-        "# Kopexx",
-        "## Status",
-        "## Getting started",
-        "## Databases",
-        "## Layout",
-        "## Design constraints",
-    ):
-        assert required in rendered, f"README is missing a rendered heading: {required}"
-
-
-def test_the_readme_stays_within_its_length_budget() -> None:
-    """700 to 1,200 words. Below it the document stops being useful; above it nobody reads it."""
-    words = len((REPO_ROOT / "README.md").read_text(encoding="utf-8").split())
-    assert 700 <= words <= 1200, f"README is {words} words; the budget is 700 to 1200"
 
 
 def test_no_password_bearing_database_url_in_tracked_markdown() -> None:
