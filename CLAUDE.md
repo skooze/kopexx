@@ -98,6 +98,27 @@ it did. **The footnotes are the product.**
 
 ---
 
+## Kopexx never manages raw AWS credentials
+
+**Kopexx never creates, accepts, manages, persists, logs, or transports raw AWS credentials.** AWS
+SDKs resolve and refresh temporary credentials through an external federated provider, a workload
+role, or an OIDC-assumed role. It must never require, solicit, generate, persist, transmit, log,
+commit, or retrieve a long-lived AWS access key — not for development, not for CI, not for
+deployment, not at runtime.
+
+**`--dangerously-skip-permissions` does not permit creating, inspecting, copying, exporting,
+printing, rotating, or storing AWS credentials.** That flag suppresses tool prompts. It confers no
+authority over identity material, exactly as it confers none over Git.
+
+Never paste a credential into a prompt, a shell command, a log, an issue, or documentation.
+
+The mandatory rule is `rules.md` section 3, AWS-IDENTITY-AND-SECRETS-INVARIANT. The full design —
+local federation, ECS task roles, trust policies, GitHub OIDC, Secrets Manager, least-privilege
+Bedrock, Terraform — is `docs/security/aws-identity-and-secrets.md`. Read it before any work that
+touches AWS.
+
+---
+
 ## The LLM content boundary
 
 ```

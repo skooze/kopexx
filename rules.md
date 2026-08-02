@@ -123,6 +123,64 @@ Violating any of these blocks sprint completion.
 10. **Never silently accept parser uncertainty.** Low confidence routes to review, not to
     publication.
 11. **Never run a destructive database test against the application database.** See below.
+12. **Never require, hold, or store a long-lived AWS access key.** See below.
+
+### AWS-IDENTITY-AND-SECRETS-INVARIANT
+
+```
+Kopexx uses temporary AWS credentials obtained through federation or IAM roles.
+
+Kopexx must never require, solicit, generate, persist, transmit, log, commit, or retrieve
+long-lived AWS access keys for ordinary development, CI, deployment, or runtime operation.
+```
+
+Prohibited credential material:
+
+```
+AWS_ACCESS_KEY_ID                      root access keys
+AWS_SECRET_ACCESS_KEY                  IAM-user access keys
+AWS_SESSION_TOKEN, manually managed    access-key CSV downloads
+credentials in URLs                    credentials in source code
+credentials in Terraform variables     credentials in container images
+credentials in task definitions        credentials committed, encrypted or plaintext
+credentials in .env                    credentials passed as CLI arguments
+credentials in PostgreSQL              credentials in Redis
+credentials in S3                      AWS access keys in Secrets Manager
+```
+
+The application must not accept raw credential values in constructors, configuration objects,
+command-line options, API requests, or database records.
+
+**Running with `--dangerously-skip-permissions` does not permit an agent to create, inspect, copy,
+export, print, rotate, or store AWS credentials.** That flag suppresses tool prompts. It confers no
+authority over identity material, exactly as it confers none over Git.
+
+Required mechanisms, one per context:
+
+```
+human development     an approved external federated credential provider, temporary credentials
+workloads             IAM roles and temporary credentials
+CI and CD             OIDC role assumption
+non-AWS secrets       AWS Secrets Manager
+credential resolution the AWS SDK default provider chain
+authorization         least-privilege IAM policies, explicit trust policies
+```
+
+A SERVICE PRINCIPAL IS NOT A CREDENTIAL. It names which AWS service may assume a role, inside a
+trust policy. Application code never receives one and never "uses" one.
+
+SECRETS MANAGER IS NOT WHERE AWS KEYS LIVE. It holds secrets IAM cannot replace — production
+database passwords, third-party API credentials, webhook secrets, signing material. The role that
+reads a secret comes from the workload environment, or the design is circular: embedded AWS
+credentials used to fetch AWS credentials.
+
+`.env.example` carries no placeholder for any credential variable. An empty placeholder documents
+an unsafe design as the expected one and invites the reader to fill it in.
+
+Enforced by `tests/architecture/test_aws_identity.py`. Full design, including ECS task-role
+separation, trust-policy rules, GitHub OIDC scoping, least-privilege Bedrock, and the Terraform
+rules, is in `docs/security/aws-identity-and-secrets.md`. This section is the mandatory rule; that
+document is the specification.
 
 ### TEST-DATABASE-ISOLATION-INVARIANT
 

@@ -29,6 +29,20 @@ ModelProvider.count_tokens(text) -> int | None
 boundary and are therefore unusable in this system regardless of whether a provider offers them
 (ADR-0013). Adding those fields would invite a call site to branch on them.
 
+## AWS identity — binding on the Bedrock adapter
+
+The Bedrock provider, when written in Sprint 5, uses the AWS SDK default credential provider
+chain. It accepts region and model identifiers as configuration and optionally a non-secret
+profile name. It never accepts access-key or secret-key parameters, never constructs a client with
+explicit credential values, never reads credentials from `.env`, never caches them, and never
+writes them into an invocation record.
+
+The mock provider requires no AWS identity and must keep working without one, so the default test
+suite never needs AWS access.
+
+Full requirements, including the preflight identity report and its prohibited fields:
+`docs/security/aws-identity-and-secrets.md`.
+
 ## Provider responsibilities
 
 Only a provider adapter may import a provider SDK, enforced by

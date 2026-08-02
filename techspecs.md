@@ -80,6 +80,7 @@ outbound side effect is a model invocation, which is metered and audited.
 | PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
 | Database URL resolution, identity comparison, engine construction | `persistence` | IMPLEMENTED |
 | Destructive-test database isolation | `persistence` + `tests/conftest.py` | IMPLEMENTED |
+| AWS identity and secret-management policy | governance + `tests/architecture` | IMPLEMENTED as governance; no AWS code exists |
 | Alembic migration | `migrations` | IMPLEMENTED and APPLIED to a live PostgreSQL 18.4 |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
 | Filing discovery | `filing_discovery` | IMPLEMENTED (Sprint 3) |
@@ -93,7 +94,7 @@ enforces that no package is an empty stub.
 
 | Reserved name | Planned path | Sprint |
 |---|---|---|
-| Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |
+| Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |  <!-- constrained by docs/security/aws-identity-and-secrets.md -->
 | Era parsers | `packages/filing_parser` | 3 |
 | Footnote extraction | `packages/footnote_extractor` | 4 |
 | Footnote canonicalization | `packages/footnote_canonicalizer` | 4 |

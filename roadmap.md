@@ -65,7 +65,7 @@ and nothing else.**
 | Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
 | Canonical footnote grouping, stages 1 to 5 | PLANNED (Sprint 4) |
-| Real provider adapter | PLANNED (Sprint 5) |
+| Real provider adapter | PLANNED (Sprint 5); AWS identity policy IMPLEMENTED as governance |
 | Summarization pipeline | PLANNED (Sprint 5) |
 | Read API and dashboard | PLANNED (Sprint 6) |
 | Deep Analysis, FILING scope | PLANNED (Sprint 7) |
@@ -253,6 +253,14 @@ DEPENDS ON: Sprint 4
 OBJECTIVE. Answer the two questions the project cannot currently answer: does it work, and what
 does it cost. **This is the go/no-go sprint.**
 
+AUTHENTICATION PREREQUISITE. Before the first Bedrock call, a developer identity must exist that
+is obtained through an approved external federated credential provider and scoped to only the
+Bedrock actions and model resources the benchmark needs. **No long-lived access key is created for
+this, at any point, by anyone.** The benchmark additionally requires a hard invocation budget, a
+hard dollar budget, an explicit model allowlist, an explicit region, and a manual start. The rule
+is `rules.md` section 3; the design is `docs/security/aws-identity-and-secrets.md`. The policy is
+already in force — it is enforced by tests today, before any provider code exists.
+
 DELIVERABLES.
 - `docs/llm/model-catalog.md`: verified model identifiers, region availability, context and
   output limits, and observed prices — obtained by calling the provider, not from memory.
@@ -353,6 +361,13 @@ because the measured cost from Sprint 5 will change what is affordable.
 
 W-3 closes risk R-02, W-4 closes R-04, and W-8 closes the pre-2009 numeric gap. All three are
 genuinely valuable and none is required to prove the product.
+
+**W-7 authentication prerequisite.** Terraform authenticates through a temporary federated or
+OIDC-assumed role, and GitHub Actions assumes a deployment role through OpenID Connect. No AWS
+access key is stored as a GitHub secret, embedded in a provider block, or written into a variable
+file. Each ECS workload receives its own least-privilege task role, kept separate from the
+task-execution role. This is settled policy rather than a W-7 design decision: `rules.md` section
+3, detailed in `docs/security/aws-identity-and-secrets.md`.
 
 ---
 

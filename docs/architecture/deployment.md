@@ -34,6 +34,36 @@ Aurora PostgreSQL   Redis            S3 (raw + parquet)
         Model provider (VPC endpoint)
 ```
 
+## Identity and secrets — PLANNED
+
+AUTHORITATIVE: `docs/security/aws-identity-and-secrets.md`. Mandatory rule: `rules.md` section 3.
+
+**Each workload gets its own least-privilege IAM role.** No credential is ever injected into an
+environment variable or a task-definition secret; application code resolves identity through the
+SDK provider chain.
+
+| Workload | Role |
+|---|---|
+| API | API task role |
+| Ingestion worker | ingestion task role |
+| Summarization worker | summarization task role |
+| Publisher | publication task role |
+| Scheduler | scheduler task role |
+| ECS platform | task-execution role, separate from all of the above |
+
+One broad role shared across services is prohibited. The reason is blast radius: a summarization
+worker compromised through filing content it parsed must not be able to publish a dataset or read
+the API's secrets.
+
+**The task role grants application permissions** — Bedrock invocation, S3, SQS, Secrets Manager
+reads, KMS decrypt. **The execution role is limited to ECS platform operations**: pulling images
+and delivering configured secrets. These two are confused routinely, and the result is an
+execution role carrying application permissions that every task in the account inherits.
+
+Terraform authenticates through a temporary federated or OIDC-assumed role. Provider blocks carry
+no access keys, variables carry no credentials, and plans print no secret values. Deployment roles
+stay separate from runtime roles.
+
 ## Networking
 
 Private subnets for ECS, Aurora, and Redis. Public subnets carry only the ALB and NAT. VPC

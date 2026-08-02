@@ -131,6 +131,13 @@ history, the top 100 issuers, the top 500 issuers, the full covered universe, mo
 state, one Deep Analysis session, and one follow-up turn. Each with a sensitivity analysis over
 `T_src`, `T_out`, and `R_retry`, which are the parameters the total is most sensitive to.
 
+## Spend is bounded by identity, not only by code
+
+A budget enforced only in application code is a budget a bug can exceed. The IAM identity used for
+any real-model run is scoped to an explicit model allowlist and region, so a runaway loop is
+refused by AWS rather than merely counted by Kopexx. See
+`docs/security/aws-identity-and-secrets.md`.
+
 ## Non-negotiable
 
 Cost optimization must not reduce footnote coverage or financial fidelity. The every-footnote

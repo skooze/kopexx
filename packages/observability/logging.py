@@ -18,20 +18,46 @@ from .correlation import get_correlation_id
 
 _CONFIGURED = False
 
-# Field names that must never appear in a log record.
+# Field names whose VALUE is never emitted. Redaction is centralized so a new logger cannot
+# forget it, and so adding a credential-bearing name protects every call site at once.
+#
+# The AWS group is present before any AWS integration exists, deliberately: a credential that
+# reaches a log has already been disclosed, and the log is the one place nobody thinks to check.
+# rules.md section 3, AWS-IDENTITY-AND-SECRETS-INVARIANT.
 REDACTED_FIELDS = frozenset(
     {
+        # model and request content
         "content",
         "payload",
         "request_body",
         "response_body",
         "text",
         "prompt",
+        # generic secret material
         "api_key",
         "secret",
+        "secret_value",
+        "credentials",
+        "authorization",
         "authorization_token",
         "access_token",
         "password",
+        # AWS identity. Kopexx holds none of these; if one ever appears in a log record, the
+        # value is suppressed and the field name itself is the signal that something is wrong.
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_session_token",
+        "access_key_id",
+        "secret_access_key",
+        "session_token",
+        "x_amz_security_token",
+        "x_amz_credential",
+        "security_token",
+        # signed URLs and cookies carry the credential in the signature
+        "signature",
+        "x_amz_signature",
+        "signed_cookie",
+        "presigned_url",
     }
 )
 

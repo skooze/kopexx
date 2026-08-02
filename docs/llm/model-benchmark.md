@@ -15,6 +15,25 @@ Among models passing every gate, the **cheapest** is selected.
 
 ---
 
+## Identity and budget preconditions
+
+The benchmark runs under a least-privilege identity holding only the Bedrock actions and model
+resources it needs. Broad administrator access to ease model discovery is prohibited; discovery is
+a one-time convenience and the permission outlives it.
+
+Permissions are separated for model discovery, standard-summary invocation, Deep Analysis
+invocation, request/response object access, and cost metadata. **Deep Analysis and standard
+summarization must be separately measurable and separately restrictable** even while sharing one
+account — they have different cost and abuse profiles, and one permission covering both makes each
+invisible inside the other.
+
+Every run requires a hard invocation budget, a hard dollar budget, an explicit model allowlist, an
+explicit region, a manual start, and no automatic retry that can exceed the budget. The workflow
+that runs it is gated and cannot trigger implicitly on a push. A pull request from an untrusted
+fork receives no role capable of invoking a billable model.
+
+See `docs/security/aws-identity-and-secrets.md`.
+
 ## Two benchmarks, not one
 
 The full corpus below is a serious measurement program: 120 gold-labelled footnotes, two
