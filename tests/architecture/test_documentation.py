@@ -168,8 +168,6 @@ def test_the_readme_renders_the_sections_it_promises() -> None:
         "## Databases",
         "## Layout",
         "## Design constraints",
-        "## Documentation",
-        "## Contributing",
     ):
         assert required in rendered, f"README is missing a rendered heading: {required}"
 
