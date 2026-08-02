@@ -1,8 +1,63 @@
 # SPRINT-0003: Acquire One Issuer's Filings and Establish Reproducible Fixtures
 
-STATUS: PLANNED
-PLANNED DATE: after the Sprint 2 alignment review
+STATUS: IN PROGRESS — acquisition complete, database work blocked
+DATE: 2026-08-01
 SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
+
+---
+
+## Outcome so far
+
+**Apple's filings are retrieved.** After three sprints in which nothing had been fetched from
+EDGAR, the repository now holds four real filings with full provenance.
+
+| Item | Result |
+|---|---|
+| Filings discovered for CIK 0000320193 | **134** covered filings, 1994-01-26 to 2026-07-31 |
+| Reconciliation against `master.gz` | **134 = 134**, zero gaps, zero discrepancies, 131 quarters |
+| Filings acquired | FY2025 10-K plus the three FY2025 10-Qs |
+| Objects preserved | **20**, 8,827,567 bytes (8.42 MiB) |
+| Re-acquisition | 0 downloaded, 20 reused, **0 requests** |
+| Throttle events | **0** across every run |
+| Fixture tree committed | 188.4 KiB, well under the 25 MB target |
+| Tests | 143 → **201 passing**, 2 skipped |
+
+**The overflow path was not optional.** `filings.recent` returned exactly 1,000 entries, its
+documented cap, of which 45 were covered forms. The remaining **89 came from the overflow shard**.
+Reading only `recent` would have silently lost 66 percent of Apple's history, and the loss would
+have looked identical to a company that simply files less.
+
+**The 13-not-58 correction is now confirmed against data we hold.** The acquired
+`FilingSummary.xml` contains 71 `<Report>` elements: 2 Cover, 6 Statements, 16 Notes, 1 Policies,
+12 Tables, 33 Details, plus one navigation entry. Of the 16 `menucat='Notes'` candidates, exactly
+three are the Item 408 and Item 1C disclosures. 16 − 3 = 13.
+
+### Two defects found by real data
+
+1. **The client rejected the primary document.** `_assert_not_error_page` treated any HTML body as
+   an error page. That was right for the DERA mirror, where HTML meant a failure, and wrong here:
+   a filing's primary document *is* HTML. Fixed with an `expect_html` flag that keeps the
+   directory-listing check active, because a folder index is also HTML and is the corruption the
+   guard exists to catch.
+
+2. **Gzip was misread as truncation.** SEC serves `.htm` and `.xml` gzipped, so `Content-Length`
+   is the *compressed* size while httpx yields decompressed bytes. The completeness check compared
+   the two and reported a truncated download of a file that arrived whole: 1,520,208 bytes
+   received against a declared 111,447. The DERA path never saw this because SEC does not
+   re-compress a `.zip`. The check now skips the comparison when `Content-Encoding` is set.
+
+Both are covered by regression tests.
+
+### A refinement to the recorded report count
+
+The 71st `<Report>` is `All Reports`, `ReportType: Book` — the renderer's own table of contents,
+with no menu category, role, or file. So the filing has **70 real reports plus one navigation
+entry**. Counting it would put every downstream total off by one.
+
+### Blocked
+
+**PostgreSQL is unavailable, so step 1 did not run.** The two live migration tests still skip, and
+the DERA TSV load is deferred with them. See "Known issues" below for the exact commands.
 
 ---
 
@@ -227,6 +282,58 @@ tests/unit/test_migrations.py             the 2 live tests now RUN
 | Repository bloat | Hard ceiling of 40 MB; measured and reported in the sprint record |
 
 ---
+
+## Known issues
+
+1. **PostgreSQL is unavailable on this machine, so the two live migration tests still skip.**
+   Every fallback in the plan was tried:
+
+   ```
+   $ docker run --rm hello-world
+   docker: Error response from daemon: failed to create task for container:
+   failed to start shim: start failed: failed to create TTRPC connection:
+   unsupported protocol: Yunix
+
+   $ docker compose version
+   docker: unknown command: docker compose      # plugin absent
+
+   $ sudo -n true
+   sudo: a password is required                  # cannot install a system package
+
+   $ pip index versions pgserver
+   ERROR: No matching distribution found         # no rootless PostgreSQL from PyPI
+
+   $ command -v podman
+   (not installed)
+   ```
+
+   The Docker daemon runs (server 29.4.1) but cannot start containers; the shim failure is the
+   same one Sprint 2 recorded. **This needs an action outside the agent's reach.** Either:
+
+   ```
+   sudo pacman -S postgresql
+   sudo -u postgres initdb -D /var/lib/postgres/data
+   sudo systemctl start postgresql
+   sudo -u postgres createuser -s fintek && sudo -u postgres createdb -O fintek fintek
+   ```
+
+   or repair the Docker containerd shim so `make up` works.
+
+   Once a server answers on 5432, `pytest tests/unit/test_migrations.py` runs the two tests that
+   have never executed, and the DERA TSV load can follow.
+
+2. **DERA TSV loading is deferred with the database.** The parser can be written against the
+   mirrored packages without a server, but the acceptance criterion is a row-count reconciliation
+   after loading, which cannot be met yet.
+
+3. **URGENT-02 is still open.** The twelve monthly DERA packages, 2.00 GiB, exist in exactly one
+   place and cannot be re-downloaded once SEC publishes the 2025q3 consolidation. A second copy on
+   the same disk is not a second copy. This needs a destination decision.
+
+4. **Only the inline-XBRL era is implemented.** `standalone_xbrl`, `html_no_xbrl`, and
+   `pem_armored` raise `UnsupportedEraError` rather than guessing. That covers the four target
+   filings and everything from roughly 2019; the other 104 of Apple's 134 filings need Stage 2
+   phase W-2.
 
 ## Definition of done
 

@@ -60,10 +60,10 @@ and nothing else.**
 | DERA live mirror | COMPLETE (78/78 packages, 25.36 GiB) |
 | LLM gateway, YAML boundary, payload compiler, boundary validator | IMPLEMENTED |
 | Mock model provider | IMPLEMENTED |
-| PostgreSQL schema and initial migration | IMPLEMENTED (offline-verified; live apply PENDING Sprint 3) |
-| DERA TSV loading | PLANNED (Sprint 3) |
-| Filing discovery, one CIK | PLANNED (Sprint 3) |
-| Filing acquisition, inline-XBRL era | PLANNED (Sprint 3) |
+| PostgreSQL schema and initial migration | IMPLEMENTED (offline-verified; live apply BLOCKED, no PostgreSQL) |
+| DERA TSV loading | BLOCKED (Sprint 3; needs PostgreSQL) |
+| Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
+| Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
 | Canonical footnote grouping, stages 1 to 5 | PLANNED (Sprint 4) |
 | Real provider adapter | PLANNED (Sprint 5) |
 | Summarization pipeline | PLANNED (Sprint 5) |
@@ -150,9 +150,17 @@ architecture tests exist to catch it.
 
 ### Sprint 3 — Acquire one issuer's filings and establish reproducible fixtures
 
-STATUS: NOT STARTED
+STATUS: IN PROGRESS — filings retrieved and reconciled; the database steps are blocked
 DEPENDS ON: Sprint 2
-DETAILED PLAN: `docs/sprints/SPRINT-0003.md`
+DETAILED PLAN AND OUTCOME: `docs/sprints/SPRINT-0003.md`
+
+DONE. Filing discovery (134 filings, 1994-2026, reconciling 134 = 134 against `master.gz` with
+zero gaps). Inline-XBRL acquisition of the FY2025 10-K and three 10-Qs, 20 objects and 8.42 MiB
+preserved with provenance, idempotent at zero requests on re-run. Committed fixtures with a
+source manifest. The item-disclosure exclusion list tested against real acquired data.
+
+BLOCKED. No PostgreSQL is reachable, so the migration is still unapplied, the two live tests
+still skip, and the DERA TSV load is deferred with them. Risk R-10.
 
 OBJECTIVE. End the condition where nothing has been retrieved. Get four real Apple filings into
 the system, preserved with provenance, and make the canonical-footnote result reproducible
@@ -330,7 +338,7 @@ genuinely valuable and none is required to prove the product.
 | 1 | Foundation, governance, SEC primitives, LLM boundary controls | COMPLETE |
 | 2 | Execute DERA mirror download; PostgreSQL schema and migrations | COMPLETE |
 | — | Alignment review; thread-first resequencing; governance amendment | COMPLETE (uncommitted) |
-| 3 | Acquire one issuer's filings; reproducible fixtures | NOT STARTED |
+| 3 | Acquire one issuer's filings; reproducible fixtures | IN PROGRESS — filings retrieved; database blocked |
 | 4 | Canonical-footnote extraction, stages 1–5 | NOT STARTED |
 | 5 | Real-model summarization; fidelity and cost measurement | NOT STARTED |
 | 6 | Dashboard and the zero-LLM read path | NOT STARTED |
@@ -351,6 +359,7 @@ genuinely valuable and none is required to prove the product.
 | R-06 | SEC access policy may change | MEDIUM | Revalidate before each ingestion phase | OPEN |
 | R-07 | Scope-classifier false negatives leak Deep Analysis cost | MEDIUM | Detector measured independently in Sprint 7; budgets are the backstop | OPEN |
 | R-08 | Twelve irreplaceable DERA monthly packages exist in one location | HIGH | URGENT-02, Sprint 3 | OPEN |
+| R-10 | No PostgreSQL is reachable on the development machine, so the migration has never been applied and the two live tests have never run | HIGH | Needs an action outside the agent's reach; commands in SPRINT-0003 | OPEN |
 | R-09 | Unit economics unknown; the product may be unaffordable at corpus scale | HIGH | **Sprint 5 is an explicit go/no-go.** Previously unresolved until sprint ~20 | OPEN |
 
 ---

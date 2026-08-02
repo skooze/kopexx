@@ -1,0 +1,39 @@
+# Gitleaks configuration.
+#
+# Extends the bundled default ruleset. Nothing here disables a rule: the only entries are
+# narrowly scoped allowlists for patterns that are provably public SEC identifiers.
+#
+# Adding a broad path exclusion or switching off a rule is prohibited by rules.md section 16.
+# If a finding is real, rotate the credential first, then clean the repository.
+
+[extend]
+useDefault = true
+
+[[rules]]
+# Re-declare the default generic-api-key rule so a targeted allowlist can hang off it.
+id = "generic-api-key"
+description = "Generic API key, with SEC document identifiers allowlisted"
+regex = '''(?i)(?:key|api|token|secret|client|passwd|password|auth|access)(?:[0-9a-z\-_\t .]{0,20})(?:[\s|']|[\s|"]){0,3}(?:=|>|:{1,3}=|\|\||:|<=|=>|:=|\?=)(?:'|\"|\s|=|\x60){0,5}([0-9a-z\-_.=]{10,150})(?:['|\"|\n|\r|\s|\x60|;]|$)'''
+keywords = ["key", "api", "token", "secret", "client", "passwd", "password", "auth", "access"]
+
+  [rules.allowlist]
+  regexTarget = "match"
+  regexes = [
+    # SEC inline-XBRL primary document names: a ticker stem, a period-end date, and an
+    # extension. For example aapl-20250927.htm and aapl-20250927_htm.xml. These are public
+    # filenames published in the EDGAR archive, and they appear throughout the acquisition code,
+    # its tests, and the fixture manifest.
+    '''[a-z0-9]+-\d{8}(_htm)?\.(htm|xml|xsd)''',
+    # Dashed SEC accession numbers, for example 0000320193-25-000079. Also public, also
+    # everywhere in this repository.
+    '''\d{10}-\d{2}-\d{6}''',
+  ]
+
+[allowlist]
+description = "Repository-wide allowlist"
+paths = [
+  # The committed filing fixtures are verbatim SEC renderer output. They contain no credentials
+  # by construction: they are public documents retrieved from the EDGAR archive, and the manifest
+  # beside them pins each source URL and SHA-256 so that claim is checkable.
+  '''tests/fixtures/filings/.*\.(xml|yaml)$''',
+]

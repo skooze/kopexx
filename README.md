@@ -43,9 +43,9 @@ a live database — that's the first task in Sprint 3.
 Current local validation:
 
 ```
-143 tests passing, 2 skipped
-92.94% coverage on the implemented packages (85% gate)
-mypy clean across 45 source files
+201 tests passing, 2 skipped
+92% coverage on the implemented packages (85% gate)
+mypy clean across 53 source files
 ruff format and lint clean
 ```
 

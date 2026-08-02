@@ -193,6 +193,28 @@ class SecHttpClient:
                 self._handle_retryable(SecTransientError(str(error)), attempt, url)
         raise SecTransientError(f"retries exhausted: {url}")
 
+    def get_bytes(self, url: str) -> bytes:
+        """Fetch a small binary resource into memory, such as a gzipped quarterly index.
+
+        Use `download` for anything large enough to matter; this holds the whole body. It exists
+        because the master index is read once and discarded, and writing it to disk only to parse
+        and delete it adds a failure mode without adding a guarantee.
+        """
+        for attempt in range(self._max_retries + 1):
+            self._acquire(url)
+            self.request_count += 1
+            try:
+                response = self._client.get(url)
+                self._classify(response, url)
+                return response.content
+            except SecUndeclaredAutomationError:
+                raise
+            except SecClientError as error:
+                self._handle_retryable(error, attempt, url)
+            except httpx.HTTPError as error:
+                self._handle_retryable(SecTransientError(str(error)), attempt, url)
+        raise SecTransientError(f"retries exhausted: {url}")
+
     # --- download path ------------------------------------------------------------------------
 
     def download(
@@ -201,6 +223,7 @@ class SecHttpClient:
         destination: str | Path,
         *,
         expect_zip: bool = False,
+        expect_html: bool = False,
     ) -> FetchResult:
         """Stream a resource to disk, hashing as it goes, and validate before committing.
 
@@ -224,11 +247,19 @@ class SecHttpClient:
                         self._classify(response, url)
                     content_type = response.headers.get("content-type", "")
                     declared_length = response.headers.get("content-length")
+                    # SEC-INVARIANT: when the response is content-encoded, Content-Length is the
+                    # COMPRESSED byte count while httpx hands us decompressed bytes. Comparing the
+                    # two reports a truncation that did not happen. The DERA path never saw this
+                    # because SEC does not re-compress a .zip, but every .htm and .xml is gzipped.
+                    if response.headers.get("content-encoding"):
+                        declared_length = None
                     first_chunk = True
                     with open(partial, "wb") as handle:
                         for chunk in response.iter_bytes(CHUNK_BYTES):
                             if first_chunk:
-                                self._assert_not_error_page(chunk, url, content_type, expect_zip)
+                                self._assert_not_error_page(
+                                    chunk, url, content_type, expect_zip, expect_html
+                                )
                                 first_chunk = False
                             handle.write(chunk)
                             digest.update(chunk)
@@ -272,12 +303,20 @@ class SecHttpClient:
 
     @staticmethod
     def _assert_not_error_page(
-        first_chunk: bytes, url: str, content_type: str, expect_zip: bool
+        first_chunk: bytes,
+        url: str,
+        content_type: str,
+        expect_zip: bool,
+        expect_html: bool = False,
     ) -> None:
         """Reject an HTML error page or directory listing delivered with a 200 status.
 
         HISTORICAL-FORMAT: SEC answers a bare folder URL with HTTP 200 and an index page. Storing
         that as content is a silent corruption, so it is an error rather than a warning.
+
+        A filing's primary document is itself HTML, so `expect_html` suppresses the blanket
+        rejection. The directory-listing check still runs in that mode, because a folder index is
+        also HTML and is exactly the failure this guard exists to catch.
         """
         head = first_chunk[:1024]
         looks_html = any(head.lstrip()[: len(m)].lower() == m.lower() for m in _HTML_SNIFF)
@@ -285,7 +324,8 @@ class SecHttpClient:
             text = head.decode("utf-8", errors="replace")
             if looks_like_directory_listing(text, content_type):
                 raise DirectoryListingError(f"directory listing returned for {url}")
-            raise SecClientError(f"HTML page returned where content was expected: {url}")
+            if not expect_html:
+                raise SecClientError(f"HTML page returned where content was expected: {url}")
         if expect_zip and not head.startswith(b"PK"):
             raise SecClientError(f"response is not a ZIP archive (bad magic bytes): {url}")
 

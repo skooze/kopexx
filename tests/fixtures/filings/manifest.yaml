@@ -1,0 +1,117 @@
+# Source manifest for the committed filing fixtures.
+#
+# Every entry pins the accession, the SEC URL, and the SHA-256 of the object as
+# retrieved. The extracted fixtures beside this file are derived from exactly these
+# bytes. Re-fetch and compare with: python scripts/build_fixtures.py --verify
+#
+# The raw objects themselves are NOT committed: they are 8.4 MiB for four filings and
+# SEC hosts them authoritatively. They live in var/objects/, which is gitignored.
+filings:
+  - accession: "0000320193-25-000079"
+    cik: "0000320193"
+    form: "10-K"
+    era: "inline_xbrl"
+    objects:
+      - role: "primary_document"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm"
+        sha256: "548ae59778cf08ee0f2ee088e7ece20d947076c3c01f74d2d65db4c2777e436a"
+        size_bytes: 1520208
+      - role: "xbrl_package"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-xbrl.zip"
+        sha256: "b866968e851df2476ac98358634e1b341265aa61e51e36632c755c30a8f91250"
+        size_bytes: 399390
+      - role: "extracted_instance"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927_htm.xml"
+        sha256: "e1076735f1c81bc96d5c1ff6e1a9d23515d6eacf52b405cb1f7da3e379ac533b"
+        size_bytes: 1416841
+      - role: "filing_summary"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/FilingSummary.xml"
+        sha256: "f5e632bd6de8965a5251fd590f053553c017396f5ec75b0ddc9e475832a7c0a2"
+        size_bytes: 42775
+      - role: "schema"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.xsd"
+        sha256: "e697d106fae1543535c634bede6337b8f1ecd987e7655eb91c62913900ab6335"
+        size_bytes: 56313
+    filing_summary_sha256: "f5e632bd6de8965a5251fd590f053553c017396f5ec75b0ddc9e475832a7c0a2"
+    report_count: 71
+  - accession: "0000320193-25-000008"
+    cik: "0000320193"
+    form: "10-Q"
+    era: "inline_xbrl"
+    objects:
+      - role: "primary_document"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/aapl-20241228.htm"
+        sha256: "10abe53ba46cce356998a00137424b3e20c682fd7575ab3fc0b66941e723ef5d"
+        size_bytes: 732589
+      - role: "xbrl_package"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/0000320193-25-000008-xbrl.zip"
+        sha256: "05ad96040bda0aa9b6abc5ab797ee738bccc440f39176892898952707afec883"
+        size_bytes: 185617
+      - role: "extracted_instance"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/aapl-20241228_htm.xml"
+        sha256: "ffc00c87d2e5f10b99c39b68e3157f0f3220e304b91cb71d1ba939434f17e6f8"
+        size_bytes: 641761
+      - role: "filing_summary"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/FilingSummary.xml"
+        sha256: "cb2371bda568ff5d0187275ef0f4a6f54f52b4c2ed824f3e382fcdc28d8585f2"
+        size_bytes: 26112
+      - role: "schema"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/aapl-20241228.xsd"
+        sha256: "ce5004028172aef3842dfcabd20c9086902938ef3cd60b455635cd74c7ad8b29"
+        size_bytes: 34533
+    filing_summary_sha256: "cb2371bda568ff5d0187275ef0f4a6f54f52b4c2ed824f3e382fcdc28d8585f2"
+    report_count: 43
+  - accession: "0000320193-25-000057"
+    cik: "0000320193"
+    form: "10-Q"
+    era: "inline_xbrl"
+    objects:
+      - role: "primary_document"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/aapl-20250329.htm"
+        sha256: "2fd930cba232625de5067cfc04fb106095715b23e34d3a0165e08734c0082083"
+        size_bytes: 889977
+      - role: "xbrl_package"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/0000320193-25-000057-xbrl.zip"
+        sha256: "e76dec64021827d01bf2a76159c17b4760fd23990ef329656a29299d6f8c199e"
+        size_bytes: 167498
+      - role: "extracted_instance"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/aapl-20250329_htm.xml"
+        sha256: "2a4569a5be13c54a0da1369cbe4591c06057a15ec60899e6ab7ce9a539e024f1"
+        size_bytes: 758005
+      - role: "filing_summary"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/FilingSummary.xml"
+        sha256: "030bd3b393a7988661e864ab2bd593270efc0d00e11d387d01b29e2abeaf93ed"
+        size_bytes: 26158
+      - role: "schema"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/aapl-20250329.xsd"
+        sha256: "94d66d8ab03d1e05b38c21dc7d4186a65e53f7bfd921167f378e94d2a18230f0"
+        size_bytes: 33865
+    filing_summary_sha256: "030bd3b393a7988661e864ab2bd593270efc0d00e11d387d01b29e2abeaf93ed"
+    report_count: 43
+  - accession: "0000320193-25-000073"
+    cik: "0000320193"
+    form: "10-Q"
+    era: "inline_xbrl"
+    objects:
+      - role: "primary_document"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250628.htm"
+        sha256: "ec86034c4029ea892d587f95cf5c9c2e3a08228929fbabf269dec3c1cb26d768"
+        size_bytes: 888048
+      - role: "xbrl_package"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/0000320193-25-000073-xbrl.zip"
+        sha256: "ba81ca9576dd509b1533bd0403e5dee8dac3e9fc1f4dec62c92672a659a09b86"
+        size_bytes: 166913
+      - role: "extracted_instance"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250628_htm.xml"
+        sha256: "a33da25d38ddc3c39fcb80b996a26fb562b8938f942f7a41a5f156339a7d70c9"
+        size_bytes: 778234
+      - role: "filing_summary"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/FilingSummary.xml"
+        sha256: "f087d0ffa4b5d06c2f9530864f211d7d3f7b7ffb0d77fb196eaec5a62cc2b326"
+        size_bytes: 27303
+      - role: "schema"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250628.xsd"
+        sha256: "a040fc385608214977377b2408834fda5cec6010e1810d4aaa9f01cd662befa5"
+        size_bytes: 35427
+    filing_summary_sha256: "f087d0ffa4b5d06c2f9530864f211d7d3f7b7ffb0d77fb196eaec5a62cc2b326"
+    report_count: 45

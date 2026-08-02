@@ -4,16 +4,18 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: CI repair, after the Sprint 2 alignment review
-VERIFICATION: 143 tests passing and 2 skipped, 93 percent coverage on implemented packages, ruff
-format and lint clean across `packages tests scripts migrations`, mypy clean across 45 source
-files in `packages scripts migrations`, editable install succeeding in a clean environment,
-offline Alembic upgrade and downgrade, gitleaks 8.30.1 clean over all reachable history and the
-working tree, and pip-audit clean.
+LAST SYNCHRONIZED WITH CODE: Sprint 3, filing discovery and acquisition
+VERIFICATION: 201 tests passing and 2 skipped, 92 percent coverage on implemented packages, ruff
+format and lint clean across `packages tests scripts migrations`, mypy clean across 53 source
+files in `packages scripts migrations`, offline Alembic upgrade and downgrade, and pip-audit
+clean.
 
 The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
-contained only a docstring (ADR-0015), then rose to 45 because type checking now also covers
-`scripts` and `migrations`.
+contained only a docstring (ADR-0015), rose to 45 when type checking extended to `scripts` and
+`migrations`, and is 53 now that filing discovery and acquisition exist.
+
+`packages/` holds ten implemented libraries. Two were added in Sprint 3: `filing_discovery` and
+`filing_acquisition`.
 
 ## Build and packaging
 
@@ -23,7 +25,7 @@ root holds `prompts`, `artifacts`, `migrations`, `metric_definitions`, `docs`, a
 setuptools refuses to guess. It additionally picked up the gitignored `var/` directory in a local
 checkout, so the failure was not even reproducible across environments.
 
-`packages/` is the only importable tree: it and all nine subpackages carry `__init__.py`, and
+`packages/` is the only importable tree: it and every subpackage carries `__init__.py`, and
 every import in the codebase has the form `packages.<name>`. No package-data configuration is
 needed because `packages/` contains zero non-`.py` files; prompts, metric definitions, and
 migrations are loaded from the repository by path rather than as package resources.
@@ -77,6 +79,8 @@ outbound side effect is a model invocation, which is metered and audited.
 | PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
 | Alembic migration | `migrations` | IMPLEMENTED (offline-verified; live apply PENDING Sprint 3) |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
+| Filing discovery | `filing_discovery` | IMPLEMENTED (Sprint 3) |
+| Filing acquisition, inline-XBRL era | `filing_acquisition` | IMPLEMENTED (Sprint 3) |
 
 Reserved package names. **These directories do not exist.** Sprint 1 created them containing only
 a docstring, which reserved names up to twenty sprints ahead of their code and caused two
@@ -87,8 +91,6 @@ enforces that no package is an empty stub.
 | Reserved name | Planned path | Sprint |
 |---|---|---|
 | Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |
-| Filing discovery | `packages/filing_discovery` | 3 |
-| Document acquisition | `packages/filing_acquisition` | 3 |
 | Era parsers | `packages/filing_parser` | 3 |
 | Footnote extraction | `packages/footnote_extractor` | 4 |
 | Footnote canonicalization | `packages/footnote_canonicalizer` | 4 |

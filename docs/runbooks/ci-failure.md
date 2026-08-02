@@ -130,7 +130,10 @@ A real or apparent secret is in the repository.
    because the value is already published to everyone with read access.
 4. If it is a **false positive**: add a narrowly scoped entry to `.gitleaks.toml` covering that
    path and rule only. **Never** disable a rule globally and never delete the finding to make the
-   job green.
+   job green. After editing the config, prove it did not blind the scanner: create a throwaway
+   repository containing a synthetic credential, copy the config in, and confirm the scan still
+   exits non-zero. Sprint 3 did exactly this when the `generic-api-key` rule matched the SEC
+   document filename `aapl-20250927.htm`.
 5. Record the decision in the sprint record.
 
 ### `scanned ~0 bytes`

@@ -8,7 +8,67 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
-Two entries: the Sprint 2 alignment review (committed as `275db19`), and the CI repair that
+### Sprint 3 — filing discovery and acquisition (not yet committed)
+
+**The first SEC filings have been retrieved.** Requirement 1 of fifteen had not started before
+this; the repository now holds four real Apple filings with full provenance.
+
+#### Added
+
+- `packages/filing_discovery`: every 10-K and 10-Q for an issuer, from the submissions API plus
+  its overflow shards, with era classification and quarterly-index reconciliation. Apple yields
+  **134 covered filings, 1994 to 2026**, reconciling **134 = 134** against `master.gz` across 131
+  quarters with zero gaps in either direction.
+- `packages/filing_acquisition`: inline-XBRL-era acquisition of the primary document, the
+  `-xbrl.zip`, SEC's own extracted instance, `FilingSummary.xml`, and the schema. **20 objects,
+  8.42 MiB preserved**, idempotent on re-run at zero requests, zero throttle events.
+- `scripts/build_fixtures.py` and `tests/fixtures/filings/`: a 188 KiB fixture tree with a
+  manifest pinning every source URL and SHA-256. The raw documents stay in gitignored object
+  storage, per the strategy decided in SPRINT-0003.
+- `SecHttpClient.get_bytes` for small in-memory fetches such as the gzipped quarterly index.
+- `.gitleaks.toml`. The scanner flagged four false positives: the `generic-api-key` rule matched
+  `aapl-20250927.htm`, a public SEC document filename. The config adds a narrow allowlist for the
+  SEC inline-XBRL filename and dashed-accession shapes and **disables no rule**. Verified against
+  a fixture that a real credential is still caught, including one placed directly beside a SEC
+  filename.
+- 58 tests: discovery, acquisition, fixtures, and the item-disclosure exclusion list exercised
+  against real acquired data rather than an invented example.
+
+#### Fixed
+
+- **The client rejected a filing's primary document.** `_assert_not_error_page` treated any HTML
+  body as an error page, which was correct for the DERA mirror and wrong here: a primary document
+  *is* HTML. Added `expect_html`, which keeps the directory-listing check active because a folder
+  index is also HTML and is the corruption the guard exists to catch.
+- **A gzipped response was misread as truncated.** SEC serves `.htm` and `.xml` gzipped, so
+  `Content-Length` reports compressed bytes while httpx yields decompressed ones. The
+  completeness check compared the two and rejected a whole 1,520,208-byte document against a
+  declared 111,447. It now skips the comparison when `Content-Encoding` is set. The DERA path
+  never saw this because SEC does not re-compress a `.zip`.
+
+#### Measured
+
+- `filings.recent` returned exactly its documented 1,000-entry cap. **89 of Apple's 134 covered
+  filings came from the overflow shard** — reading only `recent` loses 66 percent of the history,
+  and the loss is indistinguishable from a company that files less.
+- The 13-not-58 correction confirmed against the acquired `FilingSummary.xml`: 71 `<Report>`
+  elements, 16 `menucat='Notes'` candidates, 3 Item 408 / Item 1C disclosures, **13 footnotes**.
+- The 71st report is `All Reports`, `ReportType: Book` — the renderer's navigation entry, with no
+  category, role, or file. The filing has **70 real reports plus one index entry**.
+
+#### Blocked
+
+- **PostgreSQL is still unavailable**, so the two live migration tests continue to skip and the
+  DERA TSV load is deferred. Docker's daemon runs but cannot start containers (`unsupported
+  protocol: Yunix`), `sudo` requires a password, no podman, and no rootless PostgreSQL on PyPI.
+  Exact commands to unblock are in `docs/sprints/SPRINT-0003.md`.
+- **URGENT-02 remains open.** The twelve monthly DERA packages still exist in one place.
+
+---
+
+### Earlier unreleased entries
+
+Two: the Sprint 2 alignment review (committed as `275db19`), and the CI repair that
 followed the first GitHub Actions run.
 
 ---
