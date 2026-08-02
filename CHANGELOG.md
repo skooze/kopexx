@@ -56,13 +56,43 @@ this; the repository now holds four real Apple filings with full provenance.
 - The 71st report is `All Reports`, `ReportType: Book` — the renderer's navigation entry, with no
   category, role, or file. The filing has **70 real reports plus one index entry**.
 
-#### Blocked
+#### Completed after the initial Sprint 3 entry
 
-- **PostgreSQL is still unavailable**, so the two live migration tests continue to skip and the
-  DERA TSV load is deferred. Docker's daemon runs but cannot start containers (`unsupported
-  protocol: Yunix`), `sudo` requires a password, no podman, and no rootless PostgreSQL on PyPI.
-  Exact commands to unblock are in `docs/sprints/SPRINT-0003.md`.
-- **URGENT-02 remains open.** The twelve monthly DERA packages still exist in one place.
+- **PostgreSQL 18.4 installed and the migration applied to a live database**, the oldest open
+  blocker in the project. `upgrade head` → `downgrade base` → `upgrade head` all succeed; the
+  live schema carries 24 domain tables plus `alembic_version`, 25 primary keys, 19 unique and 29
+  foreign-key constraints, 23 check constraints, 37 explicit indexes (81 including
+  constraint-backing), and the append-only trigger. All counts are `public`-schema only.
+- **The two live migration tests now pass rather than skip.** The suite reports **203 passed,
+  0 skipped** — the first run in this project where every test executed.
+- **No database credential is stored on this development host.** Authentication is `peer` over
+  the Unix socket with a `pg_ident` map, so there is no password in `.env` and no SCRAM verifier
+  in `pg_authid`. `DATABASE_URL` carries a role name and a socket path only. This is a
+  local-development arrangement; deployed authentication is undecided and does not follow from
+  it.
+- **URGENT-02 discharged.** All twelve monthly DERA packages, 2,145,477,071 bytes, copied to a
+  separate filesystem and verified: source hash against the ledger, destination hash after copy,
+  and ZIP CRC on every member. A second run copied 0 bytes and re-verified every hash.
+
+#### Fixed by the first live database run
+
+Both were invisible to offline DDL generation, which writes SQL without executing it.
+
+- **The migration could not apply at all.** `xbrl_fact.dimensions` used
+  `server_default="{}"`; SQLAlchemy emits a bare string server default as raw SQL, producing
+  `DEFAULT {}` — a syntax error. Now `server_default=text("'{}'::jsonb")`, matching the partial
+  index that had always spelled the literal correctly.
+- **The append-only test was vacuous.** It ran
+  `UPDATE xbrl_fact SET value_as_filed = '1' WHERE false`. Zero rows match, and the guard is a
+  `FOR EACH ROW` trigger, so it never fired and the statement always succeeded — the test could
+  not fail whatever the schema did. Rewritten to insert a real fact and attempt to change its
+  filed value. Proven non-vacuous: dropping the trigger makes it fail. The trigger itself was
+  always correct.
+
+#### Still blocked
+
+- **The DERA TSV load into the fact lake** is the remaining Sprint 3 item. It was deferred behind
+  the database, which now exists.
 
 ---
 

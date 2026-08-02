@@ -1,6 +1,6 @@
 # SPRINT-0003: Acquire One Issuer's Filings and Establish Reproducible Fixtures
 
-STATUS: IN PROGRESS — acquisition complete, database work blocked
+STATUS: IN PROGRESS — acquisition, database, and backup complete; DERA TSV load remains
 DATE: 2026-08-01
 SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
 
@@ -54,10 +54,115 @@ The 71st `<Report>` is `All Reports`, `ReportType: Book` — the renderer's own 
 with no menu category, role, or file. So the filing has **70 real reports plus one navigation
 entry**. Counting it would put every downstream total off by one.
 
-### Blocked
+### PostgreSQL — done
 
-**PostgreSQL is unavailable, so step 1 did not run.** The two live migration tests still skip, and
-the DERA TSV load is deferred with them. See "Known issues" below for the exact commands.
+Installed locally rather than via Docker, whose containerd shim cannot start containers on this
+host. **PostgreSQL 18.4**, cluster at `/var/lib/postgres/data`, service `postgresql` active,
+`listen_addresses = localhost`.
+
+**On this development host, no database credential is stored.** Authentication is `peer` over
+the Unix socket with a `pg_ident` map from the local OS user to the `fintek` role, so there is no
+password in a file and no SCRAM verifier in `pg_authid`. `DATABASE_URL` carries a role name and a
+socket path, neither of which is a secret.
+
+**This is a local-development arrangement and says nothing about deployment.** Peer
+authentication works because the client and the server share a host and a kernel that can vouch
+for the connecting UID. A deployed database will not have that property and will need its own
+mechanism — managed credentials, IAM authentication, or client certificates. That decision has
+not been made and must not be inferred from this configuration.
+
+| Operation | Result |
+|---|---|
+| `alembic upgrade head` | exit 0, 24 domain tables created |
+| `alembic downgrade base` | exit 0, 0 domain tables; only `alembic_version` remains |
+| `alembic upgrade head` | exit 0, 24 domain tables, revision `0001_initial (head)` |
+| Live schema | see the catalog table below |
+| **Full suite** | **203 passed, 0 skipped** |
+
+The two tests that had never executed in this project now pass:
+`test_upgrade_then_downgrade_round_trips` and `test_filed_fact_cannot_be_updated`.
+
+#### Live schema, counted from the PostgreSQL catalog
+
+Every figure below is restricted to the `public` schema. System schemas are excluded.
+
+| Object | Count | Counting method |
+|---|---|---|
+| Domain tables | **24** | `pg_class` `relkind='r'`, excluding `alembic_version` |
+| User tables total | **25** | the same, including `alembic_version` |
+| Primary-key constraints | 25 | `pg_constraint` `contype='p'` |
+| Unique constraints | 19 | `contype='u'` |
+| Foreign-key constraints | 29 | `contype='f'` |
+| Check constraints | **23** | `contype='c'` |
+| Explicit indexes | **37** | indexes not backing a PK or UNIQUE constraint |
+| Indexes total | **81** | `pg_indexes`; 25 PK-backing + 19 unique-backing + 37 explicit |
+| Partial indexes | 7 | `pg_index.indpred IS NOT NULL` |
+| User triggers | 1 | `pg_trigger`, non-internal |
+
+**Two counting methods exist and they are not interchangeable.**
+
+*Model metadata* comes from SQLAlchemy reflection or `Base.metadata`. It answers "what does the
+code declare?" and is what the structural tests assert against. Its index count omits
+primary-key-backing indexes, which is why reflection reports 56 where the catalog reports 81:
+`81 − 25 PK-backing = 56`.
+
+*Catalog counts* come from `pg_class`, `pg_constraint`, `pg_indexes`. They answer "what actually
+exists in this database?" and include objects PostgreSQL creates on its own behalf. Migration
+verification uses these.
+
+The 24-versus-25 table difference is **`alembic_version`**, which Alembic creates and the
+application does not model.
+
+An earlier draft of this record reported 25 check constraints. That figure came from a
+`pg_constraint` query with no schema filter, which swept in `cardinal_number_domain_check` and
+`yes_or_no_check` from `information_schema`. The application schema has **23**.
+
+### Two defects the live database exposed
+
+Both were invisible to offline DDL generation, which writes SQL text without ever sending it to
+a server.
+
+**1. The migration could not apply at all.** `xbrl_fact.dimensions` declared
+`server_default="{}"`. SQLAlchemy emits a bare string server default as *raw SQL*, so the DDL
+read `DEFAULT {}` — a syntax error. Corrected to `server_default=text("'{}'::jsonb")`, which
+matches the partial index below it that had always spelled the literal correctly.
+
+**2. The append-only test was vacuous.** It attempted
+`UPDATE xbrl_fact SET value_as_filed = '1' WHERE false`. `WHERE false` matches zero rows and the
+guard is a `FOR EACH ROW` trigger, so it never fired and the statement always succeeded. The test
+could not fail regardless of what the schema did. Rewritten to insert a real fact and attempt to
+change its filed value. Proven non-vacuous: dropping the trigger makes it fail, restoring it
+makes it pass.
+
+The trigger itself was always correct. Verified directly: an `UPDATE` of a filed value is
+rejected with *"xbrl_fact is append-only: a filed value, unit, scale, concept, or period may
+never be updated"*, the stored value is unchanged, and non-filed columns such as
+`is_latest_selected` remain updatable — which restatement handling requires.
+
+### URGENT-02 — discharged
+
+All twelve monthly DERA packages copied to a second, genuinely separate filesystem.
+
+| Item | Value |
+|---|---|
+| Packages | **12 of 12 verified** |
+| Bytes | 2,145,477,071 |
+| Source device / destination device | different, confirmed by `stat` |
+| Verification | source SHA-256 against the ledger, destination SHA-256 after copy, ZIP CRC on every member |
+| Second run | **0 bytes copied**, 2,145,477,071 reused, every hash re-verified |
+| Source files | neither modified nor deleted |
+
+A manifest and a plain-text verification report sit beside the copy.
+
+**The destination mount is not persistent.** The backup lives on a second block device mounted at
+a path outside the repository, but `/etc/fstab` has no entry for it and there is no systemd mount
+unit — the unit systemd reports is a runtime object synthesised from the live mount table. After a
+reboot the device will not remount on its own and the path will be empty until someone mounts it.
+
+The copied data is unaffected: it is on the device, verified, and independent of the source disk.
+But **do not treat the backup path as automatically available.** Re-run the verification after any
+reboot before relying on it. Making the mount persistent is a one-line `fstab` change and has not
+been made, because modifying `/etc/fstab` was outside what was authorised.
 
 ---
 

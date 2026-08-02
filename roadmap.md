@@ -60,8 +60,8 @@ and nothing else.**
 | DERA live mirror | COMPLETE (78/78 packages, 25.36 GiB) |
 | LLM gateway, YAML boundary, payload compiler, boundary validator | IMPLEMENTED |
 | Mock model provider | IMPLEMENTED |
-| PostgreSQL schema and initial migration | IMPLEMENTED (offline-verified; live apply BLOCKED, no PostgreSQL) |
-| DERA TSV loading | BLOCKED (Sprint 3; needs PostgreSQL) |
+| PostgreSQL schema and initial migration | IMPLEMENTED and APPLIED to a live database (Sprint 3) |
+| DERA TSV loading | PLANNED (Sprint 3 remainder; PostgreSQL now available) |
 | Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
 | Canonical footnote grouping, stages 1 to 5 | PLANNED (Sprint 4) |
@@ -104,10 +104,19 @@ ACCEPTANCE CRITERIA: MET.
 ID:              URGENT-02
 DESCRIPTION:     Second durable copy of the twelve irreplaceable monthly DERA packages.
 PRIORITY:        P1
-STATUS:          OPEN
+STATUS:          COMPLETE  (Sprint 3, 2026-08-01)
 TARGET SPRINT:   3
-RATIONALE:       2.00 GiB of the mirror exists in exactly one place on one local disk and
-                 cannot be re-downloaded once SEC publishes the 2025q3 consolidation.
+COMPLETION EVIDENCE:
+    12 of 12 packages copied to a second, separate filesystem and verified.
+    2,145,477,071 bytes. Source device and destination device differ, confirmed by stat.
+    Every package: source SHA-256 verified against the mirror ledger, destination SHA-256
+    verified after copy, and ZIP CRC verified by reading every member.
+    Second run copied 0 bytes, reused 2,145,477,071, and re-verified every hash.
+    Source files were neither modified nor deleted.
+    Manifest and verification report written beside the copy.
+    CAVEAT: the destination mount is not persistent. No fstab entry exists, so the device
+    does not remount automatically after a reboot. The data is safe on a separate device;
+    the PATH is not guaranteed to be present. Re-verify after any reboot.
 ```
 
 ---
@@ -150,7 +159,7 @@ architecture tests exist to catch it.
 
 ### Sprint 3 — Acquire one issuer's filings and establish reproducible fixtures
 
-STATUS: IN PROGRESS — filings retrieved and reconciled; the database steps are blocked
+STATUS: IN PROGRESS — acquisition, database, and backup done; DERA TSV load remains
 DEPENDS ON: Sprint 2
 DETAILED PLAN AND OUTCOME: `docs/sprints/SPRINT-0003.md`
 
@@ -159,8 +168,12 @@ zero gaps). Inline-XBRL acquisition of the FY2025 10-K and three 10-Qs, 20 objec
 preserved with provenance, idempotent at zero requests on re-run. Committed fixtures with a
 source manifest. The item-disclosure exclusion list tested against real acquired data.
 
-BLOCKED. No PostgreSQL is reachable, so the migration is still unapplied, the two live tests
-still skip, and the DERA TSV load is deferred with them. Risk R-10.
+DONE SINCE. PostgreSQL 18.4 installed locally, using peer authentication over the Unix socket, so
+no password is stored for local work. Deployed authentication remains an open decision. The migration applies, downgrades, and reapplies against it. Both live
+migration tests now pass rather than skip: the suite reports 203 passed, 0 skipped. URGENT-02
+discharged with a verified second copy on a separate filesystem.
+
+REMAINING. The DERA TSV load into the fact lake, which was deferred behind the database.
 
 OBJECTIVE. End the condition where nothing has been retrieved. Get four real Apple filings into
 the system, preserved with provenance, and make the canonical-footnote result reproducible
@@ -194,7 +207,11 @@ EXIT CRITERIA. All of the above, on real fetched data.
 ### Sprint 4 — Reproduce and validate canonical-footnote extraction
 
 STATUS: NOT STARTED
-DEPENDS ON: Sprint 3
+DEPENDS ON: Sprint 3, which is still IN PROGRESS
+
+GATE. Sprint 4 does not begin until every Sprint 3 exit criterion is met. PostgreSQL, the live
+migration, both previously skipped tests, and URGENT-02 are done; the DERA TSV load is not.
+A database that merely runs is not the exit criterion.
 
 OBJECTIVE. Prove the footnote thesis in production code, against the fixtures, deterministically.
 
@@ -358,8 +375,8 @@ genuinely valuable and none is required to prove the product.
 | R-05 | Item-disclosure exclusion list drifts as SEC adds mandates | MEDIUM | `metric_definitions/item_disclosure_exclusions.yaml` with an unknown-namespace review policy | MITIGATED |
 | R-06 | SEC access policy may change | MEDIUM | Revalidate before each ingestion phase | OPEN |
 | R-07 | Scope-classifier false negatives leak Deep Analysis cost | MEDIUM | Detector measured independently in Sprint 7; budgets are the backstop | OPEN |
-| R-08 | Twelve irreplaceable DERA monthly packages exist in one location | HIGH | URGENT-02, Sprint 3 | OPEN |
-| R-10 | No PostgreSQL is reachable on the development machine, so the migration has never been applied and the two live tests have never run | HIGH | Needs an action outside the agent's reach; commands in SPRINT-0003 | OPEN |
+| R-08 | Twelve irreplaceable DERA monthly packages exist in one location | HIGH | URGENT-02 discharged: verified second copy on a separate filesystem | CLOSED |
+| R-10 | No PostgreSQL is reachable on the development machine | HIGH | PostgreSQL 18.4 installed and running; migration applied; both live tests pass | CLOSED |
 | R-09 | Unit economics unknown; the product may be unaffordable at corpus scale | HIGH | **Sprint 5 is an explicit go/no-go.** Previously unresolved until sprint ~20 | OPEN |
 
 ---
@@ -392,7 +409,8 @@ genuinely valuable and none is required to prove the product.
    though documents and footnote text reach the 1990s.
 5. No cost figure exists for any part of the corpus. Sprint 5 produces the first measured one.
    Any earlier number was withdrawn as unusable, see `docs/llm/cost-model.md`.
-6. The initial migration has not yet been applied to a live PostgreSQL. Sprint 3 does this first.
+6. Structured numeric history still requires the DERA TSV load, which is the remaining Sprint 3
+   item. The migration itself is now applied and verified against a live PostgreSQL.
 
 ---
 

@@ -20,11 +20,35 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = REPO_ROOT / "migrations" / "versions" / "0001_initial_control_plane_schema.py"
 VENV_PY = REPO_ROOT / ".venv" / "bin" / "python"
+# Last-resort default: the docker-compose stack, which sets this password on its container.
 DEFAULT_URL = "postgresql+psycopg://fintek:fintek@localhost:5432/fintek"
 
 
+def _database_url() -> str:
+    """Resolve the URL from the environment, then the project's .env, then the default.
+
+    Nothing in the suite loaded .env, so the URL had to be exported by hand before running
+    pytest. That was tolerable only while the compose default happened to match reality. Once a
+    local database moved to peer authentication the default became actively harmful: it points at
+    localhost:5432, the reachability probe finds a live server there, the test therefore RUNS
+    instead of skipping, and then fails on authentication. Reading .env makes `make test` work
+    from a clean shell and keeps the skip behaviour correct where no database exists at all.
+    """
+    from_env = os.environ.get("DATABASE_URL")
+    if from_env:
+        return from_env
+    env_file = REPO_ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("DATABASE_URL="):
+                value = line.split("=", 1)[1].strip()
+                if value:
+                    return value
+    return DEFAULT_URL
+
+
 def _database_reachable() -> bool:
-    url = os.environ.get("DATABASE_URL", DEFAULT_URL)
+    url = _database_url()
     parsed = urlparse(url.replace("postgresql+psycopg", "postgresql"))
     host, port = parsed.hostname or "localhost", parsed.port or 5432
     try:
@@ -208,7 +232,7 @@ def test_llm_invocation_constrains_content_format() -> None:
 
 def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
-    env.setdefault("DATABASE_URL", DEFAULT_URL)
+    env.setdefault("DATABASE_URL", _database_url())
     return subprocess.run(
         [str(VENV_PY), "-m", "alembic", *args],
         cwd=REPO_ROOT,
@@ -248,7 +272,7 @@ def test_upgrade_then_downgrade_round_trips() -> None:
     """Apply, verify tables exist, roll back, verify they are gone."""
     from sqlalchemy import create_engine, inspect, text
 
-    url = os.environ.get("DATABASE_URL", DEFAULT_URL)
+    url = _database_url()
     engine = create_engine(url)
 
     assert _alembic("upgrade", "head").returncode == 0
@@ -269,11 +293,94 @@ def test_upgrade_then_downgrade_round_trips() -> None:
 
 @requires_database
 def test_filed_fact_cannot_be_updated() -> None:
-    """FINANCIAL-INVARIANT proven against a real database, not merely asserted in a comment."""
+    """FINANCIAL-INVARIANT proven against a real database, not merely asserted in a comment.
+
+    CORRECTED in Sprint 3, on this test's first ever execution. The original body was:
+
+        with engine.begin() as connection, pytest.raises(Exception, match="append-only"):
+            connection.execute(text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE false"))
+
+    `WHERE false` matches zero rows, and the guard is a FOR EACH ROW trigger, so it never fired
+    and the statement succeeded. The test could not fail no matter what the schema did. It had
+    never run, because no PostgreSQL was reachable until now, so the defect was invisible.
+
+    The replacement inserts a real fact and tries to change its filed value, which is the thing
+    the invariant actually protects.
+    """
+    import uuid
+
     from sqlalchemy import create_engine, text
 
-    url = os.environ.get("DATABASE_URL", DEFAULT_URL)
+    url = _database_url()
     engine = create_engine(url)
     assert _alembic("upgrade", "head").returncode == 0
-    with engine.begin() as connection, pytest.raises(Exception, match="append-only"):
-        connection.execute(text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE false"))
+
+    issuer_id, filing_id, fact_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    original = "416161000000"
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO issuer (issuer_id, cik, legal_name, is_active) "
+                    "VALUES (:i, '0000320193', 'Apple Inc.', true)"
+                ),
+                {"i": issuer_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO filing (filing_id, issuer_id, cik, accession, form, filing_date,"
+                    " is_amendment, is_xbrl, is_inline_xbrl, era, processing_state,"
+                    " footnote_status, reconciliation_status)"
+                    " VALUES (:f, :i, '0000320193', '0000320193-25-000079', '10-K', '2025-10-31',"
+                    " false, true, true, 'inline_xbrl', 'DISCOVERED', 'NOT_STARTED',"
+                    " 'NOT_ATTEMPTED')"
+                ),
+                {"f": filing_id, "i": issuer_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO xbrl_fact (fact_id, issuer_id, cik, filing_id, accession, form,"
+                    " filing_date, taxonomy, namespace, concept, value_as_filed, unit, scale,"
+                    " sign, period_type, period_start, period_end, source_dataset, filed_at,"
+                    " is_latest_selected, validation_status)"
+                    " VALUES (:x, :i, '0000320193', :f, '0000320193-25-000079', '10-K',"
+                    " '2025-10-31', 'us-gaap', 'http://fasb.org/us-gaap/2025', 'Revenues',"
+                    " :v, 'USD', 0, 1, 'duration', '2024-09-29', '2025-09-27', 'dera',"
+                    " '2025-10-31T00:00:00Z', true, 'VALID')"
+                ),
+                {"x": fact_id, "i": issuer_id, "f": filing_id, "v": original},
+            )
+
+        # Confirm the row is really there and committed before attacking it. Without this the
+        # test could pass against an empty table, which is exactly how the original failed.
+        with engine.connect() as connection:
+            before = connection.execute(
+                text("SELECT value_as_filed FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id}
+            ).scalar()
+        assert before == original, "the fact was not committed; the update would target no row"
+
+        # The filed value is immutable. A restatement appends a new row instead.
+        with engine.begin() as connection, pytest.raises(Exception, match="append-only"):
+            connection.execute(
+                text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE fact_id = :x"),
+                {"x": fact_id},
+            )
+
+        with engine.begin() as connection:
+            stored = connection.execute(
+                text("SELECT value_as_filed FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id}
+            ).scalar()
+            assert stored == original, "the filed value changed despite the trigger"
+
+            # The guard protects the FILED value, not the whole row: selection bookkeeping
+            # must still be updatable or restatement handling could never record a winner.
+            connection.execute(
+                text("UPDATE xbrl_fact SET is_latest_selected = false WHERE fact_id = :x"),
+                {"x": fact_id},
+            )
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id})
+            connection.execute(text("DELETE FROM filing WHERE filing_id = :f"), {"f": filing_id})
+            connection.execute(text("DELETE FROM issuer WHERE issuer_id = :i"), {"i": issuer_id})

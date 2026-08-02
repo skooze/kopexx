@@ -313,6 +313,20 @@ blocks production. Speculative TODOs are prohibited.
 - **Restatements.** Append a new observation; recompute selection separately.
 - **Concept priority is a financial-accuracy artifact.** Changing the order of a metric's
   concept list changes reported growth rates. Review it like code.
+- **An applied migration is sealed.** Once a migration has been applied to any database that is
+  not disposable, it is never edited in place, never regenerated, and never deleted. Schema
+  changes come as a new revision. Editing an applied migration leaves every database that already
+  ran it silently diverged from the file that claims to describe it, and the divergence is
+  invisible until something fails much later.
+
+```
+SEALED MIGRATIONS
+
+0001_initial   applied to a live PostgreSQL on 2026-08-01 (Sprint 3). SEALED.
+               scripts/generate_initial_migration.py must never be run again: it rewrites this
+               file in place. It exists only as the record of how the revision was first
+               produced, in an environment that had no database to autogenerate against.
+```
 
 ---
 

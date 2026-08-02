@@ -11,6 +11,11 @@ Deep Analysis sessions, and model invocation audit.
 
 Generated deterministically from packages.persistence metadata rather than by --autogenerate,
 because the authoring environment had no PostgreSQL available. See docs/sprints/SPRINT-0002.md.
+
+SEALED. This revision was applied to a live PostgreSQL on 2026-08-01 (Sprint 3). Do not edit it,
+do not regenerate it with scripts/generate_initial_migration.py, and do not delete it. Any schema
+change from here is a NEW revision. Editing this file would leave every database that already ran
+it diverged from the file that claims to describe it, with nothing to detect the difference.
 """
 
 from __future__ import annotations
@@ -695,7 +700,7 @@ def upgrade() -> None:
             "dimensions",
             postgresql.JSONB(astext_type=Text()),
             nullable=False,
-            server_default=sa.text("{}"),
+            server_default=sa.text("'{}'::jsonb"),
         ),
         sa.Column("segment", sa.Text(), nullable=True),
         sa.Column("coregistrant", sa.Text(), nullable=True),

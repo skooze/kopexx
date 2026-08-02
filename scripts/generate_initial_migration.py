@@ -7,6 +7,11 @@ Base.metadata instead. The output is a normal Alembic revision: reviewable, reve
 identical to what autogenerate would emit against an empty database.
 
 Run once. Subsequent migrations use --autogenerate against a live database.
+
+DO NOT RUN THIS AGAIN. Revision 0001_initial was applied to a live PostgreSQL on 2026-08-01 and
+is sealed (rules.md, section 8). This script rewrites that file in place, so running it would
+silently diverge the tracked revision from every database that already applied it. It is kept as
+the record of how the revision was first produced, not as a tool to re-run.
 """
 
 from __future__ import annotations

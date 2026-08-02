@@ -34,6 +34,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -616,7 +617,14 @@ class XbrlFact(Base, TimestampMixin):
     duration_months: Mapped[int | None] = mapped_column(
         Integer, comment="computed at ingest; charts filter on it"
     )
-    dimensions: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # A bare string server_default is emitted by SQLAlchemy as RAW SQL, so server_default="{}"
+    # produced `DEFAULT {}`, which is a syntax error. It went unnoticed because offline DDL
+    # generation only writes the statement out; nothing parsed it until the migration was first
+    # applied to a real database in Sprint 3. The cast is what makes it a jsonb literal, and it
+    # matches the partial index below, which already spelled it correctly.
+    dimensions: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     segment: Mapped[str | None] = mapped_column(Text)
     coregistrant: Mapped[str | None] = mapped_column(Text)
     statement_role: Mapped[str | None] = mapped_column(Text)

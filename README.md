@@ -16,7 +16,8 @@ actually exists.
 
 ## Status
 
-Sprint 2 is complete, plus an alignment review and a CI repair. Sprint 3 hasn't started.
+Sprint 3 is in progress. Filing retrieval, the live database, and the DERA backup are done;
+the DERA TSV load into the fact lake is what remains.
 
 What's implemented:
 
@@ -28,7 +29,8 @@ What's implemented:
 - A complete local mirror of the SEC DERA Financial Statement and Notes datasets — 78 packages,
   25.36 GiB, hash- and CRC-verified
 - The LLM gateway and content boundary, with a mock provider
-- A 24-table PostgreSQL schema and its initial migration
+- A 24-table PostgreSQL schema, applied and verified against a live database
+- Filing discovery and inline-XBRL acquisition; four real Apple filings held with provenance
 
 What's next, in [Sprints 3–7](roadmap.md): retrieve one issuer's filings and build reproducible
 fixtures, extract canonical footnotes, run real-model summarization and measure what it costs,
@@ -36,21 +38,21 @@ build the read API and dashboard, then filing-scoped Deep Analysis. The idea is 
 working end to end before widening to the full issuer universe — see
 [ADR-0015](docs/adr/ADR-0015-thread-first-delivery-sequence.md).
 
-What doesn't exist: **no SEC filing has been retrieved yet.** No footnotes extracted, no summaries
-generated, no dashboard, no Deep Analysis, nothing deployed. The migration hasn't been applied to
-a live database — that's the first task in Sprint 3.
+What doesn't exist: no footnotes extracted, no summaries generated, no dashboard, no Deep
+Analysis, nothing deployed.
 
 Current local validation:
 
 ```
-201 tests passing, 2 skipped
+203 tests passing, 0 skipped
 92% coverage on the implemented packages (85% gate)
 mypy clean across 53 source files
 ruff format and lint clean
 ```
 
-The two skips are live-PostgreSQL migration tests; they skip with an explicit reason when no
-database is reachable. Everything else runs without one. CI is green on `main`.
+Every test executes; there are no skips. The two live-database migration tests need a local
+PostgreSQL — see below — and skip with an explicit reason if one isn't running. CI is green on
+`main`, where they do skip because the workflow has no database service.
 
 ## Getting started
 
@@ -63,9 +65,17 @@ make check            # format, lint, types, tests, migration reversibility
 `make check` is the gate. It's the same set of commands CI runs — the Makefile is the only place
 they're defined, so the two can't drift.
 
-You don't need Docker or a database for the test suite. If you want the local stack (Postgres,
-MinIO, Redis) for migration work, `make up` starts it; that needs the Docker Compose plugin
-installed.
+Most of the suite needs no database. Two migration tests do, and skip cleanly without one. For
+those, either `make up` (needs the Docker Compose plugin) or a local PostgreSQL using peer
+authentication over the Unix socket, which needs no stored password for local work:
+
+```
+DATABASE_URL=postgresql+psycopg://fintek@/fintek?host=/run/postgresql
+```
+
+Peer authentication relies on the client and server sharing a host, so it suits local
+development only. How a deployed database authenticates is not decided yet, and nothing here
+should be read as that answer.
 
 No model credentials are needed either. The default provider is an in-process mock that exercises
 the full gateway path offline.

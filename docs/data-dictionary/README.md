@@ -2,7 +2,7 @@
 
 IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2).
 
-24 tables, 36 indexes, 93 constraints. Models in `packages/persistence/models.py`; migration in
+24 domain tables. Models in `packages/persistence/models.py`; migration in
 `migrations/versions/0001_initial_control_plane_schema.py`.
 
 ## Conventions
@@ -80,7 +80,36 @@ Every citation names one of these plus an identifier, so a claim's provenance is
 
 ## Tables
 
-24 tables. Full column definitions in `packages/persistence/models.py` and the initial migration.
+24 domain tables. Full column definitions in `packages/persistence/models.py` and the initial
+migration.
+
+### Counting the schema
+
+Two methods, both useful, not interchangeable. They agree once `alembic_version` is accounted for.
+
+| Object | Model metadata | Live catalog (`public`) |
+|---|---|---|
+| Tables | 24 | 24 domain, 25 including `alembic_version` |
+| Explicit indexes | 37 | 37 |
+| of which partial | 7 | 7 |
+| Check constraints | 23 | 23 |
+| Unique constraints | 19 | 19 |
+| Foreign-key constraints | 29 | 29 |
+| Primary-key constraints | 24 | 25 (`alembic_version` has one) |
+| Indexes including constraint-backing | not modelled | 81 = 25 PK + 19 unique + 37 explicit |
+
+*Model metadata* is `Base.metadata` — what the code declares. The structural tests assert against
+it, and it is available with no database.
+
+*Live catalog* is `pg_class`, `pg_constraint`, `pg_indexes` restricted to `public`. It is what
+actually exists, including objects PostgreSQL creates on its own behalf. Migration verification
+uses it.
+
+Two traps when reading these numbers. SQLAlchemy reflection omits primary-key-backing indexes, so
+`inspect().get_indexes()` sums to 56, not 81 — the difference is exactly the 25 PK indexes. And a
+`pg_constraint` query without a schema filter picks up `cardinal_number_domain_check` and
+`yes_or_no_check` from `information_schema`, reporting 25 check constraints where the application
+has 23. Always filter on `nspname='public'`.
 Summary of ownership:
 
 | Table | Owns | Key invariant |

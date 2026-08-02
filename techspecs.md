@@ -4,8 +4,8 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 3, filing discovery and acquisition
-VERIFICATION: 201 tests passing and 2 skipped, 92 percent coverage on implemented packages, ruff
+LAST SYNCHRONIZED WITH CODE: Sprint 3, live database and DERA backup
+VERIFICATION: 203 tests passing and 0 skipped, 92 percent coverage on implemented packages, ruff
 format and lint clean across `packages tests scripts migrations`, mypy clean across 53 source
 files in `packages scripts migrations`, offline Alembic upgrade and downgrade, and pip-audit
 clean.
@@ -77,7 +77,7 @@ outbound side effect is a model invocation, which is metered and audited.
 | DERA bulk download | `dera_notes` + `sec_client` | IMPLEMENTED and EXECUTED (78/78 packages) |
 | DERA TSV load | `dera_notes` | PLANNED (Sprint 3) |
 | PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
-| Alembic migration | `migrations` | IMPLEMENTED (offline-verified; live apply PENDING Sprint 3) |
+| Alembic migration | `migrations` | IMPLEMENTED and APPLIED to a live PostgreSQL 18.4 |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
 | Filing discovery | `filing_discovery` | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | `filing_acquisition` | IMPLEMENTED (Sprint 3) |
@@ -281,7 +281,7 @@ failures, zero throttle events.
 
 RESPONSIBILITY. The PostgreSQL control-plane schema.
 
-SCOPE. 24 tables, 36 indexes, 93 constraints. Issuer identity with temporal validity, filings and
+SCOPE. 24 domain tables. In the live database: 23 check, 19 unique, 29 foreign-key and 25 primary-key constraints, and 37 explicit indexes (81 including constraint-backing). Issuer identity with temporal validity, filings and
 documents and sections and amendments, canonical footnotes with source blocks and tables, the
 append-only fact lake, metric definitions and derived values, versioned summaries, the ingest
 ledger, the DERA mirror ledger, Deep Analysis sessions and messages and memory, model invocation
