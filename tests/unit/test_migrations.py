@@ -243,11 +243,130 @@ def test_upgrade_generates_complete_ddl_offline() -> None:
 
 
 def test_downgrade_generates_complete_ddl_offline() -> None:
-    result = _alembic("downgrade", "0001_initial:base", "--sql")
+    result = _alembic("downgrade", "head:base", "--sql")
     assert result.returncode == 0, result.stderr[-2000:]
     sql = result.stdout
     assert sql.count("DROP TABLE") >= 24
     assert "DROP TRIGGER" in sql
+
+
+# --- the offline range must not go stale ----------------------------------------------------------
+#
+# `make migration-check` generated `downgrade 0001_initial:base` for as long as 0001 was the only
+# revision. Adding 0002 did not break it and did not fail it — alembic renders only the revisions
+# inside the range it is given, so the target kept exiting 0 while generating 25 statements, none of
+# which dropped an ownership column, constraint, or index. A reversibility check that silently stops
+# covering the newest migration is worse than none: it reports the property it no longer tests.
+#
+# The fix is a derived range, `head:base`. These tests hold it there.
+
+
+def _script_directory():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    return ScriptDirectory.from_config(Config(str(REPO_ROOT / "alembic.ini")))
+
+
+def _all_revisions() -> list[str]:
+    """Every revision from head down to base, newest first. Derived, never listed."""
+    script = _script_directory()
+    return [
+        revision.revision for revision in script.walk_revisions("base", script.get_current_head())
+    ]
+
+
+def _migration_check_recipe() -> list[str]:
+    """The command lines of the Makefile's migration-check target.
+
+    Read from the Makefile because the Makefile is the single definition of the suite: a test that
+    reimplemented the command would pass while CI ran something else.
+    """
+    lines = (REPO_ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("migration-check:"))
+    recipe = []
+    for line in lines[start + 1 :]:
+        if not line.startswith("\t"):
+            break
+        recipe.append(line.strip())
+    assert recipe, "migration-check has no recipe"
+    return recipe
+
+
+def test_migration_check_names_no_revision_id() -> None:
+    """THE ANTI-DRIFT GUARD. A hardcoded revision is how the previous range went stale.
+
+    Any migration id appearing in the recipe would pin the range to the revisions that exist today,
+    and the next migration would be excluded without a single test failing.
+    """
+    recipe = " ".join(_migration_check_recipe())
+    for revision in _all_revisions():
+        assert revision not in recipe, (
+            f"migration-check hardcodes revision {revision}; use a derived range such as head:base"
+        )
+    assert "head:base" in recipe, "the downgrade range must start at head"
+    assert "base:head" in recipe, "the upgrade range must end at head"
+
+
+def test_migration_check_downgrade_starts_at_the_current_head() -> None:
+    """The range the Makefile uses must resolve to the head alembic reports right now."""
+    head = _script_directory().get_current_head()
+    assert head == "0002_table_ownership", "head moved; the expectations below need re-measuring"
+
+    from_head = _alembic("downgrade", "head:base", "--sql")
+    from_explicit = _alembic("downgrade", f"{head}:base", "--sql")
+    assert from_head.returncode == 0, from_head.stderr[-2000:]
+    assert from_explicit.returncode == 0, from_explicit.stderr[-2000:]
+    assert from_head.stdout == from_explicit.stdout
+
+
+def test_every_revision_contributes_downgrade_sql() -> None:
+    """Not "the newest one is included" — every revision between head and base."""
+    result = _alembic("downgrade", "head:base", "--sql")
+    assert result.returncode == 0, result.stderr[-2000:]
+
+    revisions = _all_revisions()
+    assert len(revisions) >= 2, "with one revision this test cannot detect an omitted range"
+    for revision in revisions:
+        assert f"Running downgrade {revision}" in result.stdout, (
+            f"{revision} contributes no downgrade SQL; the offline range excludes it"
+        )
+
+
+def test_the_offline_downgrade_removes_the_table_ownership_objects() -> None:
+    """0002's own operations, named. This is what the previous range omitted entirely."""
+    sql = _alembic("downgrade", "head:base", "--sql").stdout
+
+    assert "DROP INDEX ix_footnote_table_unresolved" in sql
+    for constraint in (
+        "ck_footnote_table_ownership_matches_footnote",
+        "ck_footnote_table_ownership_kind_is_known",
+    ):
+        assert f"DROP CONSTRAINT {constraint}" in sql
+    for column in ("ownership_evidence", "ownership_method", "ownership_kind"):
+        assert f"DROP COLUMN {column}" in sql
+
+    # Reverse dependency order: 0002 unwinds before 0001 drops the table it altered.
+    assert sql.index("Running downgrade 0002_table_ownership") < sql.index(
+        "Running downgrade 0001_initial"
+    )
+    assert sql.index("DROP COLUMN ownership_kind") < sql.index("DROP TABLE footnote_table")
+
+
+def test_the_superseded_range_is_demonstrably_insufficient() -> None:
+    """Non-vacuity. The old command must be shown to omit what the new one covers.
+
+    Without this, `head:base` passing proves only that some range works, not that the range it
+    replaced was broken.
+    """
+    superseded = _alembic("downgrade", "0001_initial:base", "--sql")
+    corrected = _alembic("downgrade", "head:base", "--sql")
+    assert superseded.returncode == 0, "the old command exited non-zero for an unrelated reason"
+
+    assert "ownership_kind" not in superseded.stdout
+    assert "Running downgrade 0002_table_ownership" not in superseded.stdout
+    assert "ownership_kind" in corrected.stdout
+    assert len(corrected.stdout) > len(superseded.stdout)
 
 
 # --- live database, ISOLATED TARGET ---------------------------------------------------------------

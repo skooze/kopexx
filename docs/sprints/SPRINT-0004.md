@@ -6,8 +6,9 @@ DEPENDS ON: Sprint 3 (COMPLETE, pushed as `bc9aeb6`)
 SEQUENCING: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
 ALGORITHM: `docs/footnotes/canonicalization-algorithm.md`, stages 1 through 5 only
 
-NOT COMMITTED. Sprint completion and committing are separate; `rules.md` section 15 requires
-explicit approval for each commit.
+COMMITTED as `468d0f2` and pushed to `origin/main` on 2026-08-02, each step separately approved.
+A post-closeout hardening correction follows the sprint body; it changed no Sprint 4 behaviour and
+no measured result below.
 
 ---
 
@@ -443,11 +444,86 @@ Application database: `issuer=1 filing=4 xbrl_fact=2845` before and after. No fi
 No AWS operation, credential, or SDK. No model invocation. Zero root-owned repository files.
 Temporary run reports under the ignored `var/`.
 
-## Proposed commit
+## Commit
 
-Prepared, not created. `rules.md` section 15 requires explicit approval.
+Approved and created as `468d0f2b11db0d4622e2ab1c0c1966cd70a77288` — 41 files, 23,943 insertions,
+8 deletions — then separately approved and pushed to `origin/main`. CI run 30736026829: overall
+`success`, 559 passed, 0 skipped, coverage 93.45%.
 
 Subject: `Extract and reconcile canonical footnotes for one issuer`
+
+---
+
+## Closeout hardening (post-commit, 2026-08-02)
+
+Reading the CI log of that push — not a failing test — surfaced three gaps. None is a Sprint 4
+defect in behaviour, and none changes a measurement above. All three are the same shape: **a check
+that reported a property it was no longer testing.**
+
+### 1. The 10-Q results were measured but not asserted
+
+CI proved the three 10-Qs' *table-ownership* census. Their canonical-footnote and attached-child
+counts existed only in this document. The numbers were right; nothing would have caught them
+becoming wrong.
+
+`tests/unit/test_ten_q_regression.py` now asserts, per quarter, exactly what was measured:
+
+| Filing | Cand. | Notes | Excl. | Children | Attached | Orphans | Ambig. | Status |
+|---|---|---|---|---|---|---|---|---|
+| `0000320193-25-000008` | 12 | 10 | 2 | 23 | 23 | 0 | 0 | `COMPLETE` |
+| `0000320193-25-000057` | 12 | 10 | 2 | 23 | 23 | 0 | 0 | `COMPLETE` |
+| `0000320193-25-000073` | 12 | 10 | 2 | 25 | 25 | 0 | 0 | `COMPLETE` |
+
+Per-note distribution, in filed order — Q1 and Q2 identical, Q3 differing by exactly two blocks on
+the debt note:
+
+```
+Q1, Q2   1, 4, 2, 4, 3, 1, 1, 4, 0, 3
+Q3       1, 4, 2, 4, 3, 3, 1, 4, 0, 3
+```
+
+`Contingencies` carries zero child blocks in every quarter. That is a property of these filings,
+not a defect, and it is asserted so a change that starts inventing children for it fails.
+
+Six mutation proofs, including the two a total cannot catch: a child attached to the wrong note,
+and a correct total spread wrongly. `tests/integration/test_ten_q_persistence.py` adds the database
+half — an identical rerun of each quarter inserts 0, updates 0, digest byte-identical.
+
+**Displayed note numbers are not asserted.** They come from `Note N —` headings in the primary
+document, which is not a committed fixture; the tests synthesize headings, exactly as the 10-K
+regression always has, and assert filed order, filed titles, and ordinal position instead.
+
+### 2. `make migration-check` had stopped covering `0002`
+
+The recipe generated `downgrade 0001_initial:base`. That was correct while `0001` was the only
+revision and wrong from the moment `0002` existed: Alembic renders only the revisions inside the
+given range, so the target exited 0 while producing 25 statements — **zero** of them dropping an
+ownership column, constraint, or index.
+
+```
+was   alembic upgrade head --sql                 alembic downgrade 0001_initial:base --sql
+now   alembic upgrade base:head --sql            alembic downgrade head:base --sql
+```
+
+25 → 31 DDL statements. `head:base` is derived, so a future migration cannot be excluded by
+forgetting to edit a line. Four tests hold it, one of which reads the recipe out of the Makefile so
+a test cannot pass while CI runs something else, and one of which proves the superseded range was
+insufficient rather than merely proving the new one works.
+
+The live `fintek_test` round trip already exercised `0002`'s downgrade and is unchanged — which is
+why this was a reporting defect rather than a broken migration.
+
+### 3. CI ran on a deprecated Node runtime
+
+`actions/checkout@v4` and `actions/setup-python@v5` both declare `runs.using: node20`. Every run
+emitted a deprecation notice and nothing failed. Verified against the official repositories at
+their tags: checkout is `node24` from v5, setup-python from v6, and v7 is the current major of
+both. All four occurrences moved to `@v7`.
+
+`tests/architecture/test_ci_workflow.py` parses the workflow YAML and fails if a Node 20 major
+returns, if `fetch-depth: 0` leaves the security checkout, if permissions widen, or if the database
+isolation gate is dropped. Checked on parsed values, never on file text: a comment promising
+`fetch-depth: 0` greps identically to the setting.
 
 ## Next sprint
 

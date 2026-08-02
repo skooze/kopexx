@@ -46,7 +46,7 @@ help:
 	@echo "test             full suite"
 	@echo "test-no-skips    full suite, failing if any test skipped (CI has a database)"
 	@echo "coverage         suite with a coverage report and the 85% gate"
-	@echo "migration-check  offline alembic upgrade and downgrade generation"
+	@echo "migration-check  offline alembic generation, base to head and head to base"
 	@echo "db-upgrade       apply migrations to the application database (DATABASE_URL)"
 	@echo "db-create-test   create the disposable database for destructive tests"
 	@echo "db-upgrade-test  apply migrations to the disposable test database"
@@ -134,10 +134,19 @@ test-summary:
 	@test -f $(TEST_LOG) || { echo "no recorded run; run 'make test' or 'make test-no-skips' first" >&2; exit 1; }
 	@grep -E '^=*[0-9]+ (passed|failed|error)|[0-9]+ (passed|failed|error).* in ' $(TEST_LOG) | tail -1
 
-# Offline migration reversibility. Needs no database: --sql generates DDL without connecting.
+# Offline migration reversibility, base to head and back again. Needs no database: --sql generates
+# DDL without connecting.
+#
+# BOTH RANGES ARE DERIVED, NEVER HARDCODED. The downgrade used to read `0001_initial:base`. That was
+# correct while 0001 was the only revision and silently stopped covering anything new the moment
+# 0002 arrived: alembic renders only the revisions inside the range it is given, so the target
+# reported green while generating none of 0002's downgrade SQL — 25 statements, zero of them
+# touching table ownership. `head:base` spans every revision that exists, including ones not written
+# yet, so a future migration cannot be excluded by forgetting to edit this line.
+# tests/unit/test_migrations.py enforces that this recipe names no revision id.
 migration-check:
-	$(ALEMBIC) upgrade head --sql > /dev/null
-	$(ALEMBIC) downgrade 0001_initial:base --sql > /dev/null
+	$(ALEMBIC) upgrade base:head --sql > /dev/null
+	$(ALEMBIC) downgrade head:base --sql > /dev/null
 
 # The gate a sprint must pass. Documentation synchronization is verified by review, not by make.
 check: fmt-check lint typecheck test migration-check

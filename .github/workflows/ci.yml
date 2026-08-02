@@ -67,10 +67,22 @@ jobs:
       DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek
       TEST_DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek_test
 
+    # OFFICIAL ACTIONS ARE PINNED TO A REVIEWED MAJOR TAG, matching how every other dependency in
+    # this repository is handled. The third-party scanner in the security job is stricter — a fixed
+    # release plus a checksum — because it is not maintained by GitHub.
+    #
+    # checkout@v4 and setup-python@v5 both declare `runs.using: node20`, which GitHub has
+    # deprecated; every run emitted a deprecation notice. Verified against the official
+    # repositories: checkout is node24 from v5 onward and setup-python from v6 onward, and v7 is
+    # the current major of both. Neither v7 change affects this workflow — checkout v7 restricts
+    # fork checkouts under `pull_request_target`/`workflow_run`, which this workflow does not use,
+    # and setup-python v7 removed a `pip-install` input this workflow never set.
+    #
+    # tests/architecture/test_ci_workflow.py parses this file and fails if a node20 major returns.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -137,7 +149,9 @@ jobs:
       - name: Architecture tests
         run: make test-architecture
 
-      # Offline DDL generation. Needs no database; proves the migration is reversible.
+      # Offline DDL generation across the full revision range, base to head and head to base.
+      # Needs no database. The range is derived from the head revision, so a new migration is
+      # covered without editing anything here or in the Makefile.
       - name: Migration reversibility
         run: make migration-check
 
@@ -154,7 +168,7 @@ jobs:
     steps:
       # SECURITY-INVARIANT: fetch-depth 0. A shallow clone cannot be scanned for secrets in
       # history, and the first CI run checked out with depth 1.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -192,7 +206,7 @@ jobs:
             --no-banner \
             --exit-code 1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

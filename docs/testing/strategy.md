@@ -167,6 +167,17 @@ Two further anti-vacuity results are recorded rather than assumed:
 
 A test whose failure has never been observed is a claim, not a guard.
 
+### A measured result nobody asserted
+
+Sprint 4 measured all four filings but only the 10-K's note and attachment counts were written into
+a test. CI proved the three 10-Qs' *table ownership* census while their canonical-footnote and
+attached-child counts lived only in the sprint record. Nothing was wrong — the numbers were right —
+but a number no test reads is a claim, and it would have drifted silently.
+
+`tests/unit/test_ten_q_regression.py` and `tests/integration/test_ten_q_persistence.py` close that
+gap. The pattern generalizes: **when a sprint records a measurement, the same commit must put it
+somewhere a test can fail on it.**
+
 ## One suite, two callers
 
 The Makefile is the **single definition** of every validation command. CI invokes the same
@@ -179,7 +190,7 @@ diverge. `rules.md` section 17 requires this reconciliation; before it existed, 
 | `make fmt-check` / `make lint` | `packages tests scripts migrations` |
 | `make typecheck` | `packages scripts migrations` |
 | `make test-unit` / `test-integration` / `test-architecture` | the three layers separately, as CI runs them |
-| `make migration-check` | offline Alembic upgrade and downgrade generation |
+| `make migration-check` | offline Alembic generation, `base:head` and `head:base` |
 | `make coverage` | the suite with the 85 percent gate |
 | `make check` | everything above except coverage |
 
@@ -288,9 +299,49 @@ test_prompts_do_not_request_prohibited_output_formats
 test_every_package_exposes_a_public_interface
 ```
 
+The workflow itself is an architecture surface, in `tests/architecture/test_ci_workflow.py`. Every
+check there reads the **parsed YAML** — the `uses:`, `with:`, and `permissions:` values GitHub acts
+on — never the file's text: a comment promising `fetch-depth: 0` greps identically to the setting,
+and only one of them clones any history.
+
+```
+test_no_official_action_runs_on_a_deprecated_node_runtime
+test_official_actions_come_from_the_official_repositories
+test_the_security_checkout_still_fetches_full_history
+test_the_workflow_keeps_least_privilege_permissions
+test_the_quality_job_keeps_its_database_and_isolation_gate
+test_the_workflow_runs_the_makefile_rather_than_its_own_commands
+test_ordinary_ci_acquires_no_aws_identity
+```
+
+The runtime floor is a floor, not an exact version: `actions/checkout` runs Node 24 from v5 and
+`actions/setup-python` from v6. Pinning the exact current major would fail on the next legitimate
+bump, which is a different problem from reintroducing a retired runtime.
+
 ### Migration
 
-PLANNED. Every migration applies forward and reverses cleanly on a populated database.
+IMPLEMENTED for offline generation and for the disposable-database round trip. Still PLANNED:
+reversal on a *populated* database, which needs a fixture dataset the round trip does not build.
+
+**The offline range is derived, never named.** `make migration-check` generates
+`upgrade base:head` and `downgrade head:base`. It used to generate `downgrade 0001_initial:base`,
+which was correct while 0001 was the only revision and silently stopped covering anything new when
+0002 arrived: Alembic renders only the revisions inside the range it is given, so the target kept
+exiting 0 while producing 25 statements, none of which dropped an ownership column, constraint, or
+index. The check reported a property it had stopped testing.
+
+Four tests in `tests/unit/test_migrations.py` hold the corrected range:
+
+```
+test_migration_check_names_no_revision_id             the Makefile recipe contains no revision id
+test_migration_check_downgrade_starts_at_the_current_head
+test_every_revision_contributes_downgrade_sql         every revision head..base emits SQL
+test_the_superseded_range_is_demonstrably_insufficient  the old range omits what the new one covers
+```
+
+The first reads the recipe out of the Makefile rather than restating the command, so a test cannot
+pass while CI runs something else. The last is the non-vacuity proof: without it, `head:base`
+passing would show only that some range works, not that the range it replaced was broken.
 
 ### Performance
 

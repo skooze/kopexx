@@ -15,7 +15,7 @@ the workflow has drifted and that is itself the defect to fix.
 ```
 make check            everything the quality job runs except coverage
 make coverage         the coverage gate
-make migration-check  offline Alembic upgrade and downgrade
+make migration-check  offline Alembic generation, base to head and head to base
 ```
 
 Tools resolve from `./.venv/bin` when present and from `PATH` otherwise, so the same target

@@ -8,7 +8,46 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 
 ## [Unreleased]
 
-### Sprint 4 — canonical footnote extraction (not yet committed)
+### Post-Sprint-4 hardening (not yet committed)
+
+Three gaps found by reading the CI log of the Sprint 4 push, not by a failing test. Sprint 4's
+behaviour is unchanged: no canonicalization, ownership, migration, or schema code was touched, and
+every measured result stands exactly as recorded.
+
+#### Added
+
+- `tests/unit/test_ten_q_regression.py` — the three FY2025 10-Qs asserted the way the 10-K already
+  was: candidates, notes, exclusions, child blocks, attachments, orphans, ambiguity, completeness,
+  filed order, filed titles, and the **per-note distribution**. Plus six mutation proofs, including
+  the two a total cannot catch — a child attached to the wrong note, and a correct total spread
+  wrongly.
+- `tests/integration/test_ten_q_persistence.py` — the database half: an identical rerun of each
+  quarter inserts 0, updates 0, and leaves a byte-identical persisted digest.
+- `tests/architecture/test_ci_workflow.py` — the workflow as an architecture surface, checked by
+  parsing the YAML rather than grepping it.
+- Four tests in `tests/unit/test_migrations.py` pinning the offline migration range to a derived
+  one, including a non-vacuity proof that the range it replaced was insufficient.
+
+#### Fixed
+
+- **`make migration-check` had silently stopped covering the newest migration.** The downgrade was
+  generated as `0001_initial:base` — correct while 0001 was the only revision, and wrong from the
+  moment 0002 existed. Alembic renders only the revisions inside the range it is given, so the
+  target kept exiting 0 while producing 25 statements, none of which dropped an ownership column,
+  constraint, or index. Now `upgrade base:head` and `downgrade head:base`: derived, so a future
+  migration is covered without editing anything. **A check that reports a property it has stopped
+  testing is worse than no check.**
+- **CI ran on a deprecated Node runtime.** `actions/checkout@v4` and `actions/setup-python@v5` both
+  declare `runs.using: node20`; every run emitted a deprecation notice and nothing failed. Verified
+  against the official repositories: checkout is Node 24 from v5, setup-python from v6, and v7 is
+  the current major of both. Both moved to `@v7`. Neither v7 change affects this workflow —
+  checkout v7 restricts fork checkouts under `pull_request_target`/`workflow_run`, which is not
+  used here, and setup-python v7 removed a `pip-install` input never set here.
+- **A measured result no test asserted.** CI proved the 10-Qs' table-ownership census while their
+  note and attachment counts existed only in the sprint record. The numbers were right; nothing
+  would have caught them becoming wrong.
+
+### Sprint 4 — canonical footnote extraction (committed as `468d0f2`)
 
 **The 13-not-58 correction is now production code**, measured against four preserved Apple filings
 rather than confirmed by inspection.
