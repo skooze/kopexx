@@ -66,10 +66,11 @@ this; the repository now holds four real Apple filings with full provenance.
 - **The two live migration tests now pass rather than skip.** The suite reports **203 passed,
   0 skipped** — the first run in this project where every test executed.
 - **No database credential is stored on this development host.** Authentication is `peer` over
-  the Unix socket with a `pg_ident` map, so there is no password in `.env` and no SCRAM verifier
-  in `pg_authid`. `DATABASE_URL` carries a role name and a socket path only. This is a
-  local-development arrangement; deployed authentication is undecided and does not follow from
-  it.
+  the Unix socket with a `pg_ident` map, so there is no password in `.env`. Verified directly
+  rather than assumed: `select rolpassword is null from pg_authid where rolname='fintek'` returns
+  true, so no SCRAM verifier exists for the role. `DATABASE_URL` carries a role name and a socket
+  path only. This is a local-development arrangement and says nothing about deployment, which is
+  undecided; CI deliberately uses a disposable password instead.
 - **URGENT-02 discharged.** All twelve monthly DERA packages, 2,145,477,071 bytes, copied to a
   separate filesystem and verified: source hash against the ledger, destination hash after copy,
   and ZIP CRC on every member. A second run copied 0 bytes and re-verified every hash.
@@ -89,10 +90,164 @@ Both were invisible to offline DDL generation, which writes SQL without executin
   filed value. Proven non-vacuous: dropping the trigger makes it fail. The trigger itself was
   always correct.
 
-#### Still blocked
+#### Completed last: the DERA fact load
 
-- **The DERA TSV load into the fact lake** is the remaining Sprint 3 item. It was deferred behind
-  the database, which now exists.
+**The fact lake holds real filed data.** 2,845 facts across Apple's FY2025 10-K and its three
+10-Qs, every one reconciled against the package it came from.
+
+- `packages/dera_notes` gained eight modules, one responsibility each: `selection` (which package
+  contains a filing, and archive completeness), `tsv` (parsing), `dimensions` (dimh to axis and
+  member), `normalize` (row to domain values), `validate` (domain rules), `registration` (the
+  issuer and filing rows the fact foreign keys require), `loader` (transaction, insertion, load
+  ledger, idempotency), `reconcile`, and `report`.
+- `scripts/load_dera_partition.py` orchestrates them and holds no parsing, validation, or SQL of
+  its own. It exits non-zero unless every reconciliation check passes.
+- `packages/persistence/engine.py`: the single home for resolving `DATABASE_URL`. Three places
+  had their own copy.
+- 96 tests, including a live-database integration suite proven non-vacuous by removing the
+  idempotency guard and watching the rerun test fail.
+
+| Filing | Facts | Consolidated | Package |
+|---|---|---|---|
+| `0000320193-25-000079` 10-K FY2025 | 967 | 547 | `2025_10_notes.zip` |
+| `0000320193-25-000073` 10-Q Q3 | 683 | 317 | `2025_08_notes.zip` |
+| `0000320193-25-000057` 10-Q Q2 | 672 | 309 | `2025q2_notes.zip` |
+| `0000320193-25-000008` 10-Q Q1 | 523 | 231 | `2025q1_notes.zip` |
+
+Reconciliation is nine checks per load, all passing. The strongest is the numeric total: the sum
+of every accepted `value_numeric` computed in Python matched PostgreSQL's own `sum()` exactly —
+34,808,176,701,339.3705 for the 10-K, a delta of zero against a rounding tolerance of 0.000967.
+A rerun re-reads the whole package, finds every natural key present, and inserts nothing.
+
+#### Fixed by the DERA load
+
+- **A derived quarter start was a day short.** `period_start` is derived, because DERA publishes
+  an end date and a quarter count and no start at all. Subtracting whole months and adding a day
+  clamps 30 June minus three months to 30 March, because March has 31 days, giving 31 March. The
+  error is invisible on annual periods ending 30 September and wrong on every quarter ending in a
+  30-day month. Caught by a unit test **after** the first load had already written 136 wrong rows;
+  those were deleted and reloaded. Now derived as the first day of the month `months - 1` earlier,
+  with a test asserting consecutive quarters tile the year with no gap and no overlap.
+- **A credential sat in a tracked file.** `migrations/env.py` defaulted to
+  `postgresql+psycopg://<user>:<password>@localhost:5432/<database>`, and `tests/unit/test_migrations.py`
+  carried the same string. Both now resolve through `packages/persistence/engine`. The default
+  was also actively harmful: against a cluster using peer authentication over a Unix socket it
+  made the reachability probe succeed, so the live tests **ran** instead of skipping and then
+  failed on authentication — which reads as a broken database rather than a wrong URL.
+- **`iter_rows` read whole members into memory.** A monthly `num.tsv` is 261 MB decompressed and
+  `txt.tsv` is 210 MB; `archive.read()` cost the bytes plus a decoded copy for data consumed one
+  row at a time. Now streamed through `TextIOWrapper`.
+- **The test suite destroyed the data it was run against.**
+  `test_upgrade_then_downgrade_round_trips` runs `alembic downgrade base`, dropping every
+  application table. On a development host holding a real load, `make check` deleted 2,845 facts
+  and reported green. Destructive tests now run against a separate disposable database; see the
+  new invariant below.
+- **An inter-test dependency, exposed by that fix.**
+  `test_filed_fact_cannot_be_updated` inserted its fixture using Apple's real CIK and accession,
+  both UNIQUE, so it failed as soon as the database held a real load. It had only ever passed
+  because the destructive test ran first and emptied every table. It now builds its own schema on
+  the disposable database and uses reserved identifiers, so it depends on no other test.
+- **Package ordering was accidental.** `locate_filing` sorted ledger periods as raw strings, which
+  compares `2025-10` against `2025Q3` by comparing `-` to `Q`. Both forms are now parsed to a year
+  and an end month, and a tie prefers the quarterly package — monthlies are deleted upstream, so a
+  load citing one becomes unreproducible once SEC consolidates.
+
+#### Measured
+
+- 969 rows in `num.tsv` carry the 10-K's accession; 967 became facts. The two rejections are
+  `CommitmentsAndContingencies` rows with no value — the shape DERA uses for a line-item label.
+  They are counted and reported, never silently dropped.
+- 894 of the 10-K's facts use `us-gaap`, 71 are issuer extensions, 2 are `dei`. 257 distinct
+  concepts. 488 instants and 479 durations.
+- A full load takes about 30 seconds, almost all of it counting rows in the other five members
+  for provenance.
+
+#### Added: TEST-DATABASE-ISOLATION-INVARIANT
+
+`rules.md` section 3 gains an eleventh non-negotiable invariant:
+
+> Destructive database tests must never operate on the configured application database. Migration
+> upgrade and downgrade tests run only against a dedicated disposable test database, and must fail
+> closed if the test target cannot be proven separate.
+
+- Two variables with no fallback between them: `DATABASE_URL` for the application database,
+  `TEST_DATABASE_URL` for destructive tests. A fallback works everywhere, quietly, until the day
+  the application database has something in it.
+- `packages/persistence/engine.assert_disposable` proves separateness before any destructive test
+  body runs. It compares parsed host, port, socket path, and database name — **not the configured
+  strings**, because `@localhost/fintek` and `@127.0.0.1:5432/fintek` are different strings and
+  the same database — and excludes credentials on purpose, so a destructive run cannot be
+  authorized by connecting as a different user. It further requires a `test` token in the name and
+  refuses `prod`, `production`, `live`, `master`, and `primary`.
+- A session hook in `tests/conftest.py` records `issuer`, `filing`, and `xbrl_fact` row counts
+  before the suite and fails the run if they change — from a dropped table or from a fixture row
+  left behind. Always on.
+- `scripts/create_test_database.py` with `make db-create-test`, `db-verify-isolation`,
+  `db-upgrade-test`, and `test-summary`.
+- 30 tests in `tests/unit/test_database_isolation.py`, each named after the specific way a weaker
+  guard still lets the deletion happen: substring matching designating `latest` disposable, a
+  credential difference masking an identical target, `prod_test` passing a naming check.
+- `docs/runbooks/test-database.md`, and a gitignored `var/local-tools/setup_test_database.sh` for
+  the one privileged local action — the `fintek` role has no CREATEDB and `pg_hba` scopes peer
+  authentication to the `fintek` database, both deliberate.
+
+#### Added: Markdown integrity checks
+
+`tests/architecture/test_documentation.py` — fences balanced, no heading trapped inside a code
+block, relative links resolve, no password-bearing database URL in prose, README headings render,
+README within its 700-to-1,200-word budget. Scans repository-owned files via `git ls-files`.
+Each check was proven to fire by introducing the corresponding defect.
+
+It found a pre-existing false positive in its own first form (a `#` shell comment inside a
+` ```bash ` block read as a swallowed heading) and a scoping bug (a directory walk pulling in a
+dependency's README), both corrected.
+
+#### Operational changes
+
+- CI runs a **PostgreSQL 18 service container** with a fixed, disposable, obviously
+  non-production password written openly in the workflow. It protects nothing: the container is
+  created and destroyed by one job, is reachable only from that job, and holds public SEC data. A
+  repository secret would imply the value is sensitive and add a rotation obligation for something
+  that cannot leak anything. It replaces `POSTGRES_HOST_AUTH_METHOD: trust`, which accepted any
+  connection with no password and therefore never exercised the authentication path the
+  application code takes. It is not a pattern for a deployed database, and how one will
+  authenticate remains undecided; the local host still uses peer authentication and stores no
+  password at all. The health check authenticates rather than probing the port, so the job waits
+  for a server that will actually accept the credential the tests use.
+- The job creates `fintek_test` explicitly — `POSTGRES_DB` creates exactly one database — and runs
+  `make db-verify-isolation` **before** any test, so a misconfiguration is caught before something
+  drops a table rather than after. No step echoes a URL: `db-verify-isolation` prints host, port,
+  and database name only.
+- `make test-summary` no longer reruns the suite. It reads `.pytest-last-run.log`, written by the
+  run that the zero-skip gate just enforced, so the reported counts come from that execution
+  rather than a second one.
+- `.env.example` no longer carries the former password-bearing localhost database URL. That was a
+  credential in a tracked file, which this project prohibits, and wrong for a peer-authenticated
+  cluster besides.
+- New Makefile targets `db-upgrade` and `test-no-skips`. The second sets `FINTEK_FORBID_SKIPS`,
+  which a hook in `tests/conftest.py` reads to fail a run that skipped anything, naming each test
+  and its reason. CI runs it. Proven to fire by adding a deliberate skip.
+- Test targets now pass `-ra` instead of `-q`. A skip was a bare `s` in a progress line, and
+  "203 passed, 2 skipped" read as success for two sprints while the only two tests exercising the
+  live schema had never executed.
+- `docs/runbooks/dera-backup-mount.md`: the backup device is still not persistent across reboots.
+  The runbook carries the exact `fstab` entry, why it must be by UUID and carry `nofail`, and the
+  post-reboot check. Applying it needs root and has not been done.
+
+#### Known limitations recorded, not worked around
+
+- **DERA period boundaries are approximations.** `ddate` is rounded to the nearest month end and
+  `qtrs` is a whole number of quarters; DERA publishes the residuals separately as `datp` and
+  `durp`. Apple's FY2025 ended 2025-09-27 and DERA records 2025-09-30. Every row this loader
+  writes is therefore `validation_status = 'UNVALIDATED'` — the exact filed boundaries live in
+  the XBRL instance, and because `xbrl_fact` is append-only, that later observation supersedes
+  these rows through the ordinary restatement path rather than overwriting them.
+- **Only the named filing is loaded, not the whole package.** `xbrl_fact` has foreign keys to
+  `issuer` and `filing`, so loading a monthly package outright would first require registering
+  thousands of issuers. That is Stage 2 phase W-1 and out of scope by ADR-0015.
+- **`filing.era` is left NULL by DERA registration.** DERA does not describe a filing's
+  acquisition era; `packages/filing_acquisition` owns that column and does not yet write to the
+  database.
 
 ---
 

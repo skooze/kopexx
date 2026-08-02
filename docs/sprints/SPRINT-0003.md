@@ -1,12 +1,15 @@
 # SPRINT-0003: Acquire One Issuer's Filings and Establish Reproducible Fixtures
 
-STATUS: IN PROGRESS — acquisition, database, and backup complete; DERA TSV load remains
+STATUS: COMPLETE — all thirteen acceptance criteria met; see the audit at the end
 DATE: 2026-08-01
 SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
 
+NOT COMMITTED. Sprint completion and committing are separate; `rules.md` section 15 requires
+explicit approval for each commit, and none has been requested or granted for this work.
+
 ---
 
-## Outcome so far
+## Outcome
 
 **Apple's filings are retrieved.** After three sprints in which nothing had been fetched from
 EDGAR, the repository now holds four real filings with full provenance.
@@ -20,7 +23,8 @@ EDGAR, the repository now holds four real filings with full provenance.
 | Re-acquisition | 0 downloaded, 20 reused, **0 requests** |
 | Throttle events | **0** across every run |
 | Fixture tree committed | 188.4 KiB, well under the 25 MB target |
-| Tests | 143 → **201 passing**, 2 skipped |
+| DERA facts loaded and reconciled | **2,845** across those four filings |
+| Tests | 143 → **337 passing**, 0 skipped |
 
 **The overflow path was not optional.** `filings.recent` returned exactly 1,000 entries, its
 documented cap, of which 45 were covered forms. The remaining **89 came from the overflow shard**.
@@ -62,8 +66,23 @@ host. **PostgreSQL 18.4**, cluster at `/var/lib/postgres/data`, service `postgre
 
 **On this development host, no database credential is stored.** Authentication is `peer` over
 the Unix socket with a `pg_ident` map from the local OS user to the `fintek` role, so there is no
-password in a file and no SCRAM verifier in `pg_authid`. `DATABASE_URL` carries a role name and a
-socket path, neither of which is a secret.
+password in a file. `DATABASE_URL` carries a role name and a socket path, neither of which is a
+secret.
+
+Verified against the catalog rather than assumed:
+
+```
+select rolname, rolpassword is null as no_verifier from pg_authid where rolname='fintek'
+fintek|t
+```
+
+`no_verifier` is true, so no SCRAM verifier exists for the role. `pg_authid` is superuser-only, so
+this required one privileged read; an unprivileged session cannot answer it — `pg_roles` masks
+`rolpassword` as `********` for every role whether or not one is set, and a rejected TCP login is
+consistent with either state.
+
+**This scoping matters.** It describes the local host only. CI deliberately uses a disposable
+password, and deployment authentication is undecided.
 
 **This is a local-development arrangement and says nothing about deployment.** Peer
 authentication works because the client and the server share a host and a kernel that can vouch
@@ -77,7 +96,7 @@ not been made and must not be inferred from this configuration.
 | `alembic downgrade base` | exit 0, 0 domain tables; only `alembic_version` remains |
 | `alembic upgrade head` | exit 0, 24 domain tables, revision `0001_initial (head)` |
 | Live schema | see the catalog table below |
-| **Full suite** | **203 passed, 0 skipped** |
+| **Full suite at that point** | **203 passed, 0 skipped** — the first run in this project where every test executed |
 
 The two tests that had never executed in this project now pass:
 `test_upgrade_then_downgrade_round_trips` and `test_filed_fact_cannot_be_updated`.
@@ -162,7 +181,217 @@ reboot the device will not remount on its own and the path will be empty until s
 The copied data is unaffected: it is on the device, verified, and independent of the source disk.
 But **do not treat the backup path as automatically available.** Re-run the verification after any
 reboot before relying on it. Making the mount persistent is a one-line `fstab` change and has not
-been made, because modifying `/etc/fstab` was outside what was authorised.
+been made, because modifying `/etc/fstab` was outside what was authorised. The exact entry, the
+reasoning for `UUID=` and `nofail`, the pre-reboot validation, and the post-reboot check are now
+recorded in `docs/runbooks/dera-backup-mount.md`. Persistence is **not** an exit criterion:
+criterion 12 asks that a second durable copy exists, and it does.
+
+---
+
+## The DERA fact load — done
+
+**The fact lake holds real filed data for the first time.** 2,845 facts across the four target
+filings, every one reconciled against the package it came from.
+
+| Filing | Facts | Consolidated | Dimensional | Package | Cadence |
+|---|---|---|---|---|---|
+| `…-25-000079` 10-K FY2025 | 967 | 547 | 420 | `2025_10_notes.zip` | monthly |
+| `…-25-000073` 10-Q Q3 | 683 | 317 | 366 | `2025_08_notes.zip` | monthly |
+| `…-25-000057` 10-Q Q2 | 672 | 309 | 363 | `2025q2_notes.zip` | quarterly |
+| `…-25-000008` 10-Q Q1 | 523 | 231 | 292 | `2025q1_notes.zip` | quarterly |
+
+### The package is chosen by reading, not by arithmetic
+
+The sprint plan guessed `2025q3`. That is wrong for three of the four filings, and the reason is
+a rule worth stating plainly:
+
+**A filing belongs to the DERA package for the period it was SUBMITTED in, not the period it
+reports on.** The FY2025 10-K covers a year ending 2025-09-27 and was filed 2025-10-31, so it
+lives in `2025_10`. `locate_filing` reads each package's `sub.tsv` and answers from the data.
+Deriving a period from a report date is exactly the kind of off-by-one-quarter error that produces
+a confident, wrong, silent result — the load would simply find nothing and report a filing with no
+facts, which is indistinguishable from a filing that has none.
+
+### Ten modules, one responsibility each
+
+| Module | Owns |
+|---|---|
+| `selection` | which package holds a filing; archive completeness; period ordering |
+| `tsv` | parsing, with quoting DISABLED, streaming |
+| `dimensions` | `dimh` to axis and member, from `dim.tsv` |
+| `normalize` | row to domain values, including the derived period start |
+| `validate` | domain rules mirroring the database constraints |
+| `registration` | the `issuer` and `filing` rows the fact foreign keys require |
+| `loader` | one transaction: insert, load ledger, idempotency, advisory lock |
+| `reconcile` | nine checks against the source and the database |
+| `report` | plain text for a person |
+| `scripts/load_dera_partition.py` | orchestration only — no parsing, no validation, no SQL |
+
+### Reconciliation
+
+Nine checks per load, all passing on all four filings. The strongest is the numeric total: the sum
+of every accepted `value_numeric` computed in Python against PostgreSQL's own `sum()`.
+
+```
+every_matched_row_is_accounted_for   969 = 967 accepted + 2 rejected
+database_row_count_matches_accepted  967 = 967
+natural_key_is_unique_in_database    967 distinct keys in 967 rows
+distinct_concepts_match              257 = 257
+numeric_total_matches                34,808,176,701,339.3705
+                                     delta 0.000000, tolerance 0.000967
+consolidated_split_matches           547 = 547
+period_type_split_matches            488 instant / 479 duration, both sides
+every_dimension_hash_resolved        0 unknown
+no_duplicate_natural_keys_in_source  0
+```
+
+The two rejections are `CommitmentsAndContingencies` rows with no value — the shape DERA uses for
+a line-item label. They are counted and named in the report, never silently dropped.
+
+### Idempotency, demonstrated rather than asserted
+
+```
+run 1 (cold)   inserted 967, already present 0,   in database 967
+run 2          inserted 0,   already present 967, in database 967, RECONCILED
+```
+
+Run 2 re-reads the whole 97 MB package and re-derives every natural key. It does not consult
+`loaded_at` to decide whether to work: a bookkeeping flag set by a run that half-failed would make
+the gap permanent and invisible. The flag records what happened; it never authorises a skip.
+
+Proven non-vacuous by mutation. Removing the existing-key filter from the loader makes
+`test_a_rerun_inserts_nothing` fail with 8 rows in the database where 4 belong.
+
+### Four defects the load exposed
+
+**1. A derived quarter start was a day short.** DERA publishes an end date and a quarter count and
+no start at all, so `period_start` is derived. Subtracting whole months and adding a day clamps
+30 June minus three months to 30 March — March has 31 days — giving 31 March. The error is
+invisible on Apple's annual periods, which end 30 September and land on 1 October either way, and
+wrong on every quarter ending in a 30-day month.
+
+It was caught by a unit test **after** the first load had already written 136 wrong rows. Those
+were deleted and all four filings reloaded. The derivation is now the first day of the month
+`months - 1` earlier, with a test asserting consecutive quarters tile the year with no gap and no
+overlap.
+
+**2. The test suite destroyed the data it ran against.**
+`test_upgrade_then_downgrade_round_trips` runs `alembic downgrade base`, which drops every
+application table. That is correct against CI's ephemeral container and destructive here:
+`make check` deleted all 2,845 loaded facts, silently, and reported green.
+
+The first fix skipped the test when the target held data. That stopped the deletion and left the
+test unrun — the other half of the same failure. **The final design is two databases**, and a new
+invariant: see the section below.
+
+**3. An inter-test dependency, exposed by fixing that.**
+`test_filed_fact_cannot_be_updated` inserted its fixture row using Apple's real CIK and accession,
+both UNIQUE columns, so it failed the moment the database held a real load. It had only ever
+passed because the destructive test ran first and left every table empty. It now builds its own
+schema on the disposable database and uses reserved identifiers, so it depends on no other test.
+
+Both are one lesson: a test that has only ever run against an empty database has not been tested
+against a database.
+
+**4. A credential sat in two tracked files.** `migrations/env.py` and
+`tests/unit/test_migrations.py` both defaulted to
+`postgresql+psycopg://<user>:<password>@localhost:5432/<database>`. Both now resolve through
+`packages/persistence/engine`, which is the single home for the URL.
+
+The default was not merely untidy. Against a cluster using peer authentication over a Unix socket
+it pointed at `localhost:5432`, where a server does answer, so the reachability probe succeeded
+and the live tests **ran** instead of skipping — then failed on authentication, which reads as a
+broken database rather than a wrong URL.
+
+### What the loader deliberately does not claim
+
+**Every row is written `validation_status = 'UNVALIDATED'`.** Nothing has validated these facts;
+the validation pipeline is Sprint 5. Writing `VALID` would be a claim no code in this repository
+has earned.
+
+**`is_latest_selected` is false on every row.** Selecting the latest observation is a pure
+function over the observation set and belongs to the fact lake in Sprint 6. Asserting it now, with
+one source loaded, would be wrong the moment a second arrives.
+
+**DERA period boundaries are approximations by design.** `ddate` is rounded to the nearest month
+end and `qtrs` is a whole number of quarters; DERA publishes the residuals separately as `datp`
+and `durp`. Apple's FY2025 ended 2025-09-27 and DERA records 2025-09-30. The exact filed
+boundaries are in the XBRL instance, which Sprint 6 reads. Because `xbrl_fact` is append-only,
+that later and better observation supersedes these rows through the ordinary restatement path
+rather than overwriting them.
+
+**Only the named filing is loaded, not the whole package.** `xbrl_fact` has foreign keys to
+`issuer` and `filing`, so loading a monthly package outright would first require registering the
+7,098 submissions in it as issuers and filings. That is the issuer universe, Stage 2 phase W-1,
+and out of scope by ADR-0015.
+
+### Destructive tests are isolated — TEST-DATABASE-ISOLATION-INVARIANT
+
+`rules.md` section 3 gains an eleventh non-negotiable invariant:
+
+> Destructive database tests must never operate on the configured application database. Migration
+> upgrade and downgrade tests run only against a dedicated disposable test database, and must fail
+> closed if the test target cannot be proven separate.
+
+```
+DATABASE_URL       fintek        the application database; NON-DESTRUCTIVE use only
+TEST_DATABASE_URL  fintek_test   disposable; destructive tests drop every table in it
+```
+
+**No fallback between them.** `TEST_DATABASE_URL` never defaults to, derives from, or falls back
+to `DATABASE_URL`. A fallback works everywhere, quietly, until the day the application database
+has something in it. Absent configuration fails; it is never a silent substitution and never a
+skip.
+
+**Separateness is proven, not named.** `assert_disposable` parses both URLs to a
+`DatabaseIdentity` — host, port, socket path, database name, and deliberately no credentials — and
+refuses equality. Comparing the configured strings is not enough: `@localhost/fintek` and
+`@127.0.0.1:5432/fintek` are different strings and the same database. Credentials are excluded on
+purpose, so a destructive run cannot be authorized merely by connecting as a different user. The
+name must additionally carry `test` as a whole underscore-delimited token and must not contain
+`prod`, `production`, `live`, `master`, or `primary`.
+
+**The application database is watched from the other side.** A session hook records `issuer`,
+`filing`, and `xbrl_fact` row counts before the suite and fails the run if they change — from a
+dropped table or from a fixture row a test left behind. Always on.
+
+Failure modes are distinguished rather than blurred into one skip:
+
+| Situation | Behaviour |
+|---|---|
+| server unreachable | SKIP — the machine cannot run database tests at all |
+| `TEST_DATABASE_URL` unset | FAIL — configuration error, not an environment limitation |
+| server up, test database missing | FAIL, naming `make db-create-test` |
+| test URL equals application URL | FAIL before anything is dropped |
+
+30 tests in `tests/unit/test_database_isolation.py` cover the guard, each named after the specific
+way a weaker one still permits the deletion.
+
+**Local setup needed one privileged action.** The `fintek` role has no CREATEDB, and `pg_hba`
+scopes peer authentication to the `fintek` database — both deliberate, and granting CREATEDB to
+make tests convenient would be a broader privilege than the problem requires. A gitignored helper
+under `var/local-tools/` creates `fintek_test` owned by the existing role and widens that one
+`pg_hba` line. Procedure in `docs/runbooks/test-database.md`.
+
+**CI declares both databases** against one service container, creates `fintek_test` explicitly
+because `POSTGRES_DB` creates exactly one, and runs `make db-verify-isolation` before any test.
+
+The service uses a fixed, disposable, obviously non-production password written openly in the
+workflow, replacing `POSTGRES_HOST_AUTH_METHOD: trust`. `trust` accepts any connection with no
+password, so the workflow never exercised the authentication path the application code takes. The
+replacement protects nothing — the container lives for one job, is reachable only from it, and
+holds public SEC data — and a repository secret would imply sensitivity and a rotation obligation
+for a value that cannot leak anything. The health check authenticates rather than probing the
+port. None of this bears on deployment, which remains undecided; the local host still uses peer
+authentication and stores no password at all.
+
+### The database was empty until now
+
+Sprint 3's acquisition wrote objects to the store and provenance to a manifest, never to
+PostgreSQL, so `issuer` and `filing` both held zero rows. `packages/dera_notes/registration.py`
+creates the two rows a fact must attach to, sourced from the package's own `sub.tsv`. `era` and
+`primary_document` are left NULL: DERA does not describe them, and `packages/filing_acquisition`
+owns those columns.
 
 ---
 
@@ -337,7 +566,7 @@ default suite.
 
 ---
 
-## Acceptance criteria
+## Acceptance criteria (as planned)
 
 1. `alembic upgrade head` and `alembic downgrade base` both succeed against a real PostgreSQL.
 2. The two previously skipped live migration tests **pass**; the suite reports zero skips for
@@ -388,57 +617,73 @@ tests/unit/test_migrations.py             the 2 live tests now RUN
 
 ---
 
-## Known issues
+## Acceptance criteria — audit
 
-1. **PostgreSQL is unavailable on this machine, so the two live migration tests still skip.**
-   Every fallback in the plan was tried:
+Every criterion, checked against what actually exists. Evidence is a command that was run or a
+figure counted, not a recollection.
 
-   ```
-   $ docker run --rm hello-world
-   docker: Error response from daemon: failed to create task for container:
-   failed to start shim: start failed: failed to create TTRPC connection:
-   unsupported protocol: Yunix
+| # | Criterion | Result | Evidence |
+|---|---|---|---|
+| 1 | `upgrade head` and `downgrade base` both succeed against a real PostgreSQL | **MET** | Both run; `alembic current` reports `0001_initial (head)` |
+| 2 | The two previously skipped live migration tests pass; zero skips for database reasons | **MET** | `337 passed, 0 skipped`, `make test-no-skips` exits 0. Both run against `fintek_test`; the application database's counts are identical before and after |
+| 3 | One DERA partition is loaded and its row counts reconcile against the package | **MET, exceeded** | Four filings from four packages; nine reconciliation checks each, all passing |
+| 4 | Filing discovery for CIK `0000320193` returns the complete history and reconciles gap-free against `master.gz` | **MET** | 134 covered filings, `134 = 134` across 131 quarters, zero gaps either direction |
+| 5 | The `filings.files[]` overflow path is exercised, not merely coded | **MET** | `recent` returned its 1,000 cap; 89 of 134 came from the overflow shard |
+| 6 | Four filings preserved with SHA-256, provenance, and acquisition strategy recorded | **MET** | 20 objects, 8.42 MiB, in `var/acquisition.json` and the fixture manifest |
+| 7 | Re-running acquisition downloads nothing and re-verifies by content address | **MET** | 0 downloaded, 20 reused, 0 requests |
+| 8 | Committed fixtures reproduce the four filings' structure offline | **MET** | `tests/unit/test_filing_fixtures.py` passes with no network |
+| 9 | `pytest` passes on a fresh clone with no network access | **MET, with one qualification** | No test performs network I/O. Tests needing a database skip with a reason; on a clone without one the suite is green and reports those skips |
+| 10 | Repository growth under 25 MB, measured and reported | **MET** | Fixture tree 188.4 KiB. No binary added since |
+| 11 | The exclusion list resolves Apple's three item disclosures and flags unknown namespaces | **MET** | `tests/unit/test_filing_acquisition.py`, exercised against acquired data |
+| 12 | URGENT-02: a second durable copy of the twelve monthly packages exists | **MET** | 12 of 12, 2,145,477,071 bytes, separate device confirmed by `stat`, hashes and ZIP CRCs verified both sides |
+| 13 | Zero SEC throttle events | **MET** | 0 across every run in this sprint |
 
-   $ docker compose version
-   docker: unknown command: docker compose      # plugin absent
+Criterion 9 is qualified rather than claimed outright. "Passes with no network" is true; "passes
+with no database" means the database tests skip, which is the designed behaviour and is now
+visible in the output because the targets pass `-ra`. CI provides a database so they run there,
+and `make test-no-skips` fails if anything skips in an environment that should run everything.
 
-   $ sudo -n true
-   sudo: a password is required                  # cannot install a system package
+---
 
-   $ pip index versions pgserver
-   ERROR: No matching distribution found         # no rootless PostgreSQL from PyPI
+## Validation
 
-   $ command -v podman
-   (not installed)
-   ```
+```
+337 passed, 0 skipped
+92.73% coverage on the implemented packages (85% gate)
+mypy clean across 65 source files in packages, scripts, migrations
+ruff format and lint clean across packages, tests, scripts, migrations
+alembic upgrade head --sql and downgrade --sql both succeed offline
+```
 
-   The Docker daemon runs (server 29.4.1) but cannot start containers; the shim failure is the
-   same one Sprint 2 recorded. **This needs an action outside the agent's reach.** Either:
+---
 
-   ```
-   sudo pacman -S postgresql
-   sudo -u postgres initdb -D /var/lib/postgres/data
-   sudo systemctl start postgresql
-   sudo -u postgres createuser -s fintek && sudo -u postgres createdb -O fintek fintek
-   ```
+## Known issues carried into Sprint 4
 
-   or repair the Docker containerd shim so `make up` works.
+1. **The backup mount is not persistent.** `/etc/fstab` has no entry for the backup device, so
+   after a reboot `/mnt/backup` is an empty directory on the root filesystem. The copied data is
+   safe; the risk is a future backup writing into that empty directory and reporting success.
+   `docs/runbooks/dera-backup-mount.md` carries the exact entry and the validation sequence.
+   Applying it needs root and has not been done.
 
-   Once a server answers on 5432, `pytest tests/unit/test_migrations.py` runs the two tests that
-   have never executed, and the DERA TSV load can follow.
-
-2. **DERA TSV loading is deferred with the database.** The parser can be written against the
-   mirrored packages without a server, but the acceptance criterion is a row-count reconciliation
-   after loading, which cannot be met yet.
-
-3. **URGENT-02 is still open.** The twelve monthly DERA packages, 2.00 GiB, exist in exactly one
-   place and cannot be re-downloaded once SEC publishes the 2025q3 consolidation. A second copy on
-   the same disk is not a second copy. This needs a destination decision.
-
-4. **Only the inline-XBRL era is implemented.** `standalone_xbrl`, `html_no_xbrl`, and
+2. **Only the inline-XBRL era is implemented.** `standalone_xbrl`, `html_no_xbrl`, and
    `pem_armored` raise `UnsupportedEraError` rather than guessing. That covers the four target
    filings and everything from roughly 2019; the other 104 of Apple's 134 filings need Stage 2
    phase W-2.
+
+3. **DERA period boundaries are month-end approximations**, and every loaded row is
+   `UNVALIDATED` because of it. Superseded by the XBRL instance in Sprint 6 through the
+   append-only restatement path. Not a defect; a recorded property of the source.
+
+4. **Acquired objects are not registered in `filing_document`.** Provenance for the 20 acquired
+   objects lives in `var/acquisition.json` and the fixture manifest, not in PostgreSQL. The
+   `filing` rows that do exist were created by DERA registration and therefore carry NULL `era`
+   and `primary_document`. `packages/filing_acquisition` owns that gap.
+
+5. **Idempotency relies on a read-then-insert inside one transaction**, serialized by a
+   transaction-scoped advisory lock on the accession, rather than on a unique index over
+   `(accession, source_dataset, source_row_id)`. Migration `0001_initial` is SEALED, so adding
+   that index is a second migration. The advisory lock is correct for the single-writer ingest
+   this project has today; the index is the right answer once ingest is concurrent.
 
 ## Definition of done
 

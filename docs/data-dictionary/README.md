@@ -48,6 +48,32 @@ duration_months  computed at ingest; charts filter on it
 is_derived       true for a computed Q4
 ```
 
+The database enforces this: `ck_xbrl_fact_period_fields_match_period_type` requires an
+`instant_date` for an instant and both boundaries for a duration.
+
+### Period fidelity depends on the source, and the source is recorded
+
+`xbrl_fact.source_dataset` is not decoration. Period precision differs by source, and a chart that
+mixed them without knowing would be quietly wrong.
+
+**`source_dataset = 'dera_notes'` periods are normalized approximations.** DERA rounds `ddate` to
+the nearest month end, states `qtrs` as a whole number of quarters, and publishes the residuals
+separately as `datp` and `durp`. It publishes no period start at all, so `period_start` is
+DERIVED: the first day of the month `duration_months - 1` before `period_end`.
+
+The consequence is concrete. Apple's FY2025 ended 2025-09-27, a 52/53-week fiscal year end; DERA
+records 2025-09-30, and the derived start is 2024-10-01 where the filed context begins 2024-09-29.
+Days differ; the quarter does not.
+
+Every row loaded this way carries `validation_status = 'UNVALIDATED'`, because nothing has
+validated it and the exact filed boundaries live in the XBRL instance document. When the instance
+is parsed, its facts are APPENDED — `xbrl_fact` is append-only — and supersede the DERA
+observations through the ordinary restatement path. The DERA rows are never edited in place; the
+trigger would reject it.
+
+**Do not use a DERA `period_start` as a filed date.** Use it to bucket a period. Anything that
+must cite an exact boundary reads from a source that publishes one.
+
 ## State enums
 
 Filing processing: `DISCOVERED`, `QUEUED`, `DOWNLOADING`, `DOWNLOADED`, `PARSING`, `PARSED`,

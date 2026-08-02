@@ -1,7 +1,7 @@
 # roadmap.md — FinTek Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of the Sprint 2 alignment review)
-LAST UPDATED: Sprint 2 alignment review, 2026-08-01
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Sprint 3 completion)
+LAST UPDATED: Sprint 3 completion, 2026-08-01
 SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
 
 ---
@@ -61,7 +61,7 @@ and nothing else.**
 | LLM gateway, YAML boundary, payload compiler, boundary validator | IMPLEMENTED |
 | Mock model provider | IMPLEMENTED |
 | PostgreSQL schema and initial migration | IMPLEMENTED and APPLIED to a live database (Sprint 3) |
-| DERA TSV loading | PLANNED (Sprint 3 remainder; PostgreSQL now available) |
+| DERA TSV loading, validation, reconciliation | IMPLEMENTED and EXECUTED (Sprint 3; 2,845 facts, 4 filings) |
 | Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
 | Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
 | Canonical footnote grouping, stages 1 to 5 | PLANNED (Sprint 4) |
@@ -159,7 +159,7 @@ architecture tests exist to catch it.
 
 ### Sprint 3 — Acquire one issuer's filings and establish reproducible fixtures
 
-STATUS: IN PROGRESS — acquisition, database, and backup done; DERA TSV load remains
+STATUS: COMPLETE — all thirteen acceptance criteria met, audited in the sprint record
 DEPENDS ON: Sprint 2
 DETAILED PLAN AND OUTCOME: `docs/sprints/SPRINT-0003.md`
 
@@ -173,7 +173,15 @@ no password is stored for local work. Deployed authentication remains an open de
 migration tests now pass rather than skip: the suite reports 203 passed, 0 skipped. URGENT-02
 discharged with a verified second copy on a separate filesystem.
 
-REMAINING. The DERA TSV load into the fact lake, which was deferred behind the database.
+DONE LAST. The DERA fact load. 2,845 facts across the four filings, from four different packages,
+each load reconciled on nine checks including an exact numeric-total match against PostgreSQL's own
+`sum()`. A rerun re-reads the whole package and inserts nothing. The suite is 337 passed, 0
+skipped, and CI now runs a PostgreSQL service container so the database tests execute there rather
+than skip.
+
+CARRIED FORWARD, not blocking. The backup mount is still not persistent across reboots; the exact
+`fstab` entry and validation sequence are in `docs/runbooks/dera-backup-mount.md` and applying it
+needs root. Acquired objects are not yet registered in `filing_document`.
 
 OBJECTIVE. End the condition where nothing has been retrieved. Get four real Apple filings into
 the system, preserved with provenance, and make the canonical-footnote result reproducible
@@ -206,12 +214,12 @@ EXIT CRITERIA. All of the above, on real fetched data.
 
 ### Sprint 4 — Reproduce and validate canonical-footnote extraction
 
-STATUS: NOT STARTED
-DEPENDS ON: Sprint 3, which is still IN PROGRESS
+STATUS: NEXT
+DEPENDS ON: Sprint 3, which is COMPLETE
 
-GATE. Sprint 4 does not begin until every Sprint 3 exit criterion is met. PostgreSQL, the live
-migration, both previously skipped tests, and URGENT-02 are done; the DERA TSV load is not.
-A database that merely runs is not the exit criterion.
+GATE SATISFIED. Every Sprint 3 exit criterion is met and audited in `docs/sprints/SPRINT-0003.md`:
+PostgreSQL, the live migration, both previously skipped tests, the DERA fact load with
+reconciliation, and URGENT-02.
 
 OBJECTIVE. Prove the footnote thesis in production code, against the fixtures, deterministically.
 
@@ -409,8 +417,18 @@ genuinely valuable and none is required to prove the product.
    though documents and footnote text reach the 1990s.
 5. No cost figure exists for any part of the corpus. Sprint 5 produces the first measured one.
    Any earlier number was withdrawn as unusable, see `docs/llm/cost-model.md`.
-6. Structured numeric history still requires the DERA TSV load, which is the remaining Sprint 3
-   item. The migration itself is now applied and verified against a live PostgreSQL.
+6. Structured numeric history exists for four filings only. Widening it requires registering more
+   issuers and filings, which is Stage 2 phase W-1: `xbrl_fact` has foreign keys to `issuer` and
+   `filing`, so the loader is per-accession by construction.
+7. Loaded DERA periods are month-end approximations and every row is `UNVALIDATED`. DERA rounds
+   `ddate` to the nearest month end and publishes no period start at all. Apple's FY2025 ended
+   2025-09-27 and DERA records 2025-09-30. Exact filed boundaries arrive with the XBRL instance
+   in Sprint 6 and supersede these rows through the append-only restatement path.
+8. Idempotency of the fact load rests on a read-then-insert inside one transaction, serialized by
+   a transaction-scoped advisory lock, not on a unique index over
+   `(accession, source_dataset, source_row_id)`. Migration `0001_initial` is SEALED, so that index
+   is a second migration. Correct for today's single-writer ingest; required before concurrent
+   ingest.
 
 ---
 

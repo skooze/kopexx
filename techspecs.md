@@ -4,18 +4,19 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 3, live database and DERA backup
-VERIFICATION: 203 tests passing and 0 skipped, 92 percent coverage on implemented packages, ruff
-format and lint clean across `packages tests scripts migrations`, mypy clean across 53 source
+LAST SYNCHRONIZED WITH CODE: Sprint 3 complete, including the DERA fact load
+VERIFICATION: 337 tests passing and 0 skipped, 92.73 percent coverage on implemented packages,
+ruff format and lint clean across `packages tests scripts migrations`, mypy clean across 65 source
 files in `packages scripts migrations`, offline Alembic upgrade and downgrade, and pip-audit
 clean.
 
 The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
 contained only a docstring (ADR-0015), rose to 45 when type checking extended to `scripts` and
-`migrations`, and is 53 now that filing discovery and acquisition exist.
+`migrations`, reached 53 when filing discovery and acquisition arrived, and is 65 now that the
+DERA loader and the database-isolation guard exist.
 
 `packages/` holds ten implemented libraries. Two were added in Sprint 3: `filing_discovery` and
-`filing_acquisition`.
+`filing_acquisition`. `dera_notes` grew from a mirror into a mirror plus a fact loader.
 
 ## Build and packaging
 
@@ -75,8 +76,10 @@ outbound side effect is a model invocation, which is metered and audited.
 | Structured logging and correlation | `observability` | IMPLEMENTED |
 | DERA discovery and mirror ledger | `dera_notes` | IMPLEMENTED |
 | DERA bulk download | `dera_notes` + `sec_client` | IMPLEMENTED and EXECUTED (78/78 packages) |
-| DERA TSV load | `dera_notes` | PLANNED (Sprint 3) |
+| DERA TSV load, normalization, validation, reconciliation | `dera_notes` | IMPLEMENTED and EXECUTED (2,845 facts, 4 filings) |
 | PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
+| Database URL resolution, identity comparison, engine construction | `persistence` | IMPLEMENTED |
+| Destructive-test database isolation | `persistence` + `tests/conftest.py` | IMPLEMENTED |
 | Alembic migration | `migrations` | IMPLEMENTED and APPLIED to a live PostgreSQL 18.4 |
 | LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
 | Filing discovery | `filing_discovery` | IMPLEMENTED (Sprint 3) |
@@ -232,20 +235,71 @@ PUBLIC INTERFACE. `get_logger`, `log_event`, `configure_logging`, `correlation_s
 
 INVARIANT. Filing text and model payload bodies are never logged. A fixed field set is redacted.
 
-### 3.6 `packages/dera_notes` — discovery, ledger, and bulk download IMPLEMENTED; TSV load PLANNED (Sprint 3)
+### 3.6 `packages/dera_notes` — IMPLEMENTED (mirror Sprint 1; fact load Sprint 3)
 
-RESPONSIBILITY. Discover, mirror, and record SEC DERA NOTES packages.
+RESPONSIBILITY. Discover, mirror, and record SEC DERA NOTES packages, and load one filing's facts
+from a mirrored package into the append-only fact lake.
+
+MODULES, one responsibility each. Splitting them is not decoration: a single load script would put
+a transaction boundary, a CSV dialect, and a calendar derivation in one place, and the calendar
+derivation is where the only correctness defect of this sprint was found.
+
+| Module | Owns |
+|---|---|
+| `discovery` | scraping the authoritative listing |
+| `ledger` | the JSON mirror ledger; resumability |
+| `selection` | which package holds a filing; archive completeness; period ordering |
+| `tsv` | parsing, quoting DISABLED, streamed |
+| `dimensions` | `dimh` to axis and member, from `dim.tsv` |
+| `normalize` | row to domain values, including the derived period start |
+| `validate` | domain rules mirroring the database constraints |
+| `registration` | the `issuer` and `filing` rows the fact foreign keys require |
+| `loader` | one transaction: insert, load ledger, idempotency, advisory lock |
+| `reconcile` | nine checks against the source and the database |
+| `report` | plain text for a person |
 
 PUBLIC INTERFACE. `discover_packages`, `classify_filename`, `DeraPackage`, `PackageCadence`,
-`MirrorLedger`, `MirrorEntry`, `NOTES_LANDING_URL`.
+`MirrorLedger`, `MirrorEntry`, `NOTES_LANDING_URL`, `locate_filing`, `SelectedPackage`,
+`register_filing`, `register_mirror_ledger`, `FilingContext`, `read_package`, `load_facts`,
+`LoadResult`, `reconcile`, `Reconciliation`, `full_report`.
 
 INVARIANTS.
 - Filenames are scraped from the authoritative listing, never generated.
 - Empty discovery raises rather than returning an empty list.
 - Monthly packages are retained after quarterly consolidation.
 - `pending()` makes a run resumable; a completed run downloads nothing.
+- TSVs are parsed with `csv.QUOTE_NONE`. A double quote inside a DERA field is literal data;
+  QUOTE_MINIMAL would merge the fields on either side of it with no error raised.
+- The package holding a filing is found by reading `sub.tsv`, never by deriving a period from a
+  date. A filing belongs to the period it was SUBMITTED in.
+- The archive is re-hashed before every load. The download-time hash is not trusted.
+- A required member missing fails the load closed.
+- Numeric values are `Decimal`, never `float`.
+- Idempotency is by the DERA natural key `(adsh, tag, version, ddate, qtrs, uom, dimh, iprx,
+  coreg)`, recomputed from the package on every run. `dera_package.loaded_at` records what
+  happened and never authorises a skip.
+- Insertion, the load ledger update, and the row counts are one transaction. A failure leaves no
+  rows and an unmarked ledger.
+- Every row is written `validation_status = 'UNVALIDATED'` and `is_latest_selected = false`. The
+  validation pipeline is Sprint 5 and latest-selection is Sprint 6.
 
-UNIT TESTS. 8. INTEGRATION TESTS. 2, covering idempotency and full provenance.
+KNOWN PROPERTY OF THE SOURCE. `ddate` is rounded to the nearest month end and `qtrs` is a whole
+number of quarters; DERA publishes the residuals as `datp` and `durp`. `period_start` is not
+published at all and is derived. Exact filed boundaries come from the XBRL instance in Sprint 6
+and supersede these rows through the append-only restatement path.
+
+SCOPE LIMIT. Per accession, not per package. `xbrl_fact` has foreign keys to `issuer` and
+`filing`, so loading a whole monthly package would first require registering thousands of issuers
+— Stage 2 phase W-1, out of scope by ADR-0015.
+
+TESTS. 105. Unit: `test_dera_notes` 7, `test_dera_tsv` 16, `test_dera_normalize` 25,
+`test_dera_validate` 18, `test_dera_selection` 16, `test_dera_report` 8. Integration:
+`test_dera_load` 13 against a live database, `test_dera_mirror` 2. The integration suite was proven
+non-vacuous by removing the idempotency guard and observing the rerun test fail with 8 rows where
+4 belong.
+
+EXECUTED. 2,845 facts across Apple's FY2025 10-K and three 10-Qs, from four packages, every load
+reconciled on nine checks including an exact numeric-total match against PostgreSQL's own `sum()`.
 
 ### 3.7 `packages/sec_client.client` — IMPLEMENTED (Sprint 2)
 

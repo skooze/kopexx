@@ -1,12 +1,18 @@
 """Alembic environment.
 
-Loads the database URL from DATABASE_URL rather than alembic.ini so the same migration runs
-against local, dev, and production without editing a checked-in file.
+Resolves the database URL through `packages.persistence.engine` rather than alembic.ini, so the
+same migration runs against local, dev, and production without editing a checked-in file, and so
+the migration tool and the application can never disagree about which database they mean.
+
+The previous default here was a Docker Compose-style password-bearing localhost URL of the shape
+`postgresql+psycopg://<user>:<password>@localhost:5432/<database>`. That is a credential in a
+tracked file, which this project prohibits outright, and it was also wrong for this host: it
+forced a TCP connection that failed SCRAM authentication against a cluster configured for peer
+authentication over a Unix socket, which reads as a broken database rather than as a wrong URL.
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -19,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from packages.persistence import Base  # noqa: E402
+from packages.persistence.engine import database_url  # noqa: E402
 
 config = context.config
 
@@ -27,11 +34,9 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-DEFAULT_URL = "postgresql+psycopg://fintek:fintek@localhost:5432/fintek"
-
 
 def get_url() -> str:
-    return os.environ.get("DATABASE_URL", DEFAULT_URL)
+    return database_url()
 
 
 def run_migrations_offline() -> None:

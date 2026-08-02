@@ -24,3 +24,6 @@ var/*.sql
 var/*.err
 var/dera/*.log
 var/dera_landing.html
+
+# Recorded output of the last suite run; make test-summary reads it.
+.pytest-last-run.log

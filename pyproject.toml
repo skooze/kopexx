@@ -44,7 +44,10 @@ namespaces = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q --strict-markers"
+# Verbosity is NOT set here. The Makefile is the single definition of how the suite is
+# invoked, and a -q here combined with a -q there silently becomes -qq, which suppresses
+# the "N passed, M skipped" line entirely — so `make test-summary` printed nothing.
+addopts = "--strict-markers"
 markers = [
     "integration: exercises more than one package together",
     "architecture: enforces structural invariants from rules.md",

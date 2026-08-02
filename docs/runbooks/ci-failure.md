@@ -36,6 +36,10 @@ PATH=/tmp/ci-venv/bin:$PATH make check
 mv .venv-hidden .venv          # ALWAYS restore
 ```
 
+The quality job also runs `make db-upgrade` and `make test-no-skips` against a PostgreSQL service
+container. To match that locally you need a reachable database; without one those two targets are
+not reproducible and `make check` is as close as you get.
+
 A failure that reproduces this way but not with `make check` alone is an environment or
 dependency-declaration problem, not a code problem. See the next section.
 
@@ -172,16 +176,70 @@ to make a commit pass.
 
 ---
 
-## Failure: the two live migration tests
+## Failure: `make test-no-skips` — "tests skipped where all tests were expected to run"
+
+The quality job runs a PostgreSQL 18 service container, so every database test must EXECUTE. The
+gate prints each skipped test and its reason:
+
+```
+FAIL: 1 test(s) skipped where all tests were expected to run.
+  tests/integration/test_dera_load.py::test_a_rerun_inserts_nothing
+      Skipped: no reachable PostgreSQL; this test exercises the live control plane
+```
+
+A skip here is a guard that quietly stopped being enforced. Do not silence it — a skipped database
+test is indistinguishable from a passing one in the summary line, which is how two live migration
+tests went unexecuted for two sprints.
+
+Diagnose in this order:
+
+1. **Did the service container come up?** The job's `Initialize containers` step shows the health
+   check. `pg_isready -U fintek` must succeed before the steps run.
+2. **Is `DATABASE_URL` set for the job?** It is a job-level `env`. A test resolving the local
+   development default instead means the variable did not reach the step.
+3. **Did `make db-upgrade` run?** The tests write real rows; without the schema they fail rather
+   than skip, which is a different symptom.
+4. **Did the reachability probe answer wrongly?** `database_reachable()` in `tests/conftest.py`
+   handles both connection styles: a `?host=/run/postgresql` URL is a Unix socket and has no TCP
+   endpoint, so probing `localhost:5432` for it would answer a question about a different server.
+
+Reproduce locally with a database running:
+
+```bash
+make db-upgrade
+make test-no-skips
+```
+
+Without a database, `make test` is the right target and its skips are legitimate.
+
+---
+
+## Failure: `db-verify-isolation` — "resolve to the SAME database"
+
+The job refuses to run destructive tests that could reach the application data. Both URLs are
+job-level `env` in the workflow; one of them is wrong. Fix the workflow, never the guard.
+
+## Failure: "the suite changed the APPLICATION database"
+
+A destructive test reached `DATABASE_URL`, or a non-destructive one left rows behind. The message
+names each table with its before and after counts. See `docs/runbooks/test-database.md`.
+
+## Failure: the live database tests
 
 They **skip**, they do not fail, when no PostgreSQL is reachable:
 
 ```
-SKIPPED - no reachable PostgreSQL; live migration tests require one
+SKIPPED - no reachable PostgreSQL; this test exercises the live control plane
 ```
 
-This is expected until Sprint 3 stands up a database. A skip is reported as a skip. If they ever
-report as passes without a database, that is a defect in the guard.
+That is correct on a developer machine without one. In CI it is a failure, caught by
+`make test-no-skips` above. If they ever report as passes without a database, that is a defect in
+the guard, not a convenience.
+
+The URL is resolved in exactly one place, `packages/persistence/engine.database_url()`: the
+environment, then the project `.env`, then a local-development default. No credential appears in
+any tracked file — the CI container uses `POSTGRES_HOST_AUTH_METHOD: trust` and the development
+host uses peer authentication over a Unix socket.
 
 ---
 

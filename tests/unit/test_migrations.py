@@ -1,67 +1,55 @@
 """Migration structure and reversibility tests.
 
-Two layers. The structural tests run everywhere and prove the migration is complete and
-symmetric. The live upgrade/downgrade tests require a reachable PostgreSQL and SKIP with a clear
-reason when there is none, so a missing database never masquerades as a pass.
+Three layers.
+
+STRUCTURAL tests read the migration source and run everywhere, proving it is complete and
+symmetric without a server.
+
+OFFLINE tests generate DDL with `--sql`, which needs no connection.
+
+LIVE tests apply and drop the whole schema. They run against TEST_DATABASE_URL — a disposable
+database — never against DATABASE_URL, which holds real loaded facts. See the section header
+further down for what happened when they did not.
 """
 
 from __future__ import annotations
 
 import os
 import re
-import socket
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from packages.persistence.engine import database_url as _database_url  # noqa: E402
+
 MIGRATION = REPO_ROOT / "migrations" / "versions" / "0001_initial_control_plane_schema.py"
-VENV_PY = REPO_ROOT / ".venv" / "bin" / "python"
-# Last-resort default: the docker-compose stack, which sets this password on its container.
-DEFAULT_URL = "postgresql+psycopg://fintek:fintek@localhost:5432/fintek"
-
-
-def _database_url() -> str:
-    """Resolve the URL from the environment, then the project's .env, then the default.
-
-    Nothing in the suite loaded .env, so the URL had to be exported by hand before running
-    pytest. That was tolerable only while the compose default happened to match reality. Once a
-    local database moved to peer authentication the default became actively harmful: it points at
-    localhost:5432, the reachability probe finds a live server there, the test therefore RUNS
-    instead of skipping, and then fails on authentication. Reading .env makes `make test` work
-    from a clean shell and keeps the skip behaviour correct where no database exists at all.
-    """
-    from_env = os.environ.get("DATABASE_URL")
-    if from_env:
-        return from_env
-    env_file = REPO_ROOT / ".env"
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            if line.startswith("DATABASE_URL="):
-                value = line.split("=", 1)[1].strip()
-                if value:
-                    return value
-    return DEFAULT_URL
-
-
-def _database_reachable() -> bool:
-    url = _database_url()
-    parsed = urlparse(url.replace("postgresql+psycopg", "postgresql"))
-    host, port = parsed.hostname or "localhost", parsed.port or 5432
-    try:
-        with socket.create_connection((host, port), timeout=2):
-            return True
-    except OSError:
-        return False
-
-
-requires_database = pytest.mark.skipif(
-    not _database_reachable(),
-    reason="no reachable PostgreSQL; live migration tests require one (see SPRINT-0002 blockers)",
+# The interpreter that runs alembic in a subprocess. The project virtualenv when there is one,
+# and the interpreter running the tests otherwise.
+#
+# This used to be `.venv/bin/python` unconditionally, guarded by a skipif. CI installs into the job
+# environment and has no `.venv`, so all four alembic-invoking tests — including both destructive
+# ones — would have SKIPPED there, and `make test-no-skips` would have failed the job with a reason
+# that pointed at a missing virtualenv rather than at the real cause. Caught by reproducing the CI
+# environment locally, not by reading the workflow.
+VENV_PY = (
+    REPO_ROOT / ".venv" / "bin" / "python"
+    if (REPO_ROOT / ".venv" / "bin" / "python").exists()
+    else Path(sys.executable)
 )
+
+# Both URLs are resolved by packages/persistence/engine, which is their single home. This module
+# used to carry its own copy, whose last-resort default embedded a username and password — a
+# credential shape in a tracked file, which this project prohibits — and pointed at localhost:5432
+# over TCP. Against a
+# cluster using peer authentication over a Unix socket, that default made the reachability probe
+# succeed, so the test RAN instead of skipping and then failed on authentication, which reads as a
+# broken database rather than a wrong URL.
 
 
 def _migration_source() -> str:
@@ -243,7 +231,6 @@ def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.mark.skipif(not VENV_PY.exists(), reason="project virtualenv not present")
 def test_upgrade_generates_complete_ddl_offline() -> None:
     """Offline generation proves the migration is complete without needing a server."""
     result = _alembic("upgrade", "head", "--sql")
@@ -255,7 +242,6 @@ def test_upgrade_generates_complete_ddl_offline() -> None:
     assert "CHECK (" in sql
 
 
-@pytest.mark.skipif(not VENV_PY.exists(), reason="project virtualenv not present")
 def test_downgrade_generates_complete_ddl_offline() -> None:
     result = _alembic("downgrade", "0001_initial:base", "--sql")
     assert result.returncode == 0, result.stderr[-2000:]
@@ -264,123 +250,198 @@ def test_downgrade_generates_complete_ddl_offline() -> None:
     assert "DROP TRIGGER" in sql
 
 
-# --- live database ------------------------------------------------------------------------------
+# --- live database, ISOLATED TARGET ---------------------------------------------------------------
+#
+# Everything below runs against TEST_DATABASE_URL, never DATABASE_URL. Both tests apply and drop
+# the whole schema, and the application database holds real loaded facts.
+#
+# The earlier arrangement pointed them at DATABASE_URL. `alembic downgrade base` then dropped every
+# application table on this development host, deleting 2,845 loaded facts, while `make check`
+# reported green. Skipping when data was present stopped the deletion but left the tests unrun,
+# which is the failure this suite has already made twice. A separate target runs them AND keeps the
+# data.
 
 
-@requires_database
-def test_upgrade_then_downgrade_round_trips() -> None:
-    """Apply, verify tables exist, roll back, verify they are gone."""
-    from sqlalchemy import create_engine, inspect, text
+def _alembic_against(url: str, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run alembic against an explicit URL.
 
-    url = _database_url()
-    engine = create_engine(url)
+    The URL is passed rather than inherited, so a destructive command can never silently pick up
+    the application database from the ambient environment.
+    """
+    env = dict(os.environ)
+    env["DATABASE_URL"] = url
+    return subprocess.run(
+        [str(VENV_PY), "-m", "alembic", *args],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=180,
+    )
 
-    assert _alembic("upgrade", "head").returncode == 0
-    inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
-    assert _model_table_names() <= tables
 
-    with engine.connect() as connection:
+def _reset_to_base(url: str) -> None:
+    """Bring the disposable database to a known empty state.
+
+    A run killed midway leaves the schema at an unknown revision, and `upgrade head` from there
+    proves nothing about a migration applying to an empty database.
+    """
+    _alembic_against(url, "downgrade", "base")
+
+
+def test_the_destructive_target_is_not_the_application_database(test_database_url: str) -> None:
+    """The invariant, asserted before either destructive test is allowed to touch anything.
+
+    This is the guard, not a restatement of it: `assert_disposable` already ran inside the fixture
+    and would have failed the test. What this adds is an explicit, readable record that the two
+    URLs resolve to different databases, and that the difference is not merely one of spelling.
+    """
+    from packages.persistence.engine import parse_identity
+
+    application = parse_identity(_database_url())
+    target = parse_identity(test_database_url)
+
+    assert target != application, (
+        f"destructive tests would run against the application database {application.endpoint}"
+    )
+    assert target.database != application.database
+    assert "test" in target.database.lower()
+
+
+def test_upgrade_then_downgrade_round_trips(
+    test_database_url: str,
+    disposable_engine: object,
+) -> None:
+    """Apply, verify the tables and the trigger exist, roll back, verify they are gone.
+
+    DESTRUCTIVE. Runs only against the disposable database, whose separateness the fixture proved
+    before this body ran.
+    """
+    from sqlalchemy import inspect, text
+
+    _reset_to_base(test_database_url)
+
+    upgrade = _alembic_against(test_database_url, "upgrade", "head")
+    assert upgrade.returncode == 0, upgrade.stderr[-2000:]
+
+    tables = set(inspect(disposable_engine).get_table_names())
+    assert _model_table_names() <= tables, f"missing after upgrade: {_model_table_names() - tables}"
+
+    with disposable_engine.connect() as connection:  # type: ignore[attr-defined]
         trigger = connection.execute(
             text("SELECT 1 FROM pg_trigger WHERE tgname = 'trg_xbrl_fact_append_only'")
         ).fetchone()
         assert trigger is not None, "append-only trigger was not created"
 
-    assert _alembic("downgrade", "base").returncode == 0
-    remaining = set(inspect(engine).get_table_names()) - {"alembic_version"}
+    downgrade = _alembic_against(test_database_url, "downgrade", "base")
+    assert downgrade.returncode == 0, downgrade.stderr[-2000:]
+
+    remaining = set(inspect(disposable_engine).get_table_names()) - {"alembic_version"}
     assert not (_model_table_names() & remaining), f"tables survived downgrade: {remaining}"
 
 
-@requires_database
-def test_filed_fact_cannot_be_updated() -> None:
+def test_filed_fact_cannot_be_updated(
+    test_database_url: str,
+    disposable_engine: object,
+) -> None:
     """FINANCIAL-INVARIANT proven against a real database, not merely asserted in a comment.
 
-    CORRECTED in Sprint 3, on this test's first ever execution. The original body was:
+    CORRECTED THREE TIMES, each correction exposed by the previous one.
 
-        with engine.begin() as connection, pytest.raises(Exception, match="append-only"):
-            connection.execute(text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE false"))
+    1. The original body was:
 
-    `WHERE false` matches zero rows, and the guard is a FOR EACH ROW trigger, so it never fired
-    and the statement succeeded. The test could not fail no matter what the schema did. It had
-    never run, because no PostgreSQL was reachable until now, so the defect was invisible.
+           with engine.begin() as connection, pytest.raises(Exception, match="append-only"):
+               connection.execute(text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE false"))
 
-    The replacement inserts a real fact and tries to change its filed value, which is the thing
-    the invariant actually protects.
+       `WHERE false` matches zero rows, and the guard is a FOR EACH ROW trigger, so it never fired
+       and the statement succeeded. The test could not fail no matter what the schema did, and had
+       never run, because no PostgreSQL was reachable until Sprint 3.
+
+    2. The replacement inserted its fixture using Apple's real CIK and accession, both UNIQUE, so
+       it failed the moment the application database held a real load. It had only ever passed
+       because the destructive round-trip test ran first and emptied every table — an inter-test
+       dependency invisible while the database was always empty.
+
+    3. It ran against the application database at all. Now it runs against the disposable one and
+       builds its own schema, so it depends on no other test and destroys no real data.
     """
     import uuid
 
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import text
 
-    url = _database_url()
-    engine = create_engine(url)
-    assert _alembic("upgrade", "head").returncode == 0
+    _reset_to_base(test_database_url)
+    upgrade = _alembic_against(test_database_url, "upgrade", "head")
+    assert upgrade.returncode == 0, upgrade.stderr[-2000:]
 
     issuer_id, filing_id, fact_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     original = "416161000000"
+    cik, accession = "9999999998", "9999999998-25-000001"
+    engine = disposable_engine
 
-    try:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO issuer (issuer_id, cik, legal_name, is_active) "
-                    "VALUES (:i, '0000320193', 'Apple Inc.', true)"
-                ),
-                {"i": issuer_id},
-            )
-            connection.execute(
-                text(
-                    "INSERT INTO filing (filing_id, issuer_id, cik, accession, form, filing_date,"
-                    " is_amendment, is_xbrl, is_inline_xbrl, era, processing_state,"
-                    " footnote_status, reconciliation_status)"
-                    " VALUES (:f, :i, '0000320193', '0000320193-25-000079', '10-K', '2025-10-31',"
-                    " false, true, true, 'inline_xbrl', 'DISCOVERED', 'NOT_STARTED',"
-                    " 'NOT_ATTEMPTED')"
-                ),
-                {"f": filing_id, "i": issuer_id},
-            )
-            connection.execute(
-                text(
-                    "INSERT INTO xbrl_fact (fact_id, issuer_id, cik, filing_id, accession, form,"
-                    " filing_date, taxonomy, namespace, concept, value_as_filed, unit, scale,"
-                    " sign, period_type, period_start, period_end, source_dataset, filed_at,"
-                    " is_latest_selected, validation_status)"
-                    " VALUES (:x, :i, '0000320193', :f, '0000320193-25-000079', '10-K',"
-                    " '2025-10-31', 'us-gaap', 'http://fasb.org/us-gaap/2025', 'Revenues',"
-                    " :v, 'USD', 0, 1, 'duration', '2024-09-29', '2025-09-27', 'dera',"
-                    " '2025-10-31T00:00:00Z', true, 'VALID')"
-                ),
-                {"x": fact_id, "i": issuer_id, "f": filing_id, "v": original},
-            )
+    with engine.begin() as connection:  # type: ignore[attr-defined]
+        connection.execute(
+            text(
+                "INSERT INTO issuer (issuer_id, cik, legal_name, is_active) "
+                "VALUES (:i, :cik, 'Trigger Fixture Corp', true)"
+            ),
+            {"i": issuer_id, "cik": cik},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO filing (filing_id, issuer_id, cik, accession, form, filing_date,"
+                " is_amendment, is_xbrl, is_inline_xbrl, era, processing_state,"
+                " footnote_status, reconciliation_status)"
+                " VALUES (:f, :i, :cik, :a, '10-K', '2025-10-31',"
+                " false, true, true, 'inline_xbrl', 'DISCOVERED', 'NOT_STARTED', 'NOT_ATTEMPTED')"
+            ),
+            {"f": filing_id, "i": issuer_id, "cik": cik, "a": accession},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO xbrl_fact (fact_id, issuer_id, cik, filing_id, accession, form,"
+                " filing_date, taxonomy, namespace, concept, value_as_filed, unit, scale,"
+                " sign, period_type, period_start, period_end, source_dataset, filed_at,"
+                " is_latest_selected, validation_status)"
+                " VALUES (:x, :i, :cik, :f, :a, '10-K',"
+                " '2025-10-31', 'us-gaap', 'http://fasb.org/us-gaap/2025', 'Revenues',"
+                " :v, 'USD', 1, 1, 'duration', '2024-09-29', '2025-09-27', 'trigger_fixture',"
+                " '2025-10-31T00:00:00Z', true, 'VALID')"
+            ),
+            {
+                "x": fact_id,
+                "i": issuer_id,
+                "f": filing_id,
+                "v": original,
+                "cik": cik,
+                "a": accession,
+            },
+        )
 
-        # Confirm the row is really there and committed before attacking it. Without this the
-        # test could pass against an empty table, which is exactly how the original failed.
-        with engine.connect() as connection:
-            before = connection.execute(
-                text("SELECT value_as_filed FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id}
-            ).scalar()
-        assert before == original, "the fact was not committed; the update would target no row"
+    # Confirm the row is really there and committed before attacking it. Without this the test
+    # could pass against an empty table, which is exactly how the original failed.
+    with engine.connect() as connection:  # type: ignore[attr-defined]
+        before = connection.execute(
+            text("SELECT value_as_filed FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id}
+        ).scalar()
+    assert before == original, "the fact was not committed; the update would target no row"
 
-        # The filed value is immutable. A restatement appends a new row instead.
-        with engine.begin() as connection, pytest.raises(Exception, match="append-only"):
-            connection.execute(
-                text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE fact_id = :x"),
-                {"x": fact_id},
-            )
+    # The filed value is immutable. A restatement appends a new row instead.
+    with engine.begin() as connection, pytest.raises(Exception, match="append-only"):  # type: ignore[attr-defined]
+        connection.execute(
+            text("UPDATE xbrl_fact SET value_as_filed = '1' WHERE fact_id = :x"), {"x": fact_id}
+        )
 
-        with engine.begin() as connection:
-            stored = connection.execute(
-                text("SELECT value_as_filed FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id}
-            ).scalar()
-            assert stored == original, "the filed value changed despite the trigger"
+    with engine.begin() as connection:  # type: ignore[attr-defined]
+        stored = connection.execute(
+            text("SELECT value_as_filed FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id}
+        ).scalar()
+        assert stored == original, "the filed value changed despite the trigger"
 
-            # The guard protects the FILED value, not the whole row: selection bookkeeping
-            # must still be updatable or restatement handling could never record a winner.
-            connection.execute(
-                text("UPDATE xbrl_fact SET is_latest_selected = false WHERE fact_id = :x"),
-                {"x": fact_id},
-            )
-    finally:
-        with engine.begin() as connection:
-            connection.execute(text("DELETE FROM xbrl_fact WHERE fact_id = :x"), {"x": fact_id})
-            connection.execute(text("DELETE FROM filing WHERE filing_id = :f"), {"f": filing_id})
-            connection.execute(text("DELETE FROM issuer WHERE issuer_id = :i"), {"i": issuer_id})
+        # The guard protects the FILED value, not the whole row: selection bookkeeping must still
+        # be updatable or restatement handling could never record a winner.
+        connection.execute(
+            text("UPDATE xbrl_fact SET is_latest_selected = false WHERE fact_id = :x"),
+            {"x": fact_id},
+        )
+
+    _reset_to_base(test_database_url)

@@ -122,6 +122,52 @@ Violating any of these blocks sprint completion.
 9. **Never bypass SEC access controls.** All SEC traffic passes the shared rate limiter.
 10. **Never silently accept parser uncertainty.** Low confidence routes to review, not to
     publication.
+11. **Never run a destructive database test against the application database.** See below.
+
+### TEST-DATABASE-ISOLATION-INVARIANT
+
+```
+Destructive database tests must never operate on the configured application database.
+
+Migration upgrade and downgrade tests run ONLY against a dedicated disposable test database, and
+must FAIL CLOSED if the test target cannot be proven separate.
+```
+
+A destructive test is any test that drops, truncates, or recreates schema objects. Today that is
+the migration round-trip and the append-only trigger test; anything added later that runs
+`alembic downgrade`, `DROP TABLE`, or `TRUNCATE` is one too.
+
+**Two variables, two purposes, no fallback.**
+
+```
+DATABASE_URL        the application database. Holds real loaded facts.
+TEST_DATABASE_URL   disposable. Destructive tests drop every table in it.
+```
+
+`TEST_DATABASE_URL` must never default to, fall back to, or be derived from `DATABASE_URL`. A
+fallback works everywhere, quietly, until the day the application database has something in it.
+Absent configuration is a failure, never a silent substitution and never a skip.
+
+**Separateness is proven, not named.** `packages/persistence/engine.assert_disposable` parses both
+URLs to a `DatabaseIdentity` — host, port, socket path, database name, and deliberately no
+credentials — and refuses equality. String comparison is insufficient: `@localhost/fintek` and
+`@127.0.0.1:5432/fintek` are different strings and the same database. Credentials are excluded on
+purpose, so a destructive run cannot be authorized merely by connecting as a different user.
+
+**The target must say what it is.** Its database name must carry `test` as a whole
+underscore-delimited token, and must not contain `prod`, `production`, `live`, `master`, or
+`primary` however else it is decorated.
+
+**The application database is watched.** A session hook records the row counts of `issuer`,
+`filing`, and `xbrl_fact` before the suite and compares them after. Any change fails the run,
+whether caused by a dropped table or by a fixture row left behind.
+
+WHY THIS IS AN INVARIANT AND NOT A CONVENTION. The migration round-trip test ran against
+`DATABASE_URL` for one sprint. `make check` executed `alembic downgrade base`, dropped every
+application table, deleted 2,845 loaded facts, and reported green. The suite was not wrong about
+any assertion it made; it simply destroyed the thing it was testing beside. Skipping the test when
+data is present prevents the deletion and leaves the test unrun, which is the other half of the
+same failure.
 
 ### LLM-SERIALIZATION-INVARIANT
 
