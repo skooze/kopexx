@@ -1,14 +1,111 @@
 # Testing Strategy
 
+> **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
+> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
+> The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
+> preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
+> a filing means. The user selects four models independently — parsing, image, summary, and
+> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
+> content ontology, migration `0003` and the local application database are withdrawn. Sections
+> below that describe the withdrawn design are historical.
+>
+> **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+
+---
+
+# CURRENT DIRECTION — AUTHORITATIVE. Everything below this section is historical.
+
+Tests are grouped by whether they EXIST TODAY, are PLANNED FOR PHASE 2, or are PLANNED FOR THE
+ORCHESTRATOR. Nothing below claims a test exists when it does not.
+
+## EXISTING — running in ordinary CI today
+
+```
+source byte fidelity            five original SEC fixtures pinned by SHA-256 and size,
+                                verified from the committed blob
+hash verification               tests/unit/test_filing_fixtures.py
+entity and filing identity      tests/unit/test_corpus_identity_contract.py
+                                tests/unit/test_corpus_identity_rules.py
+exact form-family contract      tests/unit/test_form_family_contract.py — the qualifying set is
+                                GENERATED from the reviewed inventory and an unreviewed candidate
+                                fails closed
+model-boundary rules            tests/unit/test_llm_boundary.py and the architecture suite
+accession inventory             tests/unit/test_accession_inventory.py
+database isolation              tests/unit/test_database_isolation.py
+migration-target routing        tests/unit/test_migration_target_routing.py
+migration round trip            tests/unit/test_migrations.py, live against fintek_test
+persistence integration         three suites, live against fintek_integration_test
+architecture invariants         tests/architecture/, including the CI workflow itself
+deterministic ORACLE tests      footnote extraction, canonicalization and table ownership.
+                                RETAINED AS BENCHMARKS. They no longer define a correct parse.
+```
+
+## PLANNED FOR PHASE 2 — none of these exists
+
+```
+source-set completeness         that the complete relevant human-readable set was determined
+intact-input compatibility      that an incompatible pairing is refused BEFORE invocation, with
+                                measured bytes, estimated tokens and the model's limit
+flexible artifact acceptance    that an unfamiliar label or content type is represented, not
+                                rejected and not dropped
+source-reference validation     that every cited offset resolves in the preserved source
+numeric validation              that every reported number appears verbatim
+unresolved-content handling     that unresolved ranges are preserved and block completeness
+no false completeness           that PARTIAL and REVIEW_REQUIRED are produced rather than a
+                                rounded-up COMPLETE
+model-output fixture testing    recorded real responses replayed offline
+prompt-version testing          that a prompt change is versioned and attributed
+A/B model comparison            the same filing through different parsing models
+repeat-run variability          the same filing through the same model twice
+```
+
+## PLANNED FOR THE ORCHESTRATOR — none of these exists
+
+```
+capability-router tests         that a role never inherits another role's model, and that no
+                                substitution happens without the user
+cost authorization              that no billable call occurs without an explicit ceiling
+streaming security              that resumption cannot leak another job's events
+cache correctness               that a cached result is keyed by what actually determines it
+```
+
+## Rules that apply to all three groups
+
+**A skip is not a pass.** `make test-no-skips` fails the run if anything skips in an environment
+that can run it, and CI runs that target.
+
+**A test may not depend on an untracked file.** One did — it read the developer's gitignored
+`.env` — and it passed locally while being incapable of passing in CI. Fixtures come from the
+repository or from `tmp_path`.
+
+**A gate is never weakened to make a commit pass.** Correcting a demonstrably wrong test is
+permitted and must be disclosed in the commit report, with what changed and why the replacement
+still protects the behaviour.
+
+**Destructive tests never touch an application database.** Three database identities, no fallback
+between them, and the application one does not exist.
+
+
 IMPLEMENTATION STATUS: unit, integration, architecture, and migration layers IMPLEMENTED;
 golden, property, security, and performance layers PLANNED
 
-## Current state, after Sprint 4 and its closeout hardening
+## Current state, after Sprint 4.1
 
 ```
-622 tests collected, 622 passing, 0 skipped     517 unit, 44 integration, 61 architecture
- 93.45% statement coverage across the implemented packages (85% gate)
-        2,978 statements, 195 missed
+876 tests collected, 876 passing, 0 skipped     715 unit, 68 integration, 93 architecture
+ ~92% statement coverage across fifteen measured packages (85% gate)
+
+tests/unit/test_filing_content_regression.py  40  complete-filing census, 4 filings + 9 mutations
+tests/unit/test_filing_parser.py              35  blocks, structure, hierarchy, era neutrality
+tests/architecture/test_complete_filing_coverage.py 32  scope-revert guards
+tests/unit/test_filing_content.py             27  paths, coverage, layers, references
+tests/unit/test_accession_inventory.py        20  declared-type classification
+tests/unit/test_historical_filing_regression.py 18  the real 1994 bytes + 4 mutations
+tests/unit/test_migration_target_routing.py   24  defect D-13: target precedence and guards
+tests/unit/test_graphic_coverage.py           22  graphic classification and its consequence
+tests/integration/test_filing_content_persistence.py 18  LIVE: persist, zero-write rerun, digest
 
 tests/unit/test_ten_q_regression.py           42  the three 10-Qs asserted, plus mutation proofs
 tests/unit/test_table_ownership_regression.py 42  ownership census per filing
@@ -195,6 +292,95 @@ but a number no test reads is a claim, and it would have drifted silently.
 `tests/unit/test_ten_q_regression.py` and `tests/integration/test_ten_q_persistence.py` close that
 gap. The pattern generalizes: **when a sprint records a measurement, the same commit must put it
 somewhere a test can fail on it.**
+
+## Complete-filing testing — Sprint 4.1
+
+### Real filed bytes, not composed text
+
+Five primary documents are committed fixtures and hash-verified against `manifest.yaml` on every
+run: four FY2025 inline-XBRL filings and the 1994 PEM-armored submission. Sprint 3's policy
+committed only derived fixtures; Sprint 4.1 changed it, and the reason is in that file.
+
+**Five of this sprint's twelve defects were invisible to composed text.** A bare-form-only `PART`
+pattern found zero Parts in every 10-Q. Statement headings requiring end-of-string missed every
+`(Unaudited)` heading, so a 10-Q reported zero statements and zero footnotes while carrying five
+and ten. The 1994 notes are unnumbered and underlined by a typewriter rule, so `Note N` matching
+found none. Each produced a confident, silent, wrong result that a synthetic fixture would have
+confirmed as correct.
+
+Cost: 3.9 MiB raw, roughly 264 KiB after git compression.
+
+### Coverage-ledger reconciliation
+
+The load-bearing assertion is not a section count. `reconcile()` refuses to describe blocks it was
+not given — a disposition list that does not cover the block list raises rather than reconciling
+perfectly against itself — and then asserts every block carries exactly one disposition, no block
+is owned by two units, and every exclusion states a reason.
+
+```
+2,878 blocks across five filings   0 unresolved   0 double-assigned   every exclusion reasoned
+```
+
+### Document-inventory reconciliation
+
+Classification is asserted against the **filer's declared type**, and the two SEC listings are held
+apart: the index document table lists what the issuer filed (16 for one 10-K), `index.json` lists
+the folder (93, including SEC's own viewer output).
+
+### No-write rerun
+
+The idempotency proof is a second persistence pass writing **zero rows** — not a claim that the
+upserts are conditional, but the observed consequence. Run against `fintek_test` before the
+application database, and against the application database after.
+
+### Layered completeness
+
+Each layer is asserted independently, and the combination that matters most is asserted directly:
+a filing that is `SUBMISSION_COMPLETE` and `DISCLOSURE_PARTIAL` at the same time. A test that
+checked only "is it complete" could not distinguish that state from a defect.
+
+### Mutation proofs
+
+Thirteen, each removing or corrupting exactly one thing and asserting the guard notices: removed
+Item, removed signature block, removed notes section, TOC substitution, hidden-XBRL duplication,
+unresolved-disposition reachability, MD&A misclassified as a footnote, the Part-heading regression
+this sprint actually hit, a missing historical note boundary, historical signature over-capture, a
+bare rule that must not open a footnote, and a healthy-baseline control that prevents the rest from
+passing vacuously.
+
+### Architecture enforcement against scope revert
+
+`test_complete_filing_coverage.py`. A scope assumption leaves no failing test behind — which is how
+four sprints were built on one. These assert structurally where possible: the taxonomy is imported
+and checked for required types rather than grepped; constraint names are read off the SQLAlchemy
+metadata; `ParsedUnit`'s fields are checked against the era-specific provenance set. Prose matching
+is used only where the artifact is prose, and then per paragraph with a retraction marker, so a
+document may cite the retired claim while explaining it and may not reassert it.
+
+### Migration-target routing, after defect D-13
+
+A Sprint 4.1 test helper reached the application database with `alembic stamp base`, because
+`env.py` resolved its target through `DATABASE_URL` and overrode the `sqlalchemy.url` the helper
+had set. No row moved, so the preservation gate stayed green while the recorded revision and the
+schema disagreed.
+
+Three layers now apply, in this order:
+
+```
+1  precedence      packages.persistence.engine.migration_target_url() is the ONE resolver, and an
+                   explicitly supplied target outranks DATABASE_URL
+2  pre-execution   assert_safe_destructive_target() proves identity, name, host or socket, port,
+                   the test token, and difference from the application database — and raises
+                   BEFORE Alembic is called
+3  post-execution  the preservation gate watches alembic_version alongside row counts
+```
+
+Layer 3 alone is a detector, not a guard: by the time it fires, a `downgrade base` has already
+run. It is retained as a backstop.
+
+**The revision-detection guard is proven non-vacuously without touching the application database.**
+Clearing a real revision to demonstrate a guard is what caused the incident; the proof uses
+synthetic baseline snapshots instead, plus a live assertion that the collector emits the key.
 
 ## One suite, two callers
 

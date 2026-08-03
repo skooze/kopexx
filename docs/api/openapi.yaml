@@ -1,47 +1,91 @@
+# ARCHITECTURAL BETA CONTRACT. NOTHING HERE IS IMPLEMENTED.
+#
+# NO SERVER EXISTS. No endpoint below has been built, deployed, or called, and this file
+# deliberately declares no `servers:` block — naming one would imply otherwise. This document
+# records the SHAPE the beta API is intended to take so the specifications, the UX and the data
+# dictionary can agree with one another. It is redesigned as it is implemented in Phases 3 and 6.
+#
+# Authoritative direction: docs/adr/ADR-0016-corpus-first-model-first-architecture.md and
+# roadmap.md. The product is an orchestrator-driven, model-first SEC filing product: the backend
+# acquires, preserves, orchestrates and VALIDATES; a user-selected parsing model determines what a
+# filing means. The user selects four models independently.
+#
+# THIS IS BROWSER-FACING JSON AND IS OUTSIDE THE LLM CONTENT BOUNDARY (ADR-0013). JSON is correct
+# here; a browser is not a model. Model-visible synthetic content is unmarked plain text or exactly
+# one unfenced YAML 1.2 document, and is never any payload defined in this file.
+#
+# NO CREDENTIAL APPEARS IN THIS API. The browser never calls Bedrock, never receives an AWS
+# credential, and never learns a provider endpoint. All model access is server-side through
+# packages/llm_gateway.
+#
+# NO RIGID FILING TAXONOMY. Parsed content is deliberately loosely typed: a node carries whatever
+# label the filing and the parsing model produced. There is no enum of section kinds.
 openapi: 3.1.0
 
-# IMPLEMENTATION STATUS: PLANNED (Sprint 6). No endpoint is implemented.
-#
-# This is browser-facing JSON and is OUTSIDE the LLM content boundary defined in ADR-0013.
-# JSON is correct here. A browser is not a model.
-
 info:
-  title: FinTek API
-  version: 0.1.0
-  description: >-
-    SEC filing data, deterministic financial metrics, canonical footnote summaries, and scoped
-    Deep Analysis. Dashboard endpoints never invoke a language model.
+  title: Kopexx API — architectural beta contract
+  version: 0.0.0-unimplemented
+  summary: Conceptual endpoints for the orchestrator-driven, model-first SEC filing beta.
+  description: |
+    NOT IMPLEMENTED. No server exists and no endpoint has been built.
 
-servers:
-  - url: https://api.fintek.example/api/v1
-    description: production
-  - url: http://localhost:8000/api/v1
-    description: local
+    Every operation carries `x-implementation-status: PLANNED` and the phase that will build it.
+
+    Four independent model roles are selected by the user for every job: parsing, image, summary,
+    and analysis/chat. No role inherits another's model, and there is no automatic substitution.
+
+    The current authorized input mode is INTACT_SOURCE_ONLY. If the complete relevant human-readable
+    source set does not fit the selected parsing model, that pairing is INCOMPATIBLE and the job is
+    refused with an explanation. Nothing is truncated, sliced, projected, split, or silently
+    swapped to another model.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
 
 tags:
-  - name: issuers
+  - name: entities
+    description: |
+      The locally maintained catalog of entities with qualifying 10-K/10-Q-family filings. Backed
+      by the MINIMUM BETA CATALOG delivered in Phase 3 and completed before Phase 6 — not by the
+      Phase 8 universe-scale expansion, which widens the same catalog rather than creating it.
   - name: filings
-  - name: footnotes
-  - name: analysis
-  - name: admin
+    description: Discovered filings and their preserved original source artifacts.
+  - name: models
+    description: Dynamically discovered model catalog and the four role selections.
+  - name: jobs
+    description: Processing jobs, cost authorization, progress streaming.
+  - name: artifacts
+    description: Parsed, summary and image-analysis artifacts, each versioned and lineage-bearing.
+  - name: chat
+    description: Deep Dive sessions bound to an immutable scope.
 
 paths:
-
-  /issuers/search:
+  /entities/search:
     get:
-      tags: [issuers]
-      summary: Search issuers by ticker or name
-      description: >-
-        Returns only issuers in the active universe, which means issuers with at least one
-        historical 10-K or 10-Q. A ticker that never filed one does not appear.
+      tags: [entities]
+      operationId: searchEntities
+      summary: Typeahead over the local entity catalog.
+      description: |
+        Matches current name, former names, SEC filer name, current ticker, historical ticker, and
+        alias. An entity with no qualifying filing never appears.
+
+        CIK is identity. A ticker is a temporal alias and resolution is always as-of a date.
+        Historical ticker observations appear only where authoritative evidence exists; none is
+        fabricated.
+      x-implementation-status: PLANNED
+      x-phase: 6
+      x-depends-on-phase: 3
       parameters:
-        - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
-        - {name: as_of, in: query, required: false, schema: {type: string, format: date},
-           description: Resolve ticker as of this date. Tickers are reused by different issuers.}
-        - {name: limit, in: query, schema: {type: integer, default: 20, maximum: 100}}
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
       responses:
         "200":
-          description: Matches, possibly empty
+          description: Ranked candidates.
           content:
             application/json:
               schema:
@@ -50,238 +94,324 @@ paths:
                 properties:
                   results:
                     type: array
-                    items: {$ref: "#/components/schemas/IssuerSummary"}
-        "409": {$ref: "#/components/responses/AmbiguousTicker"}
-        "429": {$ref: "#/components/responses/RateLimited"}
+                    items: { $ref: "#/components/schemas/EntityMatch" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
-  /issuers/{cik}:
+  /entities/{cik}:
     get:
-      tags: [issuers]
-      parameters: [{$ref: "#/components/parameters/Cik"}]
-      responses:
-        "200":
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/Issuer"}
-        "404": {$ref: "#/components/responses/NotFound"}
-
-  /issuers/{cik}/filings:
-    get:
-      tags: [issuers]
+      tags: [entities]
+      operationId: getEntity
+      summary: One entity, with the filing-history bounds a timeframe selector needs.
+      x-implementation-status: PLANNED
+      x-phase: 6
       parameters:
-        - {$ref: "#/components/parameters/Cik"}
-        - {$ref: "#/components/parameters/Range"}
-        - {$ref: "#/components/parameters/Cursor"}
+        - $ref: "#/components/parameters/Cik"
       responses:
         "200":
+          description: The entity.
           content:
             application/json:
-              schema:
-                type: object
-                required: [filings, coverage]
-                properties:
-                  filings:
-                    type: array
-                    items: {$ref: "#/components/schemas/FilingSummary"}
-                  coverage: {$ref: "#/components/schemas/Coverage"}
-                  next_cursor: {type: [string, "null"]}
+              schema: { $ref: "#/components/schemas/Entity" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
-  /issuers/{cik}/financials:
-    get:
-      tags: [issuers]
-      summary: Deterministic metric time series for charting
-      description: >-
-        Served entirely from published datasets. No model call occurs. A derived fourth quarter is
-        flagged, and any comparability caveat is attached to the observation rather than hidden.
-      parameters:
-        - {$ref: "#/components/parameters/Cik"}
-        - {$ref: "#/components/parameters/Range"}
-        - {name: metrics, in: query, required: true,
-           schema: {type: array, items: {type: string}}, style: form, explode: false}
-        - {name: frequency, in: query,
-           schema: {type: string, enum: [annual, quarterly], default: annual}}
-      responses:
-        "200":
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/FinancialSeriesResponse"}
-        "400": {$ref: "#/components/responses/BadRequest"}
-
-  /filings/{accession}:
+  /entities/{cik}/filings:
     get:
       tags: [filings]
-      parameters: [{$ref: "#/components/parameters/Accession"}]
-      responses:
-        "200":
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/Filing"}
-        "404": {$ref: "#/components/responses/NotFound"}
-
-  /filings/{accession}/footnotes:
-    get:
-      tags: [footnotes]
-      summary: Every canonical footnote for a filing, with its stored summary
+      operationId: listEntityFilings
+      summary: Qualifying filings for an entity, optionally bounded by a timeframe.
+      description: |
+        Only forms in the reviewed 10-K/10-Q family appear. The exact filed form string is
+        preserved verbatim; it is never normalized.
+      x-implementation-status: PLANNED
+      x-phase: 6
       parameters:
-        - {$ref: "#/components/parameters/Accession"}
-        - {name: topic, in: query, schema: {type: string}}
-        # `changed` is defined by docs/footnotes/period-comparison.md as a stored
-        # footnote_comparison of CHANGED_MATERIAL against the immediately prior period. Until
-        # that table is populated (Sprint 6) the value is REJECTED with 400 UNSUPPORTED_FILTER.
-        # An interface must not imply a capability nothing computes.
-        - {name: classification, in: query,
-           schema: {type: string, enum: [routine, changed, material]}}
-        - {name: deep_dive_recommended, in: query, schema: {type: boolean}}
+        - $ref: "#/components/parameters/Cik"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
       responses:
         "200":
+          description: Filings in reverse chronological order.
           content:
             application/json:
               schema:
                 type: object
-                required: [footnotes, coverage]
+                required: [results]
                 properties:
-                  footnotes:
+                  results:
                     type: array
-                    items: {$ref: "#/components/schemas/CanonicalFootnote"}
-                  coverage: {$ref: "#/components/schemas/Coverage"}
-        "400": {$ref: "#/components/responses/BadRequest"}
+                    items: { $ref: "#/components/schemas/Filing" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
-  /issuers/{cik}/footnote-topics:
-    get:
-      tags: [footnotes]
-      summary: Footnote topics available for cross-period comparison
-      description: >-
-        A topic key is stable across periods where a footnote number is not: a note that is
-        Note 9 one year may be Note 8 the next. Served from stored comparisons; no model call.
-        See docs/footnotes/period-comparison.md.
-      parameters:
-        - {$ref: "#/components/parameters/Cik"}
-        - {$ref: "#/components/parameters/Range"}
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [topics]
-                properties:
-                  topics:
-                    type: array
-                    items:
-                      type: object
-                      required: [topic_key, title, periods_covered]
-                      properties:
-                        topic_key: {type: string}
-                        title: {type: string}
-                        periods_covered: {type: integer}
-        "404": {$ref: "#/components/responses/NotFound"}
-
-  /issuers/{cik}/footnote-topics/{topic_key}:
-    get:
-      tags: [footnotes]
-      summary: One footnote topic across periods, with what changed
-      description: >-
-        Deterministic comparison computed at publication. Reports THAT a note changed and WHAT
-        changed textually and numerically. It does not explain why; that is Deep Analysis.
-      parameters:
-        - {$ref: "#/components/parameters/Cik"}
-        - {name: topic_key, in: path, required: true, schema: {type: string}}
-        - {$ref: "#/components/parameters/Range"}
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [topic_key, periods]
-                properties:
-                  topic_key: {type: string}
-                  periods:
-                    type: array
-                    items:
-                      type: object
-                      required: [accession, fiscal_year, fiscal_period, classification]
-                      properties:
-                        accession: {type: string}
-                        fiscal_year: {type: integer}
-                        fiscal_period: {type: string}
-                        footnote_id: {type: string, format: uuid}
-                        summary: {type: string}
-                        classification:
-                          type: string
-                          enum: [NEW, ABSENT, UNCHANGED, CHANGED_IMMATERIAL,
-                                 CHANGED_MATERIAL, INCOMPARABLE]
-                        text_similarity: {type: number}
-                        changed_figures: {type: array, items: {type: object}}
-                        structural_changes: {type: array, items: {type: object}}
-                        comparison_method:
-                          type: string
-                          enum: [role_uri_stem, dominant_concept, normalized_title]
-                        confidence: {type: number}
-                        source_url: {type: string, format: uri}
-        "404": {$ref: "#/components/responses/NotFound"}
-
-  /footnotes/{footnote_id}:
-    get:
-      tags: [footnotes]
-      parameters:
-        - {name: footnote_id, in: path, required: true, schema: {type: string, format: uuid}}
-      responses:
-        "200":
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/CanonicalFootnoteDetail"}
-        "404": {$ref: "#/components/responses/NotFound"}
-
-  /filings/{accession}/processing-status:
+  /filings/{cik}/{accession}/source:
     get:
       tags: [filings]
-      description: >-
-        Distinguishes "we do not have this filing" from "we have it and processing is incomplete".
-        Collapsing those is how a dashboard tells a user a company reported nothing.
-      parameters: [{$ref: "#/components/parameters/Accession"}]
+      operationId: listSourceArtifacts
+      summary: The preserved original SEC artifacts for one filing.
+      description: |
+        Original source is authoritative and is never replaced by a parse, a summary or a derived
+        index. Each artifact records its SHA-256 and its provenance.
+
+        Filing identity is (CIK, accession). The accession alone is not unique: co-registration
+        puts one submission under more than one filer CIK.
+      x-implementation-status: PLANNED
+      x-phase: 3
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
       responses:
         "200":
+          description: The preserved source set.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/ProcessingStatus"}
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: "#/components/schemas/SourceArtifact" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
-  /analysis/sessions:
+  /models:
+    get:
+      tags: [models]
+      operationId: listModels
+      summary: The dynamically discovered model catalog.
+      description: |
+        DISCOVERED AT RUNTIME, never hardcoded. Identifiers, regions, modalities, context and
+        output limits and prices are whatever live discovery returned, together with the time it
+        was discovered. A model absent from discovery is not offered.
+
+        No credential, endpoint or provider secret is exposed.
+      x-implementation-status: PLANNED
+      x-phase: 3
+      responses:
+        "200":
+          description: Catalog snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discovered_at, models]
+                properties:
+                  discovered_at: { type: string, format: date-time }
+                  models:
+                    type: array
+                    items: { $ref: "#/components/schemas/ModelCapability" }
+
+  /jobs/cost-preview:
     post:
-      tags: [analysis]
-      summary: Create a Deep Analysis session
-      description: >-
-        Scope is computed server-side from the requested entry point and is IMMUTABLE thereafter.
-        Subsequent turns send only session_id and message.
+      tags: [jobs]
+      operationId: previewJobCost
+      summary: Compatibility and estimated cost, before anything billable happens.
+      description: |
+        Returns per-role compatibility and an estimated cost. A pairing whose complete relevant
+        human-readable source set does not fit the selected parsing model is reported INCOMPATIBLE
+        here, with the measured bytes, the estimated tokens and the model's limit — the job is not
+        silently downgraded.
+
+        Token figures are ESTIMATES until measured against a provider tokenizer.
+      x-implementation-status: PLANNED
+      x-phase: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobRequest" }
+      responses:
+        "200":
+          description: Preview, including any incompatibility.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CostPreview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /jobs:
+    post:
+      tags: [jobs]
+      operationId: createJob
+      summary: Create a processing job. Requires explicit cost authorization.
+      description: |
+        A job is refused unless it carries an explicit authorization referencing a cost preview and
+        an accepted ceiling. No billable invocation occurs without it.
+      x-implementation-status: PLANNED
+      x-phase: 3
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [scope_type]
-              properties:
-                scope_type: {type: string, enum: [FOOTNOTE, FILING, TIMEFRAME]}
-                footnote_id: {type: string, format: uuid}
-                accession: {type: string}
-                cik: {type: string}
-                range: {type: string, enum: [current_year, previous_year, 5y, 10y, all]}
-                question: {type: string, maxLength: 2000}
+              allOf:
+                - $ref: "#/components/schemas/JobRequest"
+                - type: object
+                  required: [authorization]
+                  properties:
+                    authorization: { $ref: "#/components/schemas/CostAuthorization" }
       responses:
-        "201":
+        "202":
+          description: Accepted.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/AnalysisSession"}
-        "429": {$ref: "#/components/responses/QuotaExceeded"}
+              schema: { $ref: "#/components/schemas/Job" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "402": { $ref: "#/components/responses/BudgetExhausted" }
+        "409": { $ref: "#/components/responses/Incompatible" }
 
-  /analysis/sessions/{session_id}/messages:
+  /jobs/{job_id}:
+    get:
+      tags: [jobs]
+      operationId: getJob
+      summary: Durable job state.
+      x-implementation-status: PLANNED
+      x-phase: 3
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /jobs/{job_id}/events:
+    get:
+      tags: [jobs]
+      operationId: streamJobEvents
+      summary: Server-sent progress stream, resumable.
+      description: |
+        Resumption uses `Last-Event-ID`. A completed job is served from stored state and invokes no
+        model; reconnecting after completion replays terminal state rather than re-running work.
+      x-implementation-status: PLANNED
+      x-phase: 3
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: An event stream of JobEvent objects.
+          content:
+            text/event-stream:
+              schema: { $ref: "#/components/schemas/JobEvent" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /jobs/{job_id}/parsed:
+    get:
+      tags: [artifacts]
+      operationId: getParsedArtifact
+      summary: The accepted parsed artifact produced by the selected parsing model.
+      description: |
+        DELIBERATELY LOOSELY TYPED. A node carries whatever label the filing and the model
+        produced. There is no enum of section kinds, no required hierarchy, and no obligation for
+        any filing to use names like MD&A, Item 7, Part I, Footnote, Certification or Signature.
+        Such names may appear as filing-native labels or model annotations; they are not ontology.
+
+        Served from storage. No model call occurs.
+      x-implementation-status: PLANNED
+      x-phase: 3
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: The parsed artifact.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParsedArtifact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /jobs/{job_id}/summary:
+    get:
+      tags: [artifacts]
+      operationId: getSummaryArtifact
+      summary: The summary artifact, separate from the parse it references.
+      description: |
+        A summary is its own artifact with its own version and lineage. Regenerating it does not
+        require reparsing while the accepted parse is unchanged. Superseding the parse invalidates
+        dependent summaries rather than silently leaving them attached.
+      x-implementation-status: PLANNED
+      x-phase: 5
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: The summary artifact.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SummaryArtifact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /jobs/{job_id}/images:
+    get:
+      tags: [artifacts]
+      operationId: listImageArtifacts
+      summary: Image-analysis artifacts, when a separate image model was used.
+      description: |
+        Present only when the selected parsing model is text-only. A multimodal parsing model
+        handles images itself and no image model is invoked redundantly, in which case this returns
+        an empty list and records why.
+      x-implementation-status: PLANNED
+      x-phase: 4
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Image-analysis artifacts, and the reason none exist if none do.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [artifacts]
+                properties:
+                  not_applicable_reason:
+                    type: [string, "null"]
+                    description: For example, the parsing model is multimodal and handled images itself.
+                  artifacts:
+                    type: array
+                    items: { $ref: "#/components/schemas/ImageArtifact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /chat/sessions:
     post:
-      tags: [analysis]
-      description: >-
-        The request body carries ONLY a message. CIK, tickers, accessions, footnote identifiers,
-        scope, model, and budgets are loaded from the server-side session. Additional properties
-        are REJECTED, not ignored, so a tampering attempt is visible.
-      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      tags: [chat]
+      operationId: createChatSession
+      summary: Open a Deep Dive session bound to an immutable scope.
+      description: |
+        Scope — entity and timeframe — is fixed at creation and loaded server-side thereafter. The
+        client sends a session id and a message and nothing else; it cannot widen scope.
+      x-implementation-status: PLANNED
+      x-phase: 7
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatSessionRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /chat/sessions/{session_id}/messages:
+    post:
+      tags: [chat]
+      operationId: postChatMessage
+      summary: Ask a question inside the session's scope.
+      description: |
+        Answers cite original evidence. A summary is never the sole evidence for a material claim.
+        Every turn is checked against turn, token and cost budgets before invocation.
+      x-implementation-status: PLANNED
+      x-phase: 7
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
       requestBody:
         required: true
         content:
@@ -289,285 +419,458 @@ paths:
             schema:
               type: object
               required: [message]
-              additionalProperties: false
               properties:
-                message: {type: string, minLength: 1, maxLength: 4000}
+                message: { type: string, minLength: 1 }
       responses:
         "200":
+          description: The answer and its citations.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/AnalysisResponse"}
-        "403": {$ref: "#/components/responses/ScopeViolation"}
-        "429": {$ref: "#/components/responses/BudgetExhausted"}
-    get:
-      tags: [analysis]
-      parameters: [{$ref: "#/components/parameters/SessionId"}]
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  messages:
-                    type: array
-                    items: {$ref: "#/components/schemas/AnalysisMessage"}
-
-  /analysis/sessions/{session_id}:
-    get:
-      tags: [analysis]
-      parameters: [{$ref: "#/components/parameters/SessionId"}]
-      responses:
-        "200":
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/AnalysisSession"}
-    delete:
-      tags: [analysis]
-      parameters: [{$ref: "#/components/parameters/SessionId"}]
-      responses:
-        "204": {description: Closed}
+              schema: { $ref: "#/components/schemas/ChatTurn" }
+        "402": { $ref: "#/components/responses/BudgetExhausted" }
+        "403": { $ref: "#/components/responses/ScopeViolation" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
 components:
-
   parameters:
     Cik:
       name: cik
       in: path
       required: true
-      schema: {type: string, pattern: "^[0-9]{10}$"}
-      description: Ten-digit zero-padded CIK. Leading zeros are significant.
+      description: Ten-digit zero-padded CIK. Identity; never a ticker.
+      schema: { type: string, pattern: "^[0-9]{10}$" }
     Accession:
       name: accession
       in: path
       required: true
-      schema: {type: string, pattern: "^[0-9]{10}-[0-9]{2}-[0-9]{6}$"}
-      description: Dashed accession. The prefix may belong to a filing agent, not the issuer.
+      schema: { type: string, pattern: "^[0-9]{10}-[0-9]{2}-[0-9]{6}$" }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     SessionId:
       name: session_id
       in: path
       required: true
-      schema: {type: string}
-    Range:
-      name: range
-      in: query
-      schema: {type: string, enum: [current_year, previous_year, 5y, 10y, all], default: 5y}
-      description: >-
-        Ranges are expressed in the ISSUER'S fiscal years, not calendar years. Current year may be
-        partial.
-    Cursor:
-      name: cursor
-      in: query
-      schema: {type: string}
+      schema: { type: string, format: uuid }
 
   responses:
     BadRequest:
-      description: Invalid request
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+      description: Malformed request.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: Not found
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
-    AmbiguousTicker:
-      description: The ticker resolves to more than one issuer; details carry candidates
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
-    ScopeViolation:
-      description: The request falls outside the session's authorized scope
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
-    RateLimited:
-      description: Rate limited
-      headers:
-        Retry-After: {schema: {type: integer}}
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
-    QuotaExceeded:
-      description: Per-principal quota exhausted
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+      description: No such resource.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Incompatible:
+      description: |
+        The complete relevant human-readable source set does not fit the selected model. The job is
+        refused. Nothing is truncated and no other model is substituted.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Incompatibility" }
     BudgetExhausted:
-      description: Session budget exhausted
-      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+      description: The cost ceiling for this job or session would be exceeded.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ScopeViolation:
+      description: The request would leave the session's immutable scope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
-
     Error:
       type: object
-      required: [error]
+      required: [code, message]
       properties:
-        error:
-          type: object
-          required: [code, message, request_id]
-          properties:
-            code: {type: string}
-            message: {type: string, description: Safe to display; never carries filing or model content}
-            request_id: {type: string}
-            details: {type: object}
+        code: { type: string }
+        message: { type: string }
+        detail: { type: [string, "null"] }
 
-    IssuerSummary:
+    EntityMatch:
       type: object
+      required: [cik, name, matched_on]
       properties:
-        cik: {type: string}
-        name: {type: string}
-        ticker: {type: string}
-        exchange: {type: string}
-        former_names: {type: array, items: {type: string}}
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        name: { type: string, description: Authoritative current name, resolved from the CIK. }
+        matched_on:
+          type: string
+          description: Which alias matched. A sampling label is never authoritative identity.
+          enum: [current_name, former_name, filer_name, current_ticker, historical_ticker, alias]
+        current_tickers:
+          type: array
+          items: { type: string }
+          description: May be empty. Many issuers have no current ticker.
 
-    Issuer:
-      allOf:
-        - {$ref: "#/components/schemas/IssuerSummary"}
-        - type: object
-          properties:
-            sic: {type: string}
-            fiscal_year_end: {type: string, description: MMDD; per filing, not stable over time}
-            listings: {type: array, items: {$ref: "#/components/schemas/Listing"}}
-            coverage: {$ref: "#/components/schemas/Coverage"}
-
-    Listing:
+    Entity:
       type: object
+      required:
+        [cik, name, earliest_qualifying_filing, latest_qualifying_filing, qualifying_filing_count]
       properties:
-        ticker: {type: string}
-        exchange: {type: string}
-        share_class: {type: string}
-        effective_start: {type: string, format: date}
-        effective_end: {type: [string, "null"], format: date}
-        is_current: {type: boolean}
-
-    FilingSummary:
-      type: object
-      properties:
-        accession: {type: string}
-        form: {type: string}
-        filing_date: {type: string, format: date}
-        report_date: {type: string, format: date}
-        fiscal_year: {type: integer}
-        fiscal_period: {type: string}
-        is_amendment: {type: boolean}
-        amends_accession: {type: [string, "null"]}
-        footnote_status: {type: string, enum: [COMPLETE, PARTIAL, REQUIRES_REVIEW, FAILED]}
-        sec_url: {type: string, format: uri}
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        name: { type: string }
+        former_names:
+          type: array
+          items: { type: string }
+        current_tickers:
+          type: array
+          items: { type: string }
+        sic: { type: [string, "null"] }
+        earliest_qualifying_filing:
+          type: string
+          format: date
+          description: The lower bound of any selectable timeframe for this entity.
+        latest_qualifying_filing: { type: string, format: date }
+        qualifying_filing_count: { type: integer, minimum: 1 }
 
     Filing:
-      allOf:
-        - {$ref: "#/components/schemas/FilingSummary"}
-        - type: object
-          properties:
-            sections: {type: array, items: {$ref: "#/components/schemas/FilingSection"}}
-            coverage: {$ref: "#/components/schemas/Coverage"}
-
-    FilingSection:
       type: object
+      required: [cik, accession, form_as_filed, filing_date]
       properties:
-        item_number: {type: string}
-        heading: {type: string}
-        extraction_strategy: {type: string}
-        confidence: {type: number}
-        available: {type: boolean}
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        accession: { type: string }
+        form_as_filed:
+          type: string
+          description: |
+            The EXACT filed string, preserved verbatim and never normalized. EDGAR writes 10KSB,
+            not 10-KSB. Membership in the qualifying family comes from the reviewed inventory; an
+            unreviewed form fails closed for review.
+        filing_date: { type: string, format: date }
+        report_period: { type: [string, "null"], format: date }
+        is_amendment: { type: boolean }
+        transport_era:
+          type: string
+          description: A transport observation, not a semantic classification.
 
-    Coverage:
+    SourceArtifact:
       type: object
-      description: Honest processing state. Partial coverage is never presented as complete.
+      required: [artifact_id, filename, sha256, size_bytes, role]
       properties:
-        canonical_footnotes_extracted: {type: integer}
-        toc_expected_note_count: {type: [integer, "null"]}
-        summaries_accepted: {type: integer}
-        summaries_requiring_review: {type: integer}
-        source_blocks_orphaned: {type: integer}
-        status: {type: string, enum: [COMPLETE, PARTIAL, REQUIRES_REVIEW, FAILED]}
-        display_text: {type: string, example: "Footnotes summarized: 23 of 24"}
-        structured_data_from: {type: [string, "null"], format: date,
-                               description: XBRL-bound; earlier documents exist without facts}
+        artifact_id: { type: string, format: uuid }
+        filename: { type: string }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size_bytes: { type: integer, minimum: 0 }
+        declared_type:
+          type: [string, "null"]
+          description: The FILER's declared document type from the accession index table.
+        media_type: { type: [string, "null"] }
+        role:
+          type: string
+          enum: [primary_document, complete_submission, exhibit, image, other]
+          description: A transport role, not a semantic one.
+        separately_addressable:
+          type: boolean
+          description: |
+            False for pre-2001 filings, where documents exist only inside the complete submission
+            text file and EDGAR exposes no per-document URL.
 
-    CanonicalFootnote:
+    ModelRole:
+      type: string
+      enum: [parsing, image, summary, analysis]
+      description: |
+        Four roles, each selected independently by the user. No role inherits another's model and
+        there is no automatic substitution or silent fallback.
+
+    ModelCapability:
       type: object
+      required: [model_id, roles_supported, discovered_at]
       properties:
-        footnote_id: {type: string, format: uuid}
-        number: {type: string}
-        title: {type: string}
-        sequence: {type: integer}
-        classification: {type: string, enum: [routine, changed, material]}
-        summary: {type: string}
-        topics: {type: array, items: {type: string}}
-        deep_dive_recommended: {type: boolean}
-        sec_rendering_url: {type: string, format: uri}
-        summary_status: {type: string}
+        model_id: { type: string, description: As returned by live discovery. Never hardcoded. }
+        display_name: { type: [string, "null"] }
+        roles_supported:
+          type: array
+          items: { $ref: "#/components/schemas/ModelRole" }
+        modalities:
+          type: array
+          items: { type: string, enum: [text, image] }
+        context_tokens: { type: [integer, "null"] }
+        max_output_tokens: { type: [integer, "null"] }
+        discovered_at: { type: string, format: date-time }
 
-    CanonicalFootnoteDetail:
-      allOf:
-        - {$ref: "#/components/schemas/CanonicalFootnote"}
-        - type: object
-          properties:
-            financial_relationships: {type: array, items: {type: object}}
-            important_facts: {type: array, items: {type: object}}
-            period_changes: {type: array, items: {type: object}}
-            risks_and_obligations: {type: array, items: {type: object}}
-            source_blocks: {type: array, items: {type: object}}
-            tables: {type: array, items: {type: object}}
-
-    FinancialSeriesResponse:
+    ModelSelections:
       type: object
+      required: [parsing, summary, analysis]
+      description: |
+        The image selection may be omitted or null when the parsing model is multimodal; in that
+        case the parsing model handles images and no image model is invoked.
       properties:
-        cik: {type: string}
-        frequency: {type: string}
-        series:
+        parsing: { type: string }
+        image: { type: [string, "null"] }
+        summary: { type: string }
+        analysis: { type: string }
+
+    JobRequest:
+      type: object
+      required: [cik, accessions, models]
+      properties:
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        accessions:
+          type: array
+          minItems: 1
+          items: { type: string }
+        models: { $ref: "#/components/schemas/ModelSelections" }
+
+    Incompatibility:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [source_set_exceeds_context, modality_unsupported, model_unavailable]
+        accession: { type: [string, "null"] }
+        model_id: { type: [string, "null"] }
+        source_set_bytes: { type: [integer, "null"] }
+        estimated_input_tokens: { type: [integer, "null"] }
+        model_context_tokens: { type: [integer, "null"] }
+        alternatives:
+          type: array
+          description: Compatible models the USER may choose. The server never chooses for them.
+          items: { type: string }
+
+    CostPreview:
+      type: object
+      required: [compatible, per_filing]
+      properties:
+        compatible:
+          type: boolean
+          description: False if any filing/model pairing is incompatible.
+        estimated_cost:
+          type: [number, "null"]
+          description: An ESTIMATE. No price is asserted before live discovery.
+        currency: { type: [string, "null"] }
+        per_filing:
           type: array
           items:
             type: object
+            required: [accession, compatible]
             properties:
-              metric: {type: string}
-              unit: {type: string}
-              observations:
+              accession: { type: string }
+              compatible: { type: boolean }
+              source_set_bytes: { type: [integer, "null"] }
+              estimated_input_tokens:
+                type: [integer, "null"]
+                description: An estimate from a character ratio, not a provider tokenizer count.
+              incompatibility: { $ref: "#/components/schemas/Incompatibility" }
+
+    CostAuthorization:
+      type: object
+      required: [preview_id, accepted_ceiling]
+      properties:
+        preview_id: { type: string, format: uuid }
+        accepted_ceiling: { type: number, minimum: 0 }
+        currency: { type: string }
+
+    CostRecord:
+      type: object
+      properties:
+        input_tokens: { type: [integer, "null"] }
+        output_tokens: { type: [integer, "null"] }
+        amount: { type: [number, "null"] }
+        currency: { type: [string, "null"] }
+        latency_ms: { type: [integer, "null"] }
+        measured:
+          type: boolean
+          description: False while any component is an estimate rather than a provider-reported value.
+
+    Job:
+      type: object
+      required: [job_id, state, cik, accessions, models, created_at]
+      properties:
+        job_id: { type: string, format: uuid }
+        state:
+          type: string
+          enum: [queued, acquiring, parsing, validating, summarizing, complete, failed, refused]
+        cik: { type: string }
+        accessions:
+          type: array
+          items: { type: string }
+        models: { $ref: "#/components/schemas/ModelSelections" }
+        created_at: { type: string, format: date-time }
+        cost: { $ref: "#/components/schemas/CostRecord" }
+        incompatibility: { $ref: "#/components/schemas/Incompatibility" }
+
+    JobEvent:
+      type: object
+      required: [event_id, job_id, kind, at]
+      properties:
+        event_id: { type: string }
+        job_id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum:
+            [state_changed, progress, artifact_ready, validation_result, warning, error, terminal]
+        at: { type: string, format: date-time }
+        message: { type: [string, "null"] }
+
+    ArtifactLineage:
+      type: object
+      required: [artifact_id, version, produced_by_model, prompt_version, created_at]
+      properties:
+        artifact_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        supersedes: { type: [string, "null"], format: uuid }
+        produced_by_model: { type: string }
+        prompt_version: { type: string }
+        created_at: { type: string, format: date-time }
+        request_uri:
+          type: [string, "null"]
+          description: Object-storage URI of the exact request body sent to the model.
+        response_uri:
+          type: [string, "null"]
+          description: Object-storage URI of the exact response body received.
+
+    SourceReference:
+      type: object
+      required: [artifact_id, start, end]
+      description: A byte range in a preserved original artifact. Validation resolves it there.
+      properties:
+        artifact_id: { type: string, format: uuid }
+        start: { type: integer, minimum: 0 }
+        end: { type: integer, minimum: 0 }
+
+    ParsedNode:
+      type: object
+      required: [node_id, order]
+      description: |
+        INTENTIONALLY OPEN. `label` is whatever the filing and the model produced — there is no
+        enum, no required hierarchy and no universal taxonomy. Unrecognized structure is
+        represented, not discarded.
+      additionalProperties: true
+      properties:
+        node_id: { type: string }
+        parent_id: { type: [string, "null"] }
+        order: { type: integer, minimum: 0 }
+        label:
+          type: [string, "null"]
+          description: Filing-native label or model annotation. Not a controlled vocabulary.
+        content_type:
+          type: [string, "null"]
+          description: Open-ended, for example paragraph, list, table, image, heading.
+        text: { type: [string, "null"] }
+        source_references:
+          type: array
+          items: { $ref: "#/components/schemas/SourceReference" }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        ambiguity: { type: [string, "null"] }
+        unresolved:
+          type: boolean
+          default: false
+          description: |
+            An honest unresolved marker. It prevents a complete result; it never deletes content.
+        is_financial_statement_footnote:
+          type: boolean
+          default: false
+          description: |
+            Set by the parsing model, not by backend code. Every node so marked remains an
+            independent node and an independent required summary target.
+
+    Coverage:
+      type: object
+      required: [status, source_bytes_total, source_bytes_represented]
+      description: |
+        Proved by the backend against the preserved bytes, never asserted by the model that
+        produced the parse.
+      properties:
+        status:
+          type: string
+          enum: [COMPLETE, PARTIAL, REVIEW_REQUIRED]
+        source_bytes_total: { type: integer, minimum: 0 }
+        source_bytes_represented: { type: integer, minimum: 0 }
+        unresolved_ranges:
+          type: array
+          items: { $ref: "#/components/schemas/SourceReference" }
+        citations_checked: { type: integer, minimum: 0 }
+        citations_resolved: { type: integer, minimum: 0 }
+        numbers_checked: { type: integer, minimum: 0 }
+        numbers_verbatim: { type: integer, minimum: 0 }
+
+    ParsedArtifact:
+      type: object
+      required: [lineage, cik, accession, nodes, coverage]
+      properties:
+        lineage: { $ref: "#/components/schemas/ArtifactLineage" }
+        cik: { type: string }
+        accession: { type: string }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/ParsedNode" }
+        coverage: { $ref: "#/components/schemas/Coverage" }
+
+    SummaryArtifact:
+      type: object
+      required: [lineage, parses, sections]
+      properties:
+        lineage: { $ref: "#/components/schemas/ArtifactLineage" }
+        parses:
+          type: array
+          description: The accepted parsed artifact versions this summary was grounded in.
+          items: { type: string, format: uuid }
+        invalidated_by_supersession:
+          type: boolean
+          default: false
+        sections:
+          type: array
+          items:
+            type: object
+            required: [node_id, text]
+            properties:
+              node_id: { type: string }
+              text: { type: string }
+              source_references:
                 type: array
-                items:
-                  type: object
-                  properties:
-                    period_end: {type: string, format: date}
-                    fiscal_year: {type: integer}
-                    fiscal_period: {type: string}
-                    value: {type: [number, "null"]}
-                    is_derived: {type: boolean, description: true for a computed fourth quarter}
-                    comparability_status: {type: string}
-                    warnings: {type: array, items: {type: string}}
-                    source_fact_ids: {type: array, items: {type: string}}
+                items: { $ref: "#/components/schemas/SourceReference" }
 
-    ProcessingStatus:
+    ImageArtifact:
       type: object
+      required: [lineage, source_artifact_id, description]
       properties:
-        accession: {type: string}
-        state: {type: string}
-        coverage: {$ref: "#/components/schemas/Coverage"}
-        last_updated: {type: string, format: date-time}
+        lineage: { $ref: "#/components/schemas/ArtifactLineage" }
+        source_artifact_id: { type: string, format: uuid }
+        located_in_document: { type: [string, "null"] }
+        description: { type: string }
 
-    AnalysisSession:
+    ChatSessionRequest:
       type: object
+      required: [cik, models]
       properties:
-        session_id: {type: string}
-        scope_type: {type: string, enum: [FOOTNOTE, FILING, TIMEFRAME]}
-        issuer: {type: object, properties: {cik: {type: string}, name: {type: string}}}
-        scope_badge: {type: string, example: "Apple Inc. — fiscal 2021 to 2026"}
-        status: {type: string}
-        budgets_remaining:
-          type: object
-          properties:
-            turns: {type: integer}
-            input_tokens: {type: integer}
-            output_tokens: {type: integer}
-            cost_usd: {type: number}
-        expires_at: {type: string, format: date-time}
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        from: { type: [string, "null"], format: date }
+        to: { type: [string, "null"], format: date }
+        models: { $ref: "#/components/schemas/ModelSelections" }
 
-    AnalysisMessage:
+    ChatSession:
       type: object
+      required: [session_id, cik, created_at]
       properties:
-        role: {type: string, enum: [user, assistant]}
-        content: {type: string}
-        citations: {type: array, items: {type: object}}
-        created_at: {type: string, format: date-time}
+        session_id: { type: string, format: uuid }
+        cik: { type: string }
+        from: { type: [string, "null"], format: date }
+        to: { type: [string, "null"], format: date }
+        analysis_model: { type: string }
+        created_at: { type: string, format: date-time }
 
-    AnalysisResponse:
+    ChatTurn:
       type: object
+      required: [answer, citations, cost]
       properties:
-        executive_finding: {type: string}
-        filing_facts: {type: array, items: {type: object}}
-        calculated_metrics: {type: array, items: {type: object}}
-        interpretations: {type: array, items: {type: object}}
-        risks: {type: array, items: {type: object}}
-        missing_information: {type: array, items: {type: string}}
-        suggested_follow_ups: {type: array, items: {type: string}}
-        used_selected_evidence: {type: boolean}
-        budgets_remaining: {type: object}
+        answer: { type: string }
+        citations:
+          type: array
+          description: |
+            Material claims cite original evidence. A summary is never the sole evidence for one.
+          items:
+            type: object
+            required: [kind]
+            properties:
+              kind:
+                type: string
+                enum: [source, parsed_node, summary, numeric_fact]
+              source_reference: { $ref: "#/components/schemas/SourceReference" }
+              node_id: { type: [string, "null"] }
+        cost: { $ref: "#/components/schemas/CostRecord" }

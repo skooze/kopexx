@@ -10,6 +10,43 @@ COMMITTED as `468d0f2` and pushed to `origin/main` on 2026-08-02, each step sepa
 A post-closeout hardening correction follows the sprint body; it changed no Sprint 4 behaviour and
 no measured result below.
 
+> **Forward note, added 2026-08-02 at the opening of Sprint 4.1. Nothing below this note has been
+> edited.**
+>
+> Sprint 4's *product scope* was later widened by
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`. The repository had been treating
+> financial-statement footnotes as nearly the entire summarization product; the clarified
+> requirement is that every human-readable part of every processed 10-K and 10-Q is covered.
+>
+> **This does not invalidate any result recorded below.** Sprint 4 set out to prove deterministic
+> canonical financial-footnote grouping and table ownership against real acquired bytes, and it
+> did. All seventeen acceptance criteria were met and measured, and the regression suite that
+> guards them continues to pass unchanged.
+>
+> **WHAT CHANGED IS THE ROLE OF THAT WORK, NOT ITS CORRECTNESS.** The scope correction was
+> followed by a second, larger correction: the answer to "footnotes are too narrow" was NOT a more
+> complete deterministic parser. The selected parsing model determines what a filing means; the
+> backend proves coverage, citations and numbers against the preserved bytes. So the 43 canonical
+> footnotes, the 117 of 117 attachments and the table-ownership census below are now a **recall
+> floor and a validation oracle for grading a parsing model**. They are no longer a product
+> requirement and they do not define a correct parse.
+>
+> This is a demotion of authority, not a finding of error. The measurements were real, they were
+> reproducible, and they were measurements of Apple — which is exactly why one issuer can never
+> settle an architectural question. See `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`
+> and `docs/sprints/SPRINT-0004A.md`.
+>
+> One implementation gap surfaced during the Sprint 4.1 audit and is recorded there as defect D-1:
+> Sprint 4 persisted footnote *structure* but not footnote *prose* — `canonical_footnote.text` was
+> NULL in 43 of 43 rows and `footnote_source_block.text` in 160 of 160. Sprint 4's acceptance
+> criteria were entirely about grouping, so nothing caught it.
+>
+> **D-1 IS NOT FIXED.** Sprint 4.1 was superseded before correcting it, the application database it
+> was observed in has been dropped, and the schema it concerns is superseded in direction. Text
+> extraction is now the parsing model's output rather than a deterministic extractor's, so D-1 is
+> not carried forward as a bug to repair — it is recorded as a measured property of work that has
+> been demoted to an oracle. See `docs/sprints/SPRINT-0004A.md`.
+
 ---
 
 ## Objective

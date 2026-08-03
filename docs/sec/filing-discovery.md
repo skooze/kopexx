@@ -1,5 +1,43 @@
 # Filing Discovery
 
+---
+
+# CURRENT DIRECTION — AUTHORITATIVE. Everything below this section is historical.
+
+## What discovery must produce
+
+The qualifying-family decision comes from the **reviewed inventory**, never from a pattern. 41
+distinct 10-family form strings were enumerated across all 135 time-eligible EDGAR quarterly master
+indexes from 1993Q1 through 2026Q3 and adjudicated into **22 included and 19 excluded**. Every
+included form carries an authoritative SEC description read from a real filing-detail page and a
+verified accession.
+
+```
+EXACT FILED STRINGS ARE PRESERVED. EDGAR writes 10KSB, not 10-KSB.
+PREFIX MATCHING ALONE NEVER CLASSIFIES A FORM.
+AN UNREVIEWED CANDIDATE FAILS CLOSED FOR REVIEW.
+```
+
+The defect this rule exists to prevent: a hand-written filter searched for the hyphenated strings
+`10-KSB` and `10-QSB`, matched almost nothing, and concluded the small-business family was
+"effectively absent". It is roughly 190,000 filings, and `10QSB` is the fourth most common form in
+the entire family. Enforced by `tests/unit/test_form_family_contract.py`.
+
+## Identity
+
+Filing identity is `(CIK, accession)`. The accession alone is not unique — co-registration puts one
+submission under more than one filer CIK, and a rule keyed on the accession rejects valid SEC data.
+Ownership is resolved from the SEC archive path, never from the accession prefix, which is
+frequently the filing agent's CIK: 361 of 613 corpus filings.
+
+## Transport, not meaning
+
+Discovery records transport facts only — declared type, size, order, format, era, addressability.
+It does not classify content. **Pre-2001 documents are not individually addressable on EDGAR**: the
+complete submission text file is the only retrievable artifact and every filed document lives
+inside it, so no component may assume a per-document URL exists.
+
+
 IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 3) for one CIK; universe scale PLANNED (Stage 2 W-1). Identity and URL construction IMPLEMENTED (Sprint 1)
 OWNER PACKAGE: `packages/filing_discovery`
 
@@ -25,7 +63,11 @@ disk: 984,730 small files will exhaust the inode budget. Verified coverage: all 
 present, with 1,055 overflow shards included.
 
 **Use `master.gz`, not `.idx`.** The gzip form is roughly six times smaller for identical content.
-All 136 quarterly indexes from 1993 to 2026 are present, totalling about 356 MB.
+136 quarterly index DIRECTORIES exist from 1993 to 2026, totalling about 356 MB, of which
+135 are populated. Measured 2026-08-02: 1993Q1 through 2026Q3 all carry filing records; the
+SEC pre-creates the directory for the next quarter, so 2026Q4 exists but its master.gz is a
+236-byte header-only stub with zero data rows. A scan must count contributing quarters, not
+directories.
 
 **Every `25-NSE` filing appears twice in the index**, once under the subject CIK and once under
 the exchange's, carrying the same accession. Deduplicate on accession.

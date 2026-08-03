@@ -15,12 +15,13 @@ durable project memory. No chat log, ticket, or prior session is authoritative.
 Then read, in order:
 
 ```
-rules.md                      the operating contract, read in full
-roadmap.md                    what is built, what is planned, and in what order
-techspecs.md                  what the code actually does today
-CHANGELOG.md                  what changed and when
-docs/sprints/SPRINT-NNNN.md   the latest sprint record
-docs/adr/                     the decisions that constrain new work
+rules.md                                 the operating contract, read in full
+roadmap.md                               what is built, what is planned, and in what order
+techspecs.md                             what the code actually does today
+CHANGELOG.md                             what changed and when
+docs/sprints/SPRINT-NNNN.md              the latest sprint record
+docs/architecture/product-definition.md  what the product is, authoritatively
+docs/adr/                                the decisions that constrain new work
 ```
 
 Search `packages/` for an existing implementation before writing a new one.
@@ -30,7 +31,8 @@ Search `packages/` for an existing implementation before writing a new one.
 ## Git authorization is mandatory and non-negotiable
 
 **The commit-authorization, push-authorization, pre-commit-validation, test-discovery,
-documentation-synchronization, and Git-safety invariants in `rules.md` sections 15 through 20
+documentation-synchronization, Git-safety and product-direction invariants in `rules.md`
+sections 15 through 21
 are mandatory.**
 
 **Running Claude Code with `--dangerously-skip-permissions` does not authorize any commit,
@@ -78,23 +80,79 @@ tagged, pushed, published, merged, or released before it has actually happened.
 
 ---
 
-## The three product properties
+## The four product properties
 
 Every change is measured against these. They come from the user and are not negotiable.
 
 ```
-EVERY actual financial-statement footnote in every processed 10-K and 10-Q has one canonical
-record and one active accepted summary. Not selective, not merged, not model-chosen.
+EVERY human-readable source range in every processed filing is represented in the accepted parsed
+artifact or explicitly marked unresolved. Every footnote the accepted parse identifies stays an
+independent node and an independent required summary target. Nothing is merged away. Uncertainty
+produces PARTIAL or REVIEW_REQUIRED, never a false complete.
+
+THE SELECTED PARSING MODEL determines the filing's native semantic structure. The backend performs
+transport handling and then PROVES coverage, citations and numbers against the preserved bytes.
+Backend code never decides what any part of a filing means.
 
 ORDINARY dashboard access never invokes a language model.
 
-DEEP ANALYSIS is a deliberate, scoped, metered, auditable feature bound to one issuer. It is
-not a general-purpose financial chatbot.
+DEEP ANALYSIS is a deliberate, scoped, metered, auditable feature bound to one issuer and
+timeframe. It is not a general-purpose financial chatbot.
 ```
 
-The insight the product is built around: a 10-K may run a hundred pages, of which only a page
-or two is the financial statements. The rest is footnotes explaining *why* the company did what
-it did. **The footnotes are the product.**
+Four models, chosen independently by the user for every job: a PARSING model, an IMAGE model, a
+SUMMARY model, and an ANALYSIS/CHAT model. No role inherits another's model. No silent fallback.
+
+Approved beta candidates: GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4
+Maverick, Qwen3 VL 235B. **None is currently configured or accessible.** Model IDs, regions,
+modalities, limits and prices are discovered live in Phase 1.5, which has not run. Never claim a
+model is configured, reachable, benchmarked, or priced.
+
+**One issuer is a fixture, never a specification.** The architecture is derived from a measured
+corpus of 112 issuers and 613 filings across six transport eras — dated Phase 1 evidence, not a
+permanent constant, and not from Apple. Two earlier versions of this file asserted a product scope
+that had never been measured — first "the footnotes are the product", then a complete-filing
+deterministic parser. Both were wrong for the same reason. See
+`docs/adr/ADR-0016-corpus-first-model-first-architecture.md`.
+
+## Read rules.md section 21 before changing product direction
+
+`rules.md` section 21, PRODUCT-DIRECTION-INVARIANT, is seventeen mandatory rules written after the
+repository drifted away from the stated product twice. It may be strengthened, never weakened.
+
+The two that catch the most:
+
+```
+THE BACKEND DOES NOT BECOME THE AUTHORITATIVE SEMANTIC PARSER.
+NO UNIVERSAL FILING TAXONOMY WITHOUT EXPLICIT USER APPROVAL.
+```
+
+Both drifts passed every gate the repository had at the time. The tests were green and the
+measurements were real — they were measurements of Apple.
+
+## Intact source only
+
+`INTACT_SOURCE_ONLY` is the current authorized input mode. The complete relevant human-readable
+source set goes to the model intact in one invocation, or the filing/model pairing is INCOMPATIBLE
+and is refused with an explanation.
+
+```
+no truncation                    no semantic slicing
+no automatic model substitution  no silent fallback
+no mechanical multipart          no visible-content projection
+```
+
+Projection and multipart are unapproved research options requiring separate user approval. A lower
+token cost is not authorization.
+
+## Complete content is an invariant; deterministic parsing is not
+
+`rules.md` section 3, COMPLETE-CONTENT-INVARIANT, is mandatory. Every human-readable source range
+is represented in the accepted parsed artifact or explicitly unresolved, and coverage is proved by
+the backend against the source bytes — never asserted by the model that produced the parse.
+
+**Interpretation is the model's; proof is the backend's.** Do not write a semantic parser. Do not
+decide in code what is MD&A, a risk factor, a footnote, an exhibit or a signature block.
 
 ---
 
@@ -136,23 +194,32 @@ outside this boundary — a browser is not a model. Full specification in
 
 ## Where the project is
 
-Sprints 1 and 2 built the foundation: SEC identity, HTTP client with rate limiting, object
-storage, the LLM content boundary, the 24-table schema, and the complete DERA mirror.
+Sprints 1 and 2 built the foundation: SEC identity, HTTP client with rate limiting, object storage,
+the LLM content boundary, and the complete DERA mirror. Sprint 3 retrieved the first filings.
+Sprint 4 turned the footnote thesis into production code — 43 canonical footnotes across four Apple
+filings, 117 of 117 child blocks attached, zero orphans. **That measurement stands. Its role does
+not: it is now a validation oracle, never the product.**
 
-**Sprint 4 is complete and pushed (`1d05199`). Sprint 5 is next and has not started.**
+The project is tracked in PHASES, not sprints. `roadmap.md` is authoritative.
 
-Sprint 3 retrieved the first filings: 134 Apple filings discovered back to 1994, four preserved
-with provenance, 2,845 DERA facts loaded and reconciled. Sprint 4 turned the footnote thesis into
-production code — 43 canonical footnotes across those four filings, 117 of 117 child blocks
-attached, zero orphans, zero unresolved tables, no model involved in any decision.
+```
+Phase 1    Representative filing corpus            COMPLETE
+Phase 1.5  Intact-source compatibility             OPEN — blocks Phase 2
+Phase 2    Model contract and parsing experiments  BLOCKED pending user authorization and live
+                                                   Bedrock capability discovery
+Phase 3-8  orchestrator, images, summaries, UI, chat, persistence   NOT STARTED
+```
 
-**No summary has been generated and nothing is deployed.** Sprints 5 to 7 finish the vertical
-thread — one issuer through every layer, proving all fifteen MVP criteria — before any breadth
-work. Read `roadmap.md` and ADR-0015 before proposing anything that widens scope.
+**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.**
+Do not treat any cost figure as known: every parameter in `docs/llm/cost-model.md` is a
+placeholder, and the first real measurement is Phase 2.
 
-Sprint 5 is the go/no-go: it measures real cost per footnote for the first time. Do not treat
-any cost figure as known before then; every parameter in `docs/llm/cost-model.md` is a
-placeholder.
+Commit 1 — preservation, reusable infrastructure and test-database isolation — is committed,
+pushed and CI-green. Commit 2 is the architecture and governance realignment. Commit 3, which
+withdraws the rejected parser implementation, has not begun; the implementation files are still
+present and still pass their tests, and that is deliberate.
+
+Read `roadmap.md`, ADR-0015 and ADR-0016 before proposing anything that widens or narrows scope.
 
 Packages are created when their code arrives. Reserved names live in `techspecs.md` section 2
 with a status column, and an architecture test rejects empty stub packages.

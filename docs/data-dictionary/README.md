@@ -1,10 +1,255 @@
 # Data Dictionary
 
-IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2; table-ownership columns added Sprint 4).
+> **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
+> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
+> The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
+> preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
+> a filing means. The user selects four models independently — parsing, image, summary, and
+> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
+> content ontology, migration `0003` and the local application database are withdrawn. Sections
+> below that describe the withdrawn design are historical.
+>
+> **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
 
-24 domain tables. Models in `packages/persistence/models.py`. Migrations: `0001_initial` (SEALED)
-and `0002_table_ownership`, which added `footnote_table.ownership_kind`, `ownership_method`, and
-`ownership_evidence`, their two check constraints, and the unresolved-ownership index.
+---
+
+# ARCHITECTURAL VOCABULARY — AUTHORITATIVE. Everything below this section is historical.
+
+**THIS IS NOT A SCHEMA.** No table definition here is current, and the final persistence
+representation is **DEFERRED to Phase 8**, after real parsed artifacts from real models over
+materially different corpus samples exist. Designing tables before seeing model output is exactly
+what produced the withdrawn migration `0003`.
+
+**Rigid semantic categories are removed from the mandatory vocabulary.** There is no required
+content-unit type, no required hierarchy, and no enum of filing sections. Terms like MD&A, Item 7,
+Part I, Footnote, Certification or Signature may appear as filing-native labels, model annotations,
+optional derived indexes or search facets. They are not vocabulary the system requires.
+
+## The terms
+
+| Term | Meaning |
+|---|---|
+| **Entity** | An SEC filer. Identity is the CIK. Names and tickers are temporal aliases. |
+| **Filing** | One submission. Identity is `(CIK, accession)` — never the accession alone, because co-registration puts one submission under two filer CIKs. |
+| **Source artifact** | An original SEC document, preserved byte-for-byte with its SHA-256 and provenance. Authoritative. Never replaced by anything derived. |
+| **Processing job** | One authorized unit of work over an entity, a timeframe and four model selections. Durable and resumable. |
+| **Model role** | One of exactly four: parsing, image, summary, analysis/chat. |
+| **Model selection** | The user's explicit choice of a model for one role on one job. No role inherits another's. |
+| **Model invocation** | One call to one provider. Records tokens, cost, latency, prompt version, model id, and the object-storage URIs of the exact request and response bodies. |
+| **Artifact** | Anything a model produced that the system keeps. Never confused with the source. |
+| **Artifact version** | Artifacts are superseded, never overwritten. |
+| **Artifact lineage** | What produced this artifact, from what, with which prompt, superseding what. |
+| **Parsed artifact** | The accepted output of the parsing model. Deliberately loosely typed. |
+| **Summary artifact** | A separate artifact grounded in an accepted parse. Regenerating it does not require reparsing. |
+| **Image-analysis artifact** | Produced by the image model, only when the parsing model is text-only. Linked to its source object. |
+| **Chat artifact** | A Deep Dive turn: question, answer, citations, cost, bound to an immutable scope. |
+| **Source reference** | A byte range in a preserved original artifact. Validation resolves it there, not in the parse. |
+| **Validation result** | The backend's independent proof of coverage, citations and numbers against preserved bytes. `COMPLETE`, `PARTIAL` or `REVIEW_REQUIRED`. |
+| **Cost record** | Tokens, amount, currency, latency, and whether the figures are measured or estimated. |
+| **Cache record** | A reusable accepted result, keyed by what actually determines it. |
+
+## What the vocabulary deliberately omits
+
+No content-unit type. No section kind. No universal hierarchy. No proxy-topic mapping. No
+disposition enum describing one interpretation of every filing.
+
+A parsed node carries: an id, an order, an optional parent, an optional filing-native label, an
+optional open-ended content type, text, source references, confidence, ambiguity, and an explicit
+unresolved flag. Its shape is in `docs/api/openapi.yaml` as `ParsedNode`, and it is
+`additionalProperties: true` on purpose.
+
+## The one semantic guarantee that survives
+
+Every financial-statement footnote **the accepted parse identifies** remains an independent node
+and an independent required summary target. That is a completeness guarantee about not merging
+content away. It is not a taxonomy, and the backend does not decide what a footnote is.
+
+
+IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2; table-ownership columns Sprint 4; complete filing
+content Sprint 4.1).
+
+27 domain tables. Models in `packages/persistence/models.py`. Migrations: `0001_initial` (SEALED),
+`0002_table_ownership` (SEALED), and `0003_filing_content`, which added the complete filing-content
+model described below.
+
+---
+
+## Complete filing content — migration `0003` (Sprint 4.1)
+
+Decision: ADR-0016. WITHDRAWN — see the vocabulary section below. Retained here only as the
+record of what migration `0003` would have encoded; it was never committed.
+
+### `filing_content_unit`
+
+One node in a filing's canonical content hierarchy: cover page through signatures and filed
+exhibits.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `content_unit_id` | uuid | no | Primary key |
+| `filing_id` | uuid | no | FK `filing`, cascade |
+| `document_id` | uuid | yes | FK `filing_document`. Which filed document this came from |
+| `parent_content_unit_id` | uuid | yes | FK self, cascade. NULL only on the filing root |
+| `canonical_footnote_id` | uuid | yes | FK `canonical_footnote`. **Reference, never a copy** |
+| `filing_section_id` | uuid | yes | FK `filing_section`, retained link to Sprint 4 sections |
+| `unit_type` | text | no | Taxonomy below; check-constrained |
+| `part_number` | text | yes | Roman numeral, e.g. `II` |
+| `item_number` | text | yes | e.g. `1A`, `7A` |
+| `title_as_displayed` | text | yes | Exactly as filed |
+| `normalized_title` | text | yes | Lowercased, for comparison only |
+| `sequence` | integer | no | Filed order among siblings |
+| `hierarchy_path` | text | no | **Materialized path**; see semantics below |
+| `text` | text | yes | Normalized prose. NULL on aggregates and footnote references |
+| `source_char_start` / `_end` | integer | yes | Span in the filed document |
+| `source_anchor` | text | yes | |
+| `source_sha256` | text | yes | Hash of the RAW source span |
+| `content_sha256` | text | yes | Hash of the NORMALIZED text. Two hashes distinguish a parser change from a filing change |
+| `extraction_method` | text | yes | |
+| `parser_version` | text | yes | |
+| `confidence` | numeric(5,4) | yes | |
+| `coverage_status` | text | no | `COVERED` \| `PARTIAL` \| `UNRESOLVED` \| `EXCLUDED` |
+| `summary_required` | boolean | no | Set from unit TYPE and filed position, **never from materiality** |
+| `incorporated_by_reference` | boolean | no | |
+| `unit_metadata` | jsonb | yes | |
+
+**Idempotency key**: `UNIQUE (filing_id, hierarchy_path)`.
+
+**Constraints.** `content_unit_type_is_known`; `content_coverage_status_is_known`;
+`content_unit_is_not_own_parent`; `footnote_reference_requires_footnote_type` — a
+`canonical_footnote_id` is only valid on a `FINANCIAL_STATEMENT_FOOTNOTE` unit, so there is no
+second path to footnote evidence; `footnote_unit_does_not_copy_text` — a footnote unit stores NULL
+text, because two editable copies of one fact diverge and nothing notices.
+
+### `hierarchy_path` — materialization semantics
+
+Dotted zero-padded ordinals from the root: `001.002.007`. **Derived** from
+`(parent_content_unit_id, sequence)` and rewritten by the same transaction that writes them.
+
+Stored, rather than computed on read, for two reasons stated so it is not mistaken for a second
+source of truth: `(parent_content_unit_id, sequence)` cannot serve as a unique constraint, because
+a NULL parent never conflicts in one and two content roots would insert silently; and a stored path
+turns a subtree read into a prefix scan rather than a recursive CTE on every dashboard request.
+Zero-padding makes lexical order equal filed order past nine siblings.
+
+### `filing_source_block` — the coverage ledger
+
+One discovered human-visible leaf block and its single disposition.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `source_block_id` | uuid | no | Primary key |
+| `filing_id` | uuid | no | FK `filing`, cascade |
+| `document_id` | uuid | yes | FK `filing_document` |
+| `content_unit_id` | uuid | yes | **The single owner.** Non-NULL if and only if `ASSIGNED` |
+| `block_key` | text | no | `{document_tag}:{ordinal}` over an immutable filed document |
+| `sequence` | integer | no | Discovery order |
+| `block_kind` | text | no | `heading` \| `text` \| `table` \| `list` \| `graphic` \| `signature` \| `other` |
+| `disposition` | text | no | The six below |
+| `disposition_reason` | text | yes | Required for every exclusion |
+| `normalized_text` | text | yes | |
+| `text_sha256` | text | yes | |
+| `char_length` | integer | yes | |
+| `source_char_start` / `_end` | integer | yes | |
+| `parser_version` | text | yes | |
+| `evidence` | jsonb | yes | |
+
+**Idempotency key**: `UNIQUE (filing_id, block_key)`. Stable because it derives from position in an
+immutable filed document, never from a runtime DOM identity — which would change between runs and
+make rerun reconciliation meaningless.
+
+**Dispositions.** Five count as accounted; one does not.
+
+| Disposition | Accounted |
+|---|---|
+| `ASSIGNED` | yes |
+| `REPEATED_LAYOUT` | yes |
+| `NAVIGATION_DUPLICATE` | yes |
+| `DECORATIVE` | yes |
+| `MACHINE_ONLY` | yes |
+| `UNRESOLVED` | **no — blocks completion, and is never a reason to discard the block** |
+
+**Constraints.** `assigned_block_has_exactly_one_owner` makes `ASSIGNED` equivalent to a non-NULL
+`content_unit_id`, so **double assignment is unrepresentable** rather than merely tested for.
+`excluded_block_states_its_reason` — an exclusion without a reason is indistinguishable from a
+block nobody looked at.
+
+### `filing_incorporation_reference`
+
+A statement that this filing incorporates material filed elsewhere.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `reference_id` | uuid | no | Primary key |
+| `filing_id` | uuid | no | FK `filing`, cascade |
+| `content_unit_id` | uuid | yes | The unit containing the statement |
+| `reference_key` | text | no | Stable digest of accession, unit, and source text |
+| `item_number` | text | yes | The Item whose disclosure is incorporated |
+| `referenced_form` | text | yes | e.g. `DEF 14A` |
+| `referenced_document` | text | yes | |
+| `referenced_accession` | text | yes | Set when deterministically resolved |
+| `referenced_filing_date` | date | yes | |
+| `referenced_deadline` | text | yes | e.g. "within 120 days after September 27, 2025" |
+| `resolution_status` | text | no | `UNRESOLVED` \| `IDENTIFIED` \| `RESOLVED` \| `OUT_OF_SCOPE` |
+| `acquisition_status` | text | no | `NOT_ATTEMPTED` \| `ACQUIRED` \| `UNAVAILABLE` \| `OUT_OF_SCOPE` |
+| `source_text` | text | yes | The exact filed sentence, so a reviewer can check the detector |
+| `coverage_consequence` | text | yes | |
+| `detected_by`, `parser_version` | text | yes | |
+
+**Idempotency key**: `UNIQUE (filing_id, reference_key)`.
+
+**Constraint.** `resolved_reference_names_its_evidence` — `RESOLVED` requires a
+`referenced_accession` and `acquisition_status = 'ACQUIRED'`. Marking a dependency resolved without
+evidence is the specific dishonesty this table exists to prevent.
+
+### `filing_document` — columns added by `0003`
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `document_class` | text | no | `HUMAN_READABLE` \| `MACHINE_ARTIFACT` \| `GRAPHIC` \| `UNKNOWN` |
+| `inventory_sequence` | integer | yes | Position in the authoritative accession inventory |
+| `is_primary` | boolean | no | |
+| `classification_method` | text | yes | `declared_type` where possible; filename only as fallback |
+| `classification_evidence` | jsonb | yes | Declared type, role, extraction requirement, reason |
+
+**Idempotency key added**: `UNIQUE (filing_id, filename)`.
+
+### `filing` — columns added by `0003`
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `content_status` | text | no | `COMPLETE` \| `PARTIAL` \| `REQUIRES_REVIEW` \| `FAILED` \| `NOT_STARTED` |
+| `submission_completeness` | text | no | `SUBMISSION_COMPLETE` \| `SUBMISSION_PARTIAL` \| `NOT_ASSESSED` |
+| `disclosure_completeness` | text | no | `DISCLOSURE_COMPLETE` \| `DISCLOSURE_PARTIAL` \| `NOT_ASSESSED` |
+| `content_coverage_confidence` | numeric(4,3) | yes | A judgement, not a count |
+| `documents_listed` | integer | yes | What the AUTHORITATIVE inventory claimed |
+| `content_parser_version` | text | yes | |
+
+`footnote_status` is unchanged and remains the **footnote layer**. It must never be read as filing
+completeness.
+
+### Content-unit taxonomy
+
+```
+FILING_ROOT   COVER_PAGE   PART   ITEM   SUBSECTION   NARRATIVE
+FINANCIAL_STATEMENT_SET   FINANCIAL_STATEMENT
+FINANCIAL_STATEMENT_FOOTNOTE_SET   FINANCIAL_STATEMENT_FOOTNOTE   FINANCIAL_SCHEDULE
+TABLE   LIST   GRAPHIC   EXHIBIT_INDEX   EXHIBIT   CERTIFICATION   SIGNATURE   CONSENT
+INCORPORATED_REFERENCE   OTHER_DISCLOSURE   UNRESOLVED
+```
+
+There is deliberately **no** disposition or status meaning "skipped because it looked unimportant".
+
+### Derived, deliberately not stored
+
+Every count the coverage report shows — blocks discovered, assigned, excluded, unresolved, content
+units, duplicate assignments, required summary units — is a `COUNT()` over
+`filing_source_block` and `filing_content_unit`. Only judgements are stored, for the same reason
+the eleven footnote counters are not stored: a stored copy of a derivable count is a second source
+of truth that goes stale the moment a block is re-dispositioned.
+
+---
 
 ## Conventions
 

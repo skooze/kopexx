@@ -1,26 +1,177 @@
 # techspecs.md — FinTek Technical Specification
 
 THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
+
+> **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
+> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
+> The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
+> preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
+> a filing means. The user selects four models independently — parsing, image, summary, and
+> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
+> content ontology, migration `0003` and the local application database are withdrawn. Sections
+> below that describe the withdrawn design are historical.
+>
+> **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+
 Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
 exists.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 4 complete and hardened, plus the removal of the
-documentation-content tests
-VERIFICATION: 622 tests passing and 0 skipped, 93.45 percent coverage on implemented packages,
-ruff format and lint clean across `packages tests scripts migrations`, mypy clean across 82 source
-files in `packages scripts migrations`, offline Alembic upgrade `base:head` and downgrade
-`head:base`, and pip-audit clean. Run locally; the count drop from 626 to 622 is the four removed
-tests and coverage is unchanged, because none of them exercised a package statement.
+LAST SYNCHRONIZED WITH CODE: Sprint 4.1, after the complete-filing content model, migration `0003`,
+and the application backfill
+VERIFICATION: 876 tests passing and 0 skipped, roughly 92 percent coverage across all fifteen
+measured packages, ruff format and lint clean across `packages tests scripts migrations`, mypy clean across
+101 source files in `packages scripts migrations`, offline Alembic upgrade `base:head` and
+downgrade `head:base` across all three revisions, live round trip on `fintek_test`, gitleaks clean
+over history and the working tree, and pip-audit clean. Run locally.
 
 The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
 contained only a docstring (ADR-0015), rose to 45 when type checking extended to `scripts` and
 `migrations`, reached 53 when filing discovery and acquisition arrived, 65 with the DERA loader and
-the database-isolation guard, and is 82 now that footnote extraction, canonicalization, and table
-parsing exist.
+the database-isolation guard, 82 with footnote extraction and canonicalization, and is 101 now that
+the complete-filing content model exists.
 
-`packages/` holds thirteen implemented libraries. Two were added in Sprint 3 — `filing_discovery`
-and `filing_acquisition` — and three in Sprint 4: `footnote_extractor`, `footnote_canonicalizer`,
-and `table_parser`. `dera_notes` grew from a mirror into a mirror plus a fact loader.
+`packages/` holds fifteen implemented libraries. Two were added in Sprint 3 — `filing_discovery`
+and `filing_acquisition` — three in Sprint 4: `footnote_extractor`, `footnote_canonicalizer`, and
+`table_parser` — and two in Sprint 4.1: `filing_parser` and `filing_content`. `dera_notes` grew
+from a mirror into a mirror plus a fact loader; `filing_acquisition` grew an accession inventory.
+
+> **Scope correction, Sprint 4.1 (ADR-0016).** The product covers every human-readable part of
+
+---
+
+# CURRENT STATE — AUTHORITATIVE. Everything below this section is historical.
+
+## 1. Implemented retained infrastructure
+
+All committed, all passing, none of it interpreting meaning.
+
+```
+packages/sec_identity        CIK, accession and URL normalization — the single home
+packages/sec_client          HTTP with the shared rate limiter and throttle classification
+packages/configuration       startup validation, including the SEC User-Agent gate
+packages/observability       structured logging
+packages/storage             object storage and content hashing
+packages/filing_discovery    qualifying-filing discovery
+packages/filing_acquisition  byte-exact acquisition, provenance, accession document inventory
+packages/dera_notes          the DERA mirror and numeric fact loader
+packages/llm_gateway         the model chokepoint, payload compiler and boundary validator,
+                             running against an in-process mock. NO REAL PROVIDER ADAPTER EXISTS.
+packages/persistence         engine, identity comparison, migration-target resolution
+```
+
+## 2. Committed test infrastructure
+
+```
+five original SEC filing fixtures, pinned by SHA-256 and size
+tests/fixtures/form_family.yaml         41 adjudicated forms, 22 in, 19 out
+tests/fixtures/corpus_identity.yaml     issuer and co-registration identity cases
+form-family, identity and identity-rules contract tests
+accession-inventory tests
+three database identities with no fallback, and the tests that prove them distinct
+the CI-workflow architecture tests, which parse the workflow itself
+```
+
+## 3. Deterministic work DEMOTED to oracle
+
+```
+packages/footnote_extractor        committed. Benchmark only.
+packages/footnote_canonicalizer    committed. Benchmark only.
+packages/table_parser              committed. Benchmark only.
+```
+
+Their measured Apple results stand as a recall floor for grading a parsing model. **They are not a
+product requirement and they do not define a correct parse.**
+
+## 4. Uncommitted parser work awaiting withdrawal
+
+**NONE. This is a correction to an earlier expectation.**
+
+`packages/filing_parser`, `packages/filing_content`, `scripts/extract_filing_content.py`, the
+complete-content-model document and migration `0003_filing_content_coverage.py` were deleted from
+the working tree **before Commit 1 and without ever being committed**. They exist in no commit.
+Verified: `git status` reports no uncommitted change under `packages/` or `scripts/`.
+
+Commit 3 therefore concerns the DEMOTED packages in section 3 and their scripts, not a pile of
+uncommitted parser code.
+
+## 5. Corpus evidence — dated Phase 1, 2026-08-02
+
+```
+112 issuers            613 filings            6 transport eras
+760,174,532 bytes of preserved objects, 613 of 613 hash-verified, 0 throttle events
+22 direct substantive form strings, 19 adjudicated exclusions
+75 SIC industries      138 amendments         313 annual, 300 quarterly
+187 filings carry images, 11 carry PDFs, packages range from 4 to 283 files
+44 percent of primary documents exceed ~200,000 ESTIMATED tokens
+```
+
+A measurement of one sample on one date. Not a permanent constant.
+
+## 6. Planned model-first components — NONE EXIST
+
+```
+minimum beta ENTITY catalog                          Phase 3, completed before Phase 6
+     CIK identity, authoritative name, aliases, current and evidenced historical tickers,
+     qualifying filing identities, exact filed forms, earliest and latest qualifying filing,
+     filing dates and report periods, local search, filing-bounded timeframe.
+     No fabricated historical ticker data. NOT the EDGAR universe.
+universe-scale catalog expansion                     Phase 8
+     EDGAR-wide population, full-history acquisition, alias reconciliation, scheduled sync,
+     checkpoints, amendment monitoring, new-issuer discovery, index and perf optimization.
+model catalog and live capability discovery          Phase 3
+four-role capability router                          Phase 3
+intact-source compatibility checker                  Phase 1.5 / 3
+durable job state and streaming                      Phase 3
+real provider adapter                                Phase 2
+parsed artifact                                      Phase 2
+image-analysis artifact                              Phase 4
+summary artifact                                     Phase 5
+beta UI                                              Phase 6
+Deep Dive and chat                                   Phase 7
+```
+
+## 7. Deferred persistence
+
+**The final PostgreSQL schema and the Redis design are DEFERRED to Phase 8**, after real parsed
+artifacts from real models exist. Designing them earlier is what produced the withdrawn migration
+`0003`.
+
+What is committed is `0001_initial_control_plane_schema` and `0002_table_ownership`. Both are
+SEALED under `rules.md` section 8 and are never edited. They still contain the footnote-centric
+tables — `filing_section`, `canonical_footnote`, `footnote_source_block`, `footnote_table`,
+`footnote_summary` — which are **superseded in direction but present in history**. No `0003` and no
+`0004` exist.
+
+## 8. Current database state
+
+```
+fintek                    DOES NOT EXIST. Dropped deliberately and not recreated.
+                          Ordinary CI does not create it and does not set DATABASE_URL.
+fintek_test               disposable. The migration round trip drops every table in it.
+fintek_integration_test   disposable. The persistence integration suites load and clean it.
+```
+
+No application database exists on any host. Nothing reads or writes one.
+
+## 9. Current phase statuses
+
+```
+Phase 1    Representative filing corpus            COMPLETE
+Phase 1.5  Intact-source compatibility             OPEN — blocks Phase 2
+Phase 2    Model contract and parsing experiments  BLOCKED PENDING USER AUTHORIZATION AND LIVE
+                                                   BEDROCK CAPABILITY DISCOVERY
+Phase 3-8                                          NOT STARTED
+```
+
+**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.**
+
+> every processed 10-K and 10-Q, not the footnotes alone. Financial-statement footnotes remain a
+> specialized content type with their own dedicated guarantee. Authoritative model:
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`. There is no separate
+> content-model document: the parsed artifact is deliberately loosely typed and no universal
+> filing taxonomy exists.
 
 ## Build and packaging
 
@@ -93,6 +244,13 @@ outbound side effect is a model invocation, which is metered and audited.
 | Canonicalization stages 1-5, audit, completeness | `footnote_canonicalizer` | IMPLEMENTED (Sprint 4); stages 6-11 PLANNED |
 | Footnote table structure and cell provenance | `table_parser` | IMPLEMENTED (Sprint 4) |
 | Table-to-footnote ownership via tagged spans and the presentation linkbase | `footnote_canonicalizer` | IMPLEMENTED (Sprint 4); 0 unresolved on 4 filings |
+| Accession document inventory and classification | `filing_acquisition` | IMPLEMENTED (Sprint 4.1); 55 filed documents, 0 ambiguous |
+| Era-neutral parser registry and block discovery | `filing_parser` | IMPLEMENTED (Sprint 4.1); inline-XBRL and pre-2001 plain text |
+| Canonical filing-content hierarchy and taxonomy | `filing_content` | IMPLEMENTED (Sprint 4.1) |
+| Source-block coverage ledger | `filing_content` | IMPLEMENTED (Sprint 4.1); 2,878 blocks, 0 unresolved |
+| Layered completeness | `filing_content` | IMPLEMENTED (Sprint 4.1) |
+| Incorporation-by-reference detection | `filing_content` | IMPLEMENTED (Sprint 4.1) |
+| Complete-filing persistence and backfill | `filing_content` | IMPLEMENTED and EXECUTED (Sprint 4.1); 3,165 rows, idempotent |
 
 Reserved package names. **These directories do not exist.** Sprint 1 created them containing only
 a docstring, which reserved names up to twenty sprints ahead of their code and caused two
@@ -103,7 +261,6 @@ enforces that no package is an empty stub.
 | Reserved name | Planned path | Sprint |
 |---|---|---|
 | Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |  <!-- constrained by docs/security/aws-identity-and-secrets.md -->
-| Era parsers | `packages/filing_parser` | 5 |
 | Summarization pipeline | `packages/summarization` | 5 |
 | Validation pipeline | `packages/validation` | 5 |
 | Fiscal period logic | `packages/fiscal` | 6 |
@@ -404,20 +561,114 @@ THREE VERIFIED FACTS THE DESIGN RESTS ON.
 
 UNIT TESTS. 36 across boundary and parser suites.
 
+### 3.10 `packages/filing_parser` — IMPLEMENTED (Sprint 4.1)
+
+RESPONSIBILITY. Era-neutral extraction of complete human-readable filing content. Parser selection
+by filing era and document kind, block discovery with byte offsets, meaning-preserving text
+normalization, and construction of the canonical content hierarchy from an ordered block stream.
+
+PUBLIC INTERFACE. `FilingSource`, `ParsedFiling`, `ParsedUnit`, `SourceBlock`, `BlockDisposition`,
+`HierarchyBuilder`, `ParserRegistry`, `default_registry`, `InlineXbrlParser`,
+`PlainTextSubmissionParser`, `scan_blocks`, `plain_text_blocks`, `normalize_block_text`,
+`strip_container`, `ERA_SPECIFIC_PROVENANCE`, `SUMMARY_TARGET_TYPES`.
+
+THE ERA-NEUTRAL CONTRACT. Required on every unit in every era: source document, source span, filed
+order, content kind, text or artifact reference, source hash, extraction method, parser version,
+confidence, coverage disposition. **Optional provenance**, present only where the era supplies it:
+role URI, TextBlock concept, renderer report, continuation id, `FilingSummary` report, XBRL
+context. An architecture test fails the build if one of the optional list becomes a required field,
+because that is precisely what would make a pre-2009 filing unrepresentable.
+
+INVARIANTS.
+- Parser selection is by era from the filing record, never by sniffing content. An unregistered era
+  raises rather than falling back — a modern parser handed a 1990s submission reads the
+  `IMS-HEADER` block as the document, confidently and wrongly.
+- A block key is `{document_tag}:{ordinal}` over an immutable filed document, never a runtime DOM
+  identity, so a rerun updates rather than reinserts.
+- A whole `<table>` is one block. Enumerating its cells would destroy the structure and inflate the
+  coverage denominator with fragments no reader treats as separate disclosures.
+- Hidden inline-XBRL regions are discovered and flagged, never emitted as visible prose.
+- An image without alt text is not assumed decorative.
+- A parent unit owns its children, not their blocks. Aggregate text is a derived view.
+- No model participates in any decision.
+
+MEASURED. Four FY2025 filings and one 1994 filing: 2,878 blocks, 238 content units, zero
+unresolved, zero double-assigned. Footnote total from the document body — 43 — independently
+reproduces the Sprint 4 renderer-inventory result.
+
+TESTS. 53 in `test_filing_parser.py` and `test_historical_filing_regression.py`, plus 40 in
+`test_filing_content_regression.py`.
+
+### 3.11 `packages/filing_content` — IMPLEMENTED (Sprint 4.1)
+
+RESPONSIBILITY. The canonical filing-content model: hierarchy paths and their validation, the
+source-block coverage ledger, layered completeness, incorporation-by-reference detection, and
+idempotent filing-scoped persistence.
+
+PUBLIC INTERFACE. `compute_paths`, `reconcile`, `evaluate`, `detect`, `resolve`, `persist`,
+`CoverageLedger`, `LayeredCompleteness`, `AcquisitionCompleteness`, `ReferenceSet`,
+`FilingContentWrite`, `DocumentRecord`, `PersistedCounts`, `coverage_report`,
+`completeness_report`, `advisory_lock_key`.
+
+INVARIANTS.
+- Coverage reconciles against DISCOVERED SOURCE MATERIAL, never against a count of sections.
+- Every human-visible block gets exactly one disposition. Five of the six count as accounted;
+  `UNRESOLVED` blocks completion and is never a reason to discard a block.
+- A block's owner is a single nullable column, so **double assignment is unrepresentable** rather
+  than merely tested for; a check constraint makes `ASSIGNED` equivalent to a non-NULL owner.
+- An exclusion must state its reason.
+- Footnotes are referenced by identifier, never copied. A footnote unit stores NULL text, enforced
+  by `footnote_unit_does_not_copy_text`.
+- `hierarchy_path` is derived from `(parent, sequence)` and rewritten in the same transaction. It
+  is stored because `(parent, sequence)` cannot be a unique constraint — a NULL parent never
+  conflicts — and because it turns a subtree read into a prefix scan.
+- One transaction and one transaction-scoped advisory lock per filing.
+- Every upsert has a conditional `WHERE`, so an unchanged row is not rewritten and its audit fields
+  keep answering "which run decided this".
+- Only judgements are stored on `filing`; every count is derived.
+
+LAYERED COMPLETENESS. Acquisition, submission content, disclosure, footnote, and summary. A filing
+can be `SUBMISSION_COMPLETE` and `DISCLOSURE_PARTIAL` at once — everything physically filed is
+accounted for while incorporated Items remain unprocessed. Collapsing the layers is prohibited.
+
+MEASURED. 3,165 rows written on the first backfill pass; **zero on an identical second pass**.
+
+TESTS. 27 in `test_filing_content.py`; 32 architecture tests in `test_complete_filing_coverage.py`.
+
+### 3.12 `packages/filing_acquisition.inventory` — IMPLEMENTED (Sprint 4.1)
+
+RESPONSIBILITY. The authoritative filed-document inventory and classification of every document in
+an accession.
+
+INVARIANTS.
+- Classification is by the **filer's declared type** from the accession index table, not by
+  filename. A filename heuristic remains only as a documented fallback for a row with no type.
+- The index document table lists what the ISSUER FILED; `index.json` lists the folder, which also
+  holds SEC's own viewer output. Measured on one 10-K: 16 filed against 93 folder files.
+- The complete submission `.txt` concatenates every other document and is never extracted.
+- A non-text file carrying a primary declared type is a courtesy rendering, inventoried but not
+  extracted.
+- An unclassifiable file is `UNKNOWN` and recorded as ambiguous, never guessed.
+
+MEASURED. 55 filed documents across four accessions, **zero ambiguous**.
+
+TESTS. 20 in `test_accession_inventory.py`.
+
 ---
 
 ## 4. Repository structure
 
 ```
 apps/            api, worker, scheduler, web            PLANNED
-packages/        25 domain packages, 7 implemented
+packages/        15 implemented libraries
 prompts/         versioned .txt and .yaml, never .md
 metric_definitions/  6 curated metric YAML files
-migrations/      PLANNED
-scripts/         mirror_dera.py
-tests/           unit, integration, contract, golden, evaluation, security, architecture, fixtures
-docs/            architecture, sec, financial, footnotes, llm, deep-analysis, api,
-                 data-dictionary, testing, operations, runbooks, adr, sprints, diagrams
+migrations/      IMPLEMENTED and APPLIED; 0001, 0002 SEALED, 0003 applied Sprint 4.1
+scripts/         mirror_dera.py, load_dera_partition.py, create_test_database.py,
+                 extract_filing_content.py
+tests/           unit, integration, architecture, fixtures
+docs/            architecture, sec, financial, footnotes, filings, llm, deep-analysis, api,
+                 data-dictionary, testing, operations, runbooks, adr, sprints, security
 infrastructure/  Terraform                              PLANNED
 ```
 
@@ -444,7 +695,7 @@ files, no prompt requesting a prohibited output format, and a public interface o
 | Object storage | Raw filings, datasets, exact model bodies | IMPLEMENTED (filesystem) |
 | Parquet | Fact lake, serving datasets | PLANNED |
 | DuckDB | In-process query engine over Parquet | PLANNED |
-| PostgreSQL | All control-plane state including the ingest ledger | PLANNED |
+| PostgreSQL | All control-plane state including the ingest ledger and filing content | IMPLEMENTED and APPLIED (27 tables) |
 | Redis | Cache, rate buckets, locks, fan-out | PLANNED |
 
 SQLite is deliberately not used. See ADR-0004.
@@ -496,8 +747,30 @@ enforcement before spend, and audit persistence of exact model bodies.
    See ADR-0014.
 6. `packages/sec_identity/accession.py` sits at 79 percent statement coverage, the lowest of the
    implemented modules; the uncovered lines are error branches on malformed input.
-7. The Alembic migration has NOT been applied to a live PostgreSQL. This environment has no
-   PostgreSQL and its Docker daemon cannot start containers, so upgrade and downgrade were
-   verified by offline DDL generation and by structural tests only. The two live tests skip with
-   an explicit reason. BLOCKING for Sprint 3, and the first thing to run wherever a database
-   exists.
+7. `packages/filing_content/persistence.py` sits at 49 percent statement coverage. The upsert
+   bodies are exercised end to end by the backfill against `fintek_test` and the application
+   database, and by the zero-write rerun, but not by an in-suite integration test. Adding one is
+   the highest-value coverage work outstanding.
+8. Complete-filing extraction is verified on **one issuer, five filings, two eras**: four
+   inline-XBRL FY2025 filings and one PEM-armored 1994 submission. The standalone-XBRL
+   (2009–2018) and HTML-without-XBRL (2001–2008) eras have no registered parser. BLOCKING for
+   Stage 2 phase W-2.
+9. Structural table parsing covers footnote tables only. Tables inside non-footnote content units
+   are captured as whole blocks with their text preserved, not decomposed into cells. Sufficient
+   for coverage; extended in Sprint 6 with the dashboard.
+10. Graphics are inventoried and classified but their content is not extracted. Both graphics in
+    the measured filings are non-data-bearing. A data-bearing graphic would become `UNRESOLVED`
+    and block completion rather than being silently passed, which is the intended behaviour.
+11. **Defect D-13, a correctness incident, is recorded here because the repository is the durable
+    memory.** A Sprint 4.1 test helper ran `alembic stamp base` against the APPLICATION database:
+    `migrations/env.py` resolved its target through `DATABASE_URL` and silently overrode the
+    `sqlalchemy.url` the helper had set. The application's `alembic_version` was emptied. No data
+    was lost, but only because the following `upgrade head` failed on tables that already existed —
+    against an empty database it would have migrated it. The root cause was two independent URL
+    resolutions with no defined precedence, not the missing revision check.
+    `packages.persistence.engine.migration_target_url()` is now the single resolver with an
+    explicit tested order, `assert_safe_destructive_target()` guards before Alembic is invoked, and
+    the preservation gate watches `alembic_version` as a backstop. 24 regression tests.
+12. No summary exists for any content unit. Summarization is Sprint 5, which remains suspended
+    until the Sprint 4.1 closeout is committed, pushed, and green. The `summary` completeness
+    layer therefore reads `NOT_STARTED` on every filing, correctly.

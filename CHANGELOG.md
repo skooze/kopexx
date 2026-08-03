@@ -6,7 +6,320 @@ user-visible, architecture-level, data-model, and operational changes.
 Format follows Keep a Changelog, with two additional sections that matter for this system:
 `Data migrations` and `Operational changes`.
 
+
+## Commit 2 — architecture and governance realignment (2026-08-02, not yet committed)
+
+Reconciles the active documentation, governance, architecture, roadmap and sprint plan with the
+corpus-first, model-first product direction. **Architecture and governance documentation plus
+one hermetic identity-rules test. No production implementation file changed, no package was
+added or removed, no migration was touched, and no runtime behavior changed.**
+
+- `rules.md` gains section 21, PRODUCT-DIRECTION-INVARIANT — seventeen mandatory rules written
+  after the repository drifted away from the stated product twice. Strengthening only; sections 15
+  to 21 may never be weakened.
+- ADR-0016 is finalized with corrected corpus evidence, the four model roles, `INTACT_SOURCE_ONLY`,
+  the retained / demoted / withdrawn split, risks and rejected alternatives.
+- `docs/api/openapi.yaml` is replaced. The previous document was built on the withdrawn
+  content-unit ontology and declared production and localhost servers. The replacement is an
+  architectural beta contract with no `servers:` block, every operation marked PLANNED, and a
+  deliberately loosely-typed parsed artifact.
+- The roadmap, product definition, dashboard UX, data dictionary, Deep Analysis, LLM and testing
+  specifications are reconciled around the same direction.
+- Corpus totals corrected everywhere from 59 issuers / 533 filings to **112 issuers / 613
+  filings**, and labelled as dated Phase 1 evidence rather than permanent constants.
+- A withdrawn finding is recorded rather than deleted: "190 of 533 filings declare no primary
+  document" came from `index.json`, whose `type` field is a UI icon name and whose sizes are often
+  zero. Re-measured against filer-declared document tables, all 613 filings resolve a primary
+  document.
+- Nine references to `docs/filings/complete-content-model.md`, a file that does not exist, are
+  removed, along with five references to the superseded ADR filename.
+- The entity catalog is split into two scopes so the beta UI is not left waiting on Phase 8: a
+  MINIMUM BETA CATALOG required no later than Phase 3 and completed before Phase 6 can be
+  complete, and a Phase 8 universe-scale EXPANSION of that same working catalog. Phase 6
+  depends on Phase 3, never on Phase 8. No fabricated historical ticker data.
+
+**No model activity. No orchestrator implementation. No final persistence design.**
+
+## Commit 1 correction — CI (`068eceb2`, pushed, CI green)
+
+One unit test asserted that the migration-target resolver reads `TEST_DATABASE_URL` from the
+project's `.env`, and relied on the developer's own gitignored `.env` to supply it. It passed
+locally and could only ever fail in CI, which it did. It now writes its own `.env` under `tmp_path`
+and points the resolver's `REPO_ROOT` at it, so the real parser, resolver and precedence chain all
+still run with nothing stubbed. Four regression tests added, including the first coverage of the
+cluster-database rejection rule. No production code changed.
+
+## Commit 1 — preservation and reusable infrastructure (`062baafc`, pushed)
+
+28 paths.
+
+- Preserved five original SEC filings that cost rate-limited fetches and cannot be reproduced
+  offline — four Apple FY2025 inline-XBRL documents and the 1994 PEM-armored complete submission —
+  all pinned in the fixture manifest with their SHA-256.
+- Added two small durable fixtures and 25 contract tests making the form-family and identity
+  defects unrepeatable.
+- Added the accession document inventory, which classifies documents by the filer's own declared
+  type rather than by filename.
+- **Test-database isolation.** Three identities with no fallback between them: `fintek_test` for
+  destructive migration tests, `fintek_integration_test` for persistence integration tests, and an
+  application database that deliberately does not exist. Closed defect D-13, in which an Alembic
+  `sqlalchemy.url` option was silently overridden by `DATABASE_URL` and `stamp base` reached the
+  application database. Ordinary CI now creates no database named `fintek` and does not set
+  `DATABASE_URL` at all.
+
 ## [Unreleased]
+
+### Changed — the product is a model-first orchestrator, derived from a measured corpus
+
+**2026-08-02. The architecture was re-founded on evidence rather than on one issuer.**
+
+The repository had validated a deterministic semantic parser, a 22-value universal filing ontology
+and a PostgreSQL schema against five Apple filings. A representative research corpus was acquired
+and measured: 112 issuers, 613 filings, six transport eras, 760,174,532 bytes of preserved
+objects, every object SHA-256 verified, zero throttle events. The measurements refuted the design.
+These are DATED PHASE 1 FIGURES — a measurement of one sample on one date, not a constant.
+
+```
+44 percent of primary documents exceed ~200,000 estimated tokens; 12 percent exceed ~1,000,000
+pre-2001 documents are NOT individually addressable: the complete submission is the only artifact
+raw-to-visible markup overhead ranges from 1.06x (SGML) to 24.11x (inline XBRL)
+filing packages range from 4 to 283 files; table markup from 0 to 1,115 open tags
+malformed table markup is normal before 2005 and absent after it
+48 of 112 issuers have former names; 68 have no current ticker; 4 report three or more
+361 of 613 accession prefixes belong to the FILING AGENT, not the issuer
+```
+
+Apple, the issuer the entire previous architecture was validated against, is roughly one eighth
+the size of the largest filing in the corpus.
+
+Decision record: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`.
+
+### Removed — the deterministic semantic parser and its schema
+
+`packages/filing_parser` and `packages/filing_content`, `scripts/extract_filing_content.py`, the
+complete-content-model document, the earlier uncommitted ADR-0016, and their tests. None had ever
+been committed. Migration `0003_filing_content_coverage.py` was deleted without being committed and
+no `0004` was created. The local `fintek` application database was dropped after proving that all
+36 original SEC source objects it referenced exist byte-exact on the filesystem with matching
+hashes; PostgreSQL held no source bytes, only references.
+
+### Demoted — footnote extraction becomes a validation oracle
+
+`packages/footnote_extractor`, `packages/footnote_canonicalizer` and `packages/table_parser` are
+retained and unchanged, and are no longer a product requirement. Their measured Apple results — 43
+canonical footnotes, 117 of 117 attachments, 174 classified tables — become recall floors for
+grading a parsing model.
+
+### Retained — acquisition, preservation and safety
+
+SEC client and rate limiting, filing discovery, accession document inventory by the filer's
+declared type, object storage and hashing, byte-exact preservation and provenance, DERA and XBRL
+numeric evidence, database-isolation guards, AWS identity governance, the LLM gateway chokepoint,
+and token and cost accounting.
+
+
+### Changed — the product covers complete SEC filings, not footnotes alone
+
+**Sprint 4.1. The product definition was too narrow, and the correction is architectural.**
+
+The repository had encoded "the footnotes are the product" as a scope definition rather than as an
+emphasis. That claim reached governance, the MVP definition, the completeness model, the schema,
+the API, the dashboard specification, the Deep Analysis scope table, the summarization contract,
+the benchmark corpus, and the cost model — twenty-four locations across five layers.
+
+The clarified requirement: **every human-readable part of every processed 10-K and 10-Q** is
+acquired, parsed, classified, preserved, represented as canonical filing content, summarized,
+searchable, displayed, and available as evidence to filing-scoped Deep Analysis. Financial
+statements and their footnotes are critically important content types; they are examples of filing
+content, not the whole of it.
+
+Three failures followed structurally, not incidentally, and all three are now fixed:
+
+```
+extraction was blind outside one renderer menu category — MD&A, risk factors, controls,
+    legal proceedings, signatures and certifications were INVISIBLE, not merely unprocessed
+acquisition fetched five objects per filing, never the filed package; filing_document held
+    zero rows for four acquired filings
+completeness measured the wrong denominator — a filing whose MD&A was never extracted
+    computed COMPLETE
+```
+
+Decision record: the uncommitted ADR-0016 "complete filing content scope", which was itself
+superseded before entering history by
+`docs/adr/ADR-0016-corpus-first-model-first-architecture.md`. Sprint record:
+`docs/sprints/SPRINT-0004A.md`.
+
+**Sprint 4 is not superseded.** Its 43 canonical footnotes, 117 of 117 attachments, zero orphans
+and table ownership stand unchanged and are now referenced by the general model rather than
+replaced. Its sprint record is unedited; a dated forward note was appended.
+
+### Added — the COMPLETE-FILING-COVERAGE-INVARIANT
+
+`rules.md` section 3. Every human-readable disclosure is assigned to exactly one canonical
+filing-content unit or to an explicit, auditable exclusion. Nothing may be omitted for being
+boilerplate, routine, qualitative, non-financial, untagged, outside the financial statements,
+outside the footnotes, hard to classify, in an exhibit, in a certification, in a signature block,
+incorporated by reference, present only in a historical format, or judged immaterial by code or a
+model.
+
+Coverage reconciles against **discovered source material**, never against a count of sections.
+Extraction is deterministic or honestly unresolved: no model participates in discovering,
+classifying, bounding, or discarding filing content (`rules.md` invariant 13).
+
+### Added — the canonical filing-content model
+
+`packages/filing_content`: hierarchy paths, the source-block coverage ledger, layered completeness,
+incorporation-by-reference detection, and idempotent filing-scoped persistence.
+
+`packages/filing_parser`: an era-neutral parser registry. Required fields carry no inline-XBRL
+dependency; role URI, TextBlock concept, renderer report, continuation id, `FilingSummary` report
+and XBRL context are optional provenance, and an architecture test fails the build if one becomes
+required.
+
+`packages/filing_acquisition.inventory`: the authoritative filed-document inventory, classified by
+the **filer's declared type** rather than by filename.
+
+Measured across five filings and two eras:
+
+```
+2,878 source blocks   238 content units   0 unresolved   0 double-assigned
+43 footnotes reached from the DOCUMENT BODY, independently reproducing the Sprint 4
+   renderer-inventory total
+```
+
+### Added — complete accession document acquisition
+
+55 filed documents inventoried across four accessions, **zero ambiguous classifications**. Seventeen
+human-readable filed documents had never been fetched: a description of securities, a subsidiaries
+list, an auditor consent, six officer certifications, and two material contracts. 23 downloaded,
+4 reused, 4,632,706 bytes, all through the shared rate limiter with hashes and provenance.
+
+### Added — the historical proof
+
+Apple's 1994 10-K (`0000320193-94-000016`), real filed bytes, PEM-armored. Decoded through PEM
+armor, an `IMS-HEADER` submission header, and a `DOCUMENT` wrapper into 4 Parts, 14 Items, 4
+financial statements, 9 individual footnotes, 5 schedules, 4 exhibit-index pages and a signature
+block — **with no inline XBRL, no role URI, no `FilingSummary`, no TextBlock concept and no
+continuation identifier**.
+
+### Added — layered completeness
+
+Acquisition, submission content, disclosure, footnote, and summary, tracked separately and never
+collapsed. `SUBMISSION_COMPLETE` and `DISCLOSURE_COMPLETE` are distinct: a 10-K whose Part III is
+incorporated from a proxy statement is submission-complete and disclosure-partial at the same time,
+and marking either one alone would be false.
+
+### Data migrations
+
+`0003_filing_content` — applied to the application database. Adds `filing_content_unit`,
+`filing_source_block`, `filing_incorporation_reference`; five columns on `filing_document`; six on
+`filing`. `0001_initial` and `0002_table_ownership` are untouched.
+
+Structural guarantees the schema now enforces rather than tests:
+
+```
+assigned_block_has_exactly_one_owner    a block cannot be assigned twice — ownership is a
+                                        single column, not a join table
+excluded_block_states_its_reason        an exclusion without a reason is indistinguishable
+                                        from a block nobody looked at
+footnote_unit_does_not_copy_text        footnote evidence is referenced, never duplicated
+resolved_reference_names_its_evidence   RESOLVED must name the accession it resolved to
+```
+
+Backfill: **3,165 rows** across five filings; an identical second pass wrote **zero**. 2,845 XBRL
+facts, 43 footnote identities, 160 footnote attachments and 174 table ownership records verified
+unchanged. One non-derived insert, disclosed before it ran: the 1994 filing's `filing` row.
+
+### Fixed — twelve defects
+
+```
+D-1   footnote prose never persisted: canonical_footnote.text NULL 43/43,
+      footnote_source_block.text NULL 160/160
+D-2   filing_document never populated by acquisition
+D-3   filing.era and filing.primary_document NULL, so parser selection had no stored input
+D-4   dead `if False` branch in the era check-constraint expression
+D-5   the Part pattern required a bare `PART I`, so every 10-Q matched ZERO parts and all
+      eleven Items attached to the filing root — silently
+D-6   statement and notes headings required end-of-string, so every `(Unaudited)` heading was
+      missed; 10-Qs reported zero statements and zero footnotes while carrying five and ten
+D-7   test_migrations read only 0001, so a table created in 0003 looked absent and one created
+      but never dropped would have passed the completeness check
+D-8   the head revision was asserted against a literal, so any new migration failed the test for
+      the one reason that is not a defect
+D-9   certifications classified by filename landed in `other_filed_attachment`
+D-10  a courtesy PDF carries the SAME declared type as the document it duplicates and was marked
+      for extraction, which would have double-counted an entire proxy statement
+D-11  the 1994 filing's footnotes are unnumbered and underlined by a typewriter rule; matching
+      only `Note N` found ZERO and collapsed all 140 notes-section blocks into the aggregate
+D-12  the historical signature unit captured 146 blocks of schedules and exhibit index, because
+      nothing terminates a signature block in a pre-2001 flat submission
+```
+
+D-5, D-6, D-9, D-10 and D-11 each produced a confident, silent, wrong result on real filings and
+were invisible to any test written against author-composed text. That is why the four FY2025
+primary documents and the 1994 submission are now committed fixtures.
+
+### Changed — downstream specifications
+
+`docs/api/openapi.yaml` to 0.2.0: content, tree, coverage, documents, summary,
+incorporated-references and content-unit endpoints; `Coverage` replaced by five independent layers;
+Deep Analysis scopes extended to `CONTENT_UNIT`, `PART` and `ITEM`. Footnote endpoints remain as
+specialized convenience views.
+
+`docs/dashboard/ux-specification.md`: the filing view is a rendered canonical hierarchy, not a
+footnote index; coverage displays five layers separately.
+
+`docs/deep-analysis/product.md` and `retrieval.md`: `FILING` scope is the complete processed filing
+corpus, and retrieval selects from all content units.
+
+`docs/llm/standard-summarization.md`, `summary-validation.md`, `model-benchmark.md`,
+`cost-model.md`: summary targets are content units with footnotes keeping their own independent
+guarantee; hierarchical chunking for oversized units; the benchmark spans the taxonomy; cost is
+measured per unit, per footnote, per Item, per filing — never extrapolated from footnote counts.
+
+Suite: 622 to 794, 0 skipped. Coverage 91.64% across thirteen measured packages.
+
+### Fixed — migration-target routing (defect D-13)
+
+**A test helper ran `alembic stamp base` against the application database.**
+
+`migrations/env.py` resolved its target through `packages.persistence.engine.database_url()`,
+which reads `DATABASE_URL`. A helper that set `sqlalchemy.url` on an Alembic `Config` was therefore
+silently overridden, and the operation reached `fintek`, emptying its `alembic_version`.
+
+**No data was lost, and that was luck rather than safety.** The subsequent `upgrade head` failed on
+`CREATE TABLE dataset_version` because those tables already existed, so the transaction rolled
+back. Against an empty application database the same helper would have migrated it.
+
+The row-count preservation gate stayed green throughout: not one row moved. This was never merely
+an `alembic_version` reporting problem — the recorded revision and the actual schema disagreed,
+and the mechanism that allowed it would equally have allowed a `downgrade base`.
+
+Root cause: **two independent URL resolutions with no defined precedence.**
+
+```
+packages.persistence.engine.migration_target_url()   the single authoritative resolver
+  1. an explicit argument supplied by the caller
+  2. FINTEK_ALEMBIC_URL, the invocation-specific override
+  3. TEST_DATABASE_URL, when FINTEK_ALEMBIC_TEST_TARGET selects it
+  4. DATABASE_URL, the ordinary application target
+  5. the repository-safe local default
+
+An explicitly supplied target is NEVER silently overridden by DATABASE_URL.
+```
+
+`assert_safe_destructive_target()` now runs **before** Alembic is invoked, for `downgrade`,
+`stamp`, and any `upgrade` that rebuilds a schema. It proves parsed identity, database name, host
+or socket, port, the disposable-test token, and difference from the application database, and
+raises without opening a connection.
+
+The application-preservation gate additionally watches `alembic_version` alongside row counts.
+That is necessary but not sufficient, and is documented as the post-execution backstop rather than
+the fix.
+
+24 regression tests in `tests/unit/test_migration_target_routing.py`, covering all ten required
+cases. The revision-detection proof uses synthetic snapshots — the application revision is never
+mutated again to demonstrate a guard.
 
 ### Removed — tests that asserted documentation content
 

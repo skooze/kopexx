@@ -1,9 +1,11 @@
 # rules.md — Operating Contract for FinTek
 
-STATUS: IMPLEMENTED. Authoritative since Sprint 1 and amended since: sections 15 to 21 by the
-alignment review (`275db19`), the AWS identity and secrets invariant in section 3 by `60f3e00`, and
-the sealed-migration and single-home records in sections 5 and 8 as the code they describe arrived.
-Sections 15 to 20 may be strengthened without an ADR and may never be weakened — section 21.
+STATUS: IMPLEMENTED. Authoritative since Sprint 1 and amended since: sections 15 to 22 by the
+alignment review (`275db19`), the AWS identity and secrets invariant in section 3 by `60f3e00`, the
+sealed-migration and single-home records in sections 5 and 8 as the code they describe arrived, and
+the complete-filing-coverage invariant in sections 1 and 3 by Sprint 4.1 (ADR-0016).
+Sections 15 to 21 may be strengthened without an ADR and may never be weakened — section 22.
+Section 21, PRODUCT-DIRECTION-INVARIANT, was added by Commit 2 on 2026-08-02.
 
 ---
 
@@ -24,7 +26,7 @@ Before planning or modifying this repository:
 
 Before running any Git history operation:
 
-10. Read sections 15 through 20 of this file.
+10. Read sections 15 through 21 of this file.
 11. Stop and obtain explicit user approval for that specific commit, and separately for
     that specific push. No flag, setting, or prior approval substitutes for it.
 ```
@@ -44,15 +46,19 @@ FinTek is a financial filing and historical analysis platform.
 1. Discovers all covered issuers (initially Nasdaq-listed issuers that have filed at least one
    10-K or 10-Q).
 2. Retrieves every electronically available 10-K and 10-Q for those issuers, back to the
-   earliest electronic filings in the 1990s.
+   earliest electronic filings in the 1990s, including every document in the filed submission
+   package.
 3. Stores source filings and source datasets in controlled object storage.
 4. Extracts authoritative structured financial facts.
 5. Calculates normalized and derived financial metrics deterministically.
-6. Identifies every actual financial-statement footnote in every filing.
-7. Generates one concise standalone summary for every actual footnote.
-8. Stores those summaries permanently and immutably (superseded, never overwritten).
-9. Renders financial data, charts, filings, and footnote summaries from stored data.
-10. Offers an explicit, scoped, metered Deep Analysis action.
+6. Sends the intact original filing artifact to a user-selected parsing model, which determines
+   the filing's native structure and returns a clean parsed artifact.
+7. Validates that artifact against the preserved bytes for coverage, citations and numbers.
+8. Sends the accepted parse to an independently selected summary model, which returns a separate
+   summary and explanation artifact.
+9. Stores those summaries permanently and immutably (superseded, never overwritten).
+10. Renders financial data, charts, complete filing content, and summaries from stored data.
+11. Offers an explicit, scoped, metered Deep Analysis action over the complete filing evidence.
 
 ### What the product does not do
 
@@ -62,14 +68,31 @@ transcription, options analytics, non-US filing systems, mobile applications, fu
 modeling, or SEC form types beyond 10-K and 10-Q. These are non-goals for the MVP. The
 architecture must remain extensible toward them without carrying their weight now.
 
-### The three headline requirements
+### The four headline requirements
 
 ```
-EVERY-FOOTNOTE REQUIREMENT
-Every actual financial-statement footnote in every processed 10-K and 10-Q must have exactly
-one canonical record and exactly one active accepted standard summary. Routine notes may have
-shorter summaries. No note may be omitted, merged away, or skipped because a model judged it
-immaterial.
+COMPLETE-CONTENT REQUIREMENT
+Every human-readable source range in every processed filing must be represented in the accepted
+parsed artifact or explicitly marked unresolved. Every financial-statement footnote identified by
+the accepted parse must remain an independent content node and an independent required summary
+target. A filing may not be represented as complete when a footnote or any other human-readable
+disclosure is unresolved, omitted, or merged away.
+
+The backend does NOT define footnotes, sections, or any other filing content through a fixed enum
+or a deterministic parser. The selected parsing model identifies them. Source-coverage validation
+against the preserved bytes proves that no source content disappeared. The Apple oracle corpus
+measures whether expected footnotes were found. Competing-model or human review is used when
+required. Uncertainty produces PARTIAL or REVIEW_REQUIRED, never a false complete result.
+```
+
+```
+CORPUS-BEFORE-ARCHITECTURE REQUIREMENT
+No architectural claim about what filings contain is accepted unless it has been measured across
+multiple issuers, industries and filing eras. One issuer is a fixture, never a specification.
+DATED PHASE 1 EVIDENCE, measured 2026-08-02 across 112 issuers and 613 filings — a measurement of
+one sample on one date, never a permanent constant: 44 percent of primary documents exceed ~200k
+estimated tokens, markup overhead ranges from 1.06x to 24.11x, package size ranges from 4 to 283
+files, and pre-2001 filings expose no individually addressable documents at all. See ADR-0016.
 ```
 
 ```
@@ -120,6 +143,7 @@ Violating any of these blocks sprint completion.
    from an immutable session record, never from the request body.
 6. **Never mark a filing complete with missing summaries.** Completeness is computed, not
    assumed.
+6a. **Never silently omit human-readable filing content.** See below.
 7. **Never overwrite an accepted historical summary version.** Supersede it.
 8. **Never store authoritative data only in Redis.**
 9. **Never bypass SEC access controls.** All SEC traffic passes the shared rate limiter.
@@ -127,6 +151,83 @@ Violating any of these blocks sprint completion.
     publication.
 11. **Never run a destructive database test against the application database.** See below.
 12. **Never require, hold, or store a long-lived AWS access key.** See below.
+13. **Never accept model output on trust.** The selected parsing model determines what filing
+    content means; the backend independently validates coverage, citations and numbers against the
+    preserved original bytes before any artifact is accepted.
+14. **Never let the backend assign semantic meaning to filing content.** Backend code performs
+    transport-level handling only: format, encoding, declared type, order, offsets, hashes, image
+    location, size and compatibility. It never decides what is MD&A, a risk factor, a footnote, a
+    financial statement, an exhibit or a signature block.
+15. **Never design persistence ahead of measured model output.** Schema follows accepted
+    artifacts; artifacts follow real experiments over a representative corpus.
+
+### COMPLETE-CONTENT-INVARIANT
+
+```
+For every processed filing, every human-readable source range in the preserved original bytes
+must be represented in the accepted parsed artifact, or explicitly marked unresolved. Coverage is
+proved by the backend against the source bytes; it is never asserted by the model that produced
+the parse.
+```
+
+No human-readable disclosure may be silently omitted because it is:
+
+```
+boilerplate                          routine
+qualitative                          non-financial
+not tagged in XBRL                   outside the financial statements
+outside the footnotes                difficult to classify
+contained in an exhibit              contained in a certification
+contained in a signature block       incorporated by reference
+present only in a historical format  judged immaterial by code or a model
+```
+
+A filing may be marked content-complete only when **all** of the following hold:
+
+```
+every filed document is inventoried
+every human-readable source block is accounted for
+every required content unit is extracted
+every table and meaningful non-text artifact is assigned or explicitly unresolved
+no source block is duplicated across incompatible owners
+no required content is unresolved
+all coverage counts reconcile
+```
+
+**Coverage is reconciled against discovered source material, never against section counts.** A
+count of extracted sections says nothing about whether a paragraph between two of them was
+dropped. Every human-visible source block receives exactly one disposition — assigned, repeated
+layout, navigation or table-of-contents duplication, decorative, machine-only, or `UNRESOLVED` —
+and only the first five count as accounted. `UNRESOLVED` prevents complete status; it is never a
+reason to discard the block.
+
+**Financial-statement footnotes are identified by the parsing model, not by the backend.** Each
+one the accepted parse identifies remains an independent content node and an independent required
+summary target. The 43-footnote Apple result (ADR-0005, now superseded) survives as a recall floor
+and validation oracle, never as the definition of a correct parse.
+
+**Summarization completeness follows content completeness.** A filing is fully summarized when
+every required node of the accepted parsed artifact has an accepted active summary.
+
+**Interpretation is the model's; proof is the backend's.** The selected parsing model determines
+what filing content means. The backend independently proves, against the preserved original bytes,
+that every human-readable source range is represented or explicitly unresolved, that every citation
+resolves inside the source at its stated offset, and that every reported number appears verbatim.
+Model output is never accepted on trust; it is accepted on validation.
+
+Two completeness concepts are tracked separately and never collapsed:
+
+```
+SUBMISSION_COMPLETE   every human-readable item physically filed in this accession is accounted
+                      for
+DISCLOSURE_COMPLETE   material incorporated by reference and needed to complete the disclosure
+                      has also been resolved
+```
+
+A filing whose incorporated document is unavailable or unprocessed is never `DISCLOSURE_COMPLETE`.
+
+Rationale, the corpus evidence, and the withdrawal of the deterministic semantic parser:
+`docs/adr/ADR-0016-corpus-first-model-first-architecture.md`.
 
 ### AWS-IDENTITY-AND-SECRETS-INVARIANT
 
@@ -238,8 +339,15 @@ XHTML, Markdown, Markdown fences, Markdown tables, Markdown headings, Markdown l
 blockquotes, inline backtick formatting, native JSON tool schemas, or native JSON tool
 arguments.
 
-Every model-visible request must be unmarked normalized plain text or one unfenced YAML 1.2
-document.
+Every SYNTHETIC model-visible request component must be unmarked normalized plain text or one
+unfenced YAML 1.2 document.
+
+ORIGINAL-SOURCE EXCEPTION. An untouched original SEC artifact may be sent intact, in whatever
+format the SEC published it — HTML, SGML, XML, XBRL, inline XBRL, PDF, image, plain text. It is
+admitted by PROVENANCE, not by syntax: the bytes must be identical to a preserved artifact whose
+SHA-256 is recorded in the source store, and must not have been constructed by this system. The
+exception is one-directional: no model RESPONSE may use it. Do not duplicate the original filing
+into a verbose wrapper.
 
 Every structured model response must be one unfenced YAML 1.2 document. Plain-text responses
 are permitted only for explicitly unstructured tasks.
@@ -323,10 +431,14 @@ Before writing a new function:
 | CIK normalization | `packages/sec_identity/cik.py` |
 | Accession normalization | `packages/sec_identity/accession.py` |
 | SEC URL construction | `packages/sec_identity/urls.py` |
-| Footnote candidate and child-block discovery | `packages/footnote_extractor/` |
-| Canonical grouping, exclusion, and completeness | `packages/footnote_canonicalizer/` |
-| Table-to-footnote ownership | `packages/footnote_canonicalizer/` |
-| Footnote table structure and cell provenance | `packages/table_parser/` |
+| Footnote ORACLE generation (benchmark only) | `packages/footnote_extractor/` |
+| Footnote grouping ORACLE (benchmark only) | `packages/footnote_canonicalizer/` |
+| Table-ownership ORACLE (benchmark only) | `packages/footnote_canonicalizer/` |
+| Table structure ORACLE and validator | `packages/table_parser/` |
+| Semantic interpretation of filing content | the SELECTED PARSING MODEL, never backend code |
+| Transport decoding, offsets and format detection | `packages/source_transport/` — Phase 3 |
+| Coverage validation of model output | `packages/coverage_validation/` — Phase 3 |
+| Four-role model routing and capability discovery | `packages/model_catalog/` — Phase 3 |
 | Fiscal period logic | `packages/fiscal/` — RESERVED, not yet created |
 | Model invocation | `packages/llm_gateway/` |
 | Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, not yet created |
@@ -938,7 +1050,92 @@ committed    tagged    pushed    published to GitHub    merged    released
 
 ---
 
-## 21. Exception and ADR Process
+## 21. PRODUCT-DIRECTION-INVARIANT
+
+Added 2026-08-02 by Commit 2, after the repository drifted away from the stated product **twice**:
+first by narrowing scope to financial-statement footnotes, then by answering that correction with a
+*more complete deterministic parser*. Both drifts were confident, well-tested, and wrong. This
+section exists so a future agent cannot repeat either one.
+
+These seventeen rules are mandatory. Like sections 15 to 20 they may be strengthened without an
+ADR and may never be weakened.
+
+```
+ 1. THE BACKEND DOES NOT BECOME THE AUTHORITATIVE SEMANTIC PARSER.
+    Backend code performs transport handling and validation. It never decides what any part of a
+    filing MEANS. Regular expressions, heading heuristics, item detectors and section classifiers
+    used to produce authoritative structure are prohibited.
+
+ 2. NO UNIVERSAL FILING TAXONOMY WITHOUT EXPLICIT USER APPROVAL.
+    No fixed enum of content kinds, no required hierarchy, no CHECK constraint encoding one
+    interpretation of every filing. Filing-native labels, model annotations, optional derived
+    indexes, search facets and benchmarks are permitted; ontology is not.
+
+ 3. ORIGINAL SEC SOURCE IS AUTHORITATIVE.
+    Preserved byte-for-byte, hashed, provenanced, durable, and never replaced by a parse, a
+    summary or a derived index.
+
+ 4. COMPLETE SOURCE COVERAGE IS REQUIRED.
+    Every human-readable source range is represented in the accepted parsed artifact or explicitly
+    marked unresolved. Coverage is proved by the backend against the preserved bytes, never
+    asserted by the model that produced the parse.
+
+ 5. UNKNOWN CONTENT IS PRESERVED OR MARKED UNRESOLVED, NEVER DISCARDED.
+    Uncertainty produces PARTIAL or REVIEW_REQUIRED. A false complete is a defect.
+
+ 6. INTACT_SOURCE_ONLY IS THE CURRENT AUTHORIZED INPUT MODE.
+    The complete relevant human-readable source set is sent intact in one invocation, or the
+    filing/model pairing is INCOMPATIBLE and is refused with an explanation.
+
+ 7. PROJECTION AND MULTIPART REQUIRE SEPARATE EXPLICIT APPROVAL.
+    Visible-content projection, mechanical multipart, and any hybrid of the two are unapproved
+    research options. They must never be described as accepted architecture, and a lower token
+    cost is not authorization.
+
+ 8. MODEL ROLES ARE INDEPENDENTLY SELECTED BY THE USER.
+    Parsing, image, summary and analysis/chat. No role inherits another's model.
+
+ 9. NO SILENT MODEL FALLBACK OR SUBSTITUTION.
+    An incompatible or unavailable model is reported. Another is chosen only by the user.
+
+10. NO SILENT TRUNCATION.
+    Not of input, not of output, not of a source set. If it does not fit, that is a result.
+
+11. NO BILLABLE INVOCATION WITHOUT EXPLICIT AUTHORIZATION AND A COST CEILING.
+    Cost is previewed and authorized before the call, never reconciled after it.
+
+12. MODEL-VISIBLE SYNTHETIC CONTENT IS RAW TEXT OR ONE UNFENCED YAML 1.2 DOCUMENT.
+    The original-source exception in section 3 is unchanged: an untouched preserved SEC artifact
+    may be sent intact in whatever syntax SEC published. Provider transport JSON is the API
+    envelope only.
+
+13. DATABASE DESIGN FOLLOWS MEASURED MODEL OUTPUTS.
+    No schema, cache design or index is specified before real artifacts from real models over
+    materially different corpus samples exist.
+
+14. RESEARCH-CORPUS CONCLUSIONS ARE NOT GENERALIZED FROM ONE ISSUER.
+    A claim about what filings contain requires measurement across multiple issuers, industries
+    and eras. Corpus totals are dated evidence and are labelled as such wherever they appear.
+
+15. THE EXISTING DETERMINISTIC APPLE WORK IS AN ORACLE, NOT UNIVERSAL PRODUCT TRUTH.
+    It grades a parsing model. It does not define a correct parse and is not a requirement.
+
+16. HISTORICAL RECORDS ARE CORRECTED ADDITIVELY.
+    Committed sprint records and changelog entries are not rewritten to pretend an earlier
+    direction never happened. Supersession is recorded with a forward note and a reference.
+
+17. NO SPRINT IS COMPLETE WHILE CODE, DOCUMENTATION, ROADMAP AND ACTUAL PRODUCT DIRECTION
+    DISAGREE. A green suite over the wrong product is not completion.
+```
+
+WHY THIS IS AN INVARIANT AND NOT A PREFERENCE. Both drifts passed every gate the repository had at
+the time. The tests were green, the documentation was internally consistent, and the measurements
+were real — they were simply measurements of Apple. Nothing in sections 1 to 20 could catch a
+repository that was carefully, verifiably building the wrong product. This section can.
+
+---
+
+## 22. Exception and ADR Process
 
 Any deviation from these rules requires an ADR recording status, context, decision,
 alternatives considered, consequences, migration impact, and revisit conditions.
@@ -946,6 +1143,6 @@ alternatives considered, consequences, migration impact, and revisit conditions.
 Accepted ADRs are never silently rewritten. Supersede them with a new ADR that references the
 one it replaces.
 
-Sections 15 through 20 are exempt from this process in one direction only: they may be
+Sections 15 through 21 are exempt from this process in one direction only: they may be
 strengthened without an ADR, but may not be weakened or removed by any agent under any
 circumstance.

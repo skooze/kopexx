@@ -1,5 +1,79 @@
 # Summarization Model Benchmark
 
+> **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
+> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
+> The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
+> preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
+> a filing means. The user selects four models independently — parsing, image, summary, and
+> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
+> content ontology, migration `0003` and the local application database are withdrawn. Sections
+> below that describe the withdrawn design are historical.
+>
+> **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+
+---
+
+# CURRENT DIRECTION — AUTHORITATIVE. Everything below this section is historical.
+
+**NO BENCHMARK HAS BEEN RUN. NO MODEL HAS BEEN INVOKED. NO RESULT IS CLAIMED.**
+
+This document describes what will be measured in Phase 2. It reports nothing, because nothing has
+been measured. Any number below this line that looks like a result is a worked example or a
+placeholder.
+
+## The candidates
+
+GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4 Maverick, Qwen3 VL 235B.
+
+**None is currently configured or accessible.** Model IDs, versions, regions, modalities, context
+and output limits, supported request formats and prices are DISCOVERED LIVE in Phase 1.5 and are
+never hardcoded. No identifier in this repository is trusted until discovery returns it.
+
+## What Phase 2 measures, per role
+
+Benchmarks are per ROLE. A model good at parsing is not thereby the right summary model, and the
+user selects each independently anyway.
+
+```
+PARSING       whether the provider accepts the intact artifact at all
+              source coverage against preserved bytes
+              citation fidelity — does every cited offset resolve
+              numeric fidelity — does every reported number appear verbatim
+              omission detection — what disappeared silently
+              input tokens, output tokens, latency, cost
+              variability across models, and across reruns of the SAME model
+IMAGE         description usefulness, correct linkage to the source object
+SUMMARY       grounding in the accepted parse, citation fidelity, cost
+ANALYSIS      answer grounding, scope adherence, per-turn cost
+```
+
+## The corpus samples Phase 2 must use
+
+Materially different, not five filings from one issuer — that is the mistake this whole correction
+exists to undo:
+
+```
+historical plain-text or SGML      early HTML                pre-inline-XBRL
+modern inline-XBRL                 small-business form       transition form
+amendment                          young issuer              mature issuer
+image-bearing filing               a large filing compatible with at least one available model
+```
+
+## The output contract is provisional
+
+The parser request and response contracts are provisional until real responses reshape them. Raw
+text or exactly one unfenced YAML 1.2 document, with the original-source exception for the intact
+artifact. **The artifact format follows what the models actually return**, not the reverse.
+
+## The Apple oracle
+
+The 43 canonical footnotes, 117 of 117 attachments and the table-ownership census are a **recall
+floor for grading a parsing model**. A model that finds fewer is suspect. A model that finds more
+is not thereby wrong — the oracle is one issuer, and it does not define a correct parse.
+
+
 IMPLEMENTATION STATUS: smoke benchmark PLANNED (Sprint 5); full benchmark PLANNED (pre-backfill)
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
 GATES: `prompts/footnote-summary/v1.0.0/evaluation.yaml`
@@ -45,30 +119,62 @@ The evaluation is therefore split.
 
 ### Tier 1 — Slice smoke benchmark (Sprint 5)
 
+> **Corrected in Sprint 4.1 (ADR-0016).** This corpus was 15 canonical footnotes. That measures
+> one content type and would have produced unit economics for roughly a fifth of the real
+> summarized surface: Apple's FY2025 10-K has **67 required summary units**, of which 13 are
+> footnotes. A cost figure extrapolated from the footnote subset would have been wrong in the same
+> direction, and for the same reason, as the withdrawn 58-TextBlock estimate.
+
 ```
-PURPOSE     Prove the pipeline end to end and measure real cost per footnote.
-CORPUS      The 13 canonical footnotes of Apple's FY2025 10-K, plus 2 deliberately hard
-            cases: the largest note and a routine one-paragraph note.
+PURPOSE     Prove the pipeline end to end across the CONTENT TAXONOMY and measure real cost
+            per content unit and per filing.
+CORPUS      A stratified sample of required summary units from the vertical-slice filings,
+            spanning every stratum below. Not fewer than 20 units, and the footnote stratum is
+            never fewer than the 2 hard cases named below.
 LABELS      Figures, units, scales, periods, and signs extracted from the filed source
             programmatically, then reviewed once by a human. Not full gold labels.
 CANDIDATES  At least 2, spanning 2 capability tiers.
 ```
 
-Gates for tier 1 — deliberately narrower than production gates, because 15 footnotes cannot
+**Required strata.** Every one must appear; none may be the whole corpus.
+
+```
+cover-page metadata            Business (Item 1)
+Risk Factors (Item 1A)         MD&A (Item 7)
+market risk (Item 7A)          legal proceedings (Item 3)
+cybersecurity (Item 1C)        controls and procedures (Item 9A)
+a financial statement          a routine one-paragraph footnote
+a complex table-heavy footnote a human-readable exhibit
+a certification                a signature block
+a historical filing section    an oversized unit requiring hierarchical chunking
+```
+
+**Footnotes must neither disappear from the benchmark nor constitute it.** They are the hardest
+stratum and keep the two deliberately hard cases the original corpus named: the largest note and a
+routine one-paragraph note.
+
+Gates for tier 1 — deliberately narrower than production gates, because a smoke corpus cannot
 establish a rate to three decimal places:
 
 ```
 structured_output_validity    == 1.0     every response parses as one YAML 1.2 document
-footnote_omission_rate        == 0.0     13 footnotes in, 13 summaries out
-numeric_fidelity              == 1.0     on 15 items, any error is a real defect
+unit_omission_rate            == 0.0     every required unit in the corpus produces a summary
+footnote_omission_rate        == 0.0     13 footnotes in, 13 summaries out, independently
+chunk_coverage                == 1.0     every leaf chunk of an oversized unit is summarized
+aggregate_lineage_validity    == 1.0     every aggregate cites only accepted child summaries
+numeric_fidelity              == 1.0     any error on a corpus this size is a real defect
 unit_and_scale_fidelity       == 1.0
-citation_resolvability        == 1.0     every cited source id exists and belongs to that note
+citation_resolvability        == 1.0     every cited id exists and belongs to that unit or an
+                                         approved child
+qualitative_source_grounding  == 1.0     every narrative claim traces to a supplied block
 boundary_violations           == 0       no prohibited format in either direction
+recommendations_or_forecasts  == 0       no advice, no price prediction
 ```
 
 Tier 1 also **measures and publishes**, replacing the placeholders in `docs/llm/cost-model.md`:
-`T_src`, `T_tbl`, `T_out`, `R_retry`, observed `P_in` and `P_out`, cost per footnote, cost per
-filing, and extrapolated cost per issuer history.
+`T_src`, `T_tbl`, `T_out`, `R_retry`, observed `P_in` and `P_out`, and cost per source character,
+per input token, per leaf chunk, per content unit, per footnote, per Part, per Item, per filing,
+and extrapolated per issuer history.
 
 **Passing tier 1 does not select a production model.** It proves the pipeline works, establishes
 real unit economics, and produces the go/no-go the project currently lacks. A tier-1 result is
@@ -89,6 +195,11 @@ cannot pass by being good at one industry or one era.
 
 Industries: software, industrial, retail, bank, insurer, REIT, utility, biotechnology,
 acquisition-heavy.
+
+Content types, stratified independently of footnote type: cover page, Business, Risk Factors,
+Legal Proceedings, MD&A, market risk, controls and procedures, cybersecurity, other information,
+financial statements, financial schedules, exhibits, certifications, signatures, and incorporated
+references.
 
 Footnote types: significant accounting policies, revenue recognition, debt, credit facilities,
 derivatives and hedging, fair-value hierarchy, income taxes, valuation allowances, stock-based
@@ -126,14 +237,16 @@ never quietly patched.
 ## Scored dimensions
 
 ```
-canonical_footnote_coverage      omission_rate                unsupported_claim_rate
+content_unit_coverage            canonical_footnote_coverage  omission_rate
+chunk_coverage                   aggregate_lineage_validity   unsupported_claim_rate
 numeric_fidelity                 date_fidelity                period_fidelity
 unit_fidelity                    scale_fidelity               sign_fidelity
 citation_precision               citation_recall              financial_relationship_accuracy
 material_change_accuracy         accounting_policy_accuracy   risk_identification_recall
-structured_output_validity       hallucination_rate           concision
-readability                      latency_p50 / latency_p95    retry_rate
-cost_per_footnote                cost_per_filing              human_review_rate
+qualitative_source_grounding     structured_output_validity   hallucination_rate
+concision                        readability                  latency_p50 / latency_p95
+retry_rate                       cost_per_content_unit        cost_per_footnote
+cost_per_item                    cost_per_filing              human_review_rate
 ```
 
 ## Production gates

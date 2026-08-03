@@ -1,5 +1,43 @@
 # Summary Validation
 
+---
+
+# CURRENT DIRECTION — AUTHORITATIVE. Everything below this section is historical.
+
+**NOT IMPLEMENTED. NO SUMMARY HAS BEEN VALIDATED BECAUSE NONE EXISTS.**
+
+## What validation proves, and who proves it
+
+The backend proves it, independently, against the preserved bytes. **A model's own claim that its
+output is complete is never accepted as evidence.**
+
+```
+COVERAGE     every human-readable source range is represented in the accepted parse or
+             explicitly marked unresolved
+CITATIONS    every cited offset resolves inside the preserved source at its stated position
+NUMBERS      every reported number appears verbatim in the source
+FOOTNOTES    every footnote the accepted parse identified still exists as an independent node
+             with its own summary, and none was merged away
+```
+
+Failure produces `PARTIAL` or `REVIEW_REQUIRED`. **A false complete is a defect**, and uncertainty
+never rounds up.
+
+## Validation is against the SOURCE, not against a taxonomy
+
+Coverage is reconciled against discovered source material, never against a count of sections. A
+count of extracted sections says nothing about whether a paragraph between two of them was dropped.
+
+There is no expected list of section kinds to check for, because there is no universal taxonomy.
+What is checked is that the preserved bytes are accounted for.
+
+## Summary-specific validation
+
+A summary must be grounded in the accepted parse it references, must not introduce numbers absent
+from the evidence, and must not become the sole support for a material claim. A summary whose parse
+has been superseded is invalidated rather than silently retained.
+
+
 IMPLEMENTATION STATUS: PLANNED (Sprint 5); boundary validation IMPLEMENTED
 OWNER PACKAGE: `packages/validation`
 
@@ -15,14 +53,20 @@ Each stage runs only if the previous passed. Ordering is cheapest-first.
 ```
 1  boundary        response is one unfenced YAML 1.2 document       IMPLEMENTED
 2  schema          every required field, correct types, valid enums
-3  identity        footnote id and accession match what was requested
+3  identity        content unit id and accession match what was requested
 4  source          every cited id was actually supplied in the request
 5  coverage        blocks_referenced == blocks_supplied, same for tables
-6  citation        each cited source belongs to THIS footnote and supports the claim
+6  citation        each cited source belongs to THIS unit or an approved child, and supports
+                   the claim
 7  numeric         every important_fact reconciles against a table cell or filed fact
 8  foreign issuer  no company other than the subject is presented as the subject
 9  truncation      response is complete, not cut off
+10 chunk lineage   for an aggregate, every leaf chunk of the unit has an accepted summary and
+                   the aggregate cites only those
 ```
+
+Stage 10 is what makes hierarchical chunking safe. Without it an aggregate could be built from the
+first three chunks of an eight-chunk Item and validate perfectly against them.
 
 ## Numeric validation
 
@@ -75,11 +119,22 @@ Only `ACTIVE` summaries are displayed and only they count toward completeness.
 
 ## Publishing gate
 
+> **Corrected in Sprint 4.1 (ADR-0016).** The second clause previously read "every valid canonical
+> footnote", which made a filing publishable as complete while its MD&A had no summary at all.
+
 ```
 a summary is publishable only when validation_status is VALIDATED or VALIDATED_NORMALIZED
-a filing is complete only when every valid canonical footnote has one such active summary
+
+a filing's SUMMARY layer is complete only when every canonical content unit whose
+summary_required is true has one such active summary
+
+a filing's FOOTNOTE layer is complete only when every valid canonical footnote has one of its
+own — the general rule does not absorb this one
+
+an AGGREGATE summary may not be active while any required child unit lacks an accepted summary;
+it is PARTIAL and names what is missing
 ```
 
 An unsupported value is never presented as authoritative dashboard data. Where a summary is
-withheld, the footnote still appears with its title and a link to the original, because a missing
-footnote is worse than a missing summary.
+withheld, the **content unit** still appears with its title, its filed position, and a link to the
+original, because a missing section is worse than a missing summary.

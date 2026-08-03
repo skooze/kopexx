@@ -1,46 +1,81 @@
-# roadmap.md — FinTek Delivery Roadmap
+# roadmap.md — Kopexx Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Sprint 4 closeout hardening)
-LAST UPDATED: 2026-08-02, after `1d05199` was pushed to `origin/main`
-SEQUENCING DECISION: `docs/adr/ADR-0015-thread-first-delivery-sequence.md`
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of the 2026-08-02 corpus study)
+LAST UPDATED: 2026-08-02 during the architecture and governance realignment, prepared against
+published baseline `068eceb`.
+ARCHITECTURE DECISION: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`
+SEQUENCING PRINCIPLE: evidence before architecture; architecture before schema.
 
 ---
 
 ## Product Vision
 
-An investor types a ticker and receives that company's SEC filings already digested: deterministic
-financial charts, and one plain-language summary for every financial-statement footnote in every
-10-K and 10-Q the company has ever filed. When the investor wants to go deeper, they explicitly
-start a Deep Analysis session that is locked to that issuer and that corpus.
+An investor selects a company, a timeframe, and four models — a parsing model, an image model, a
+summary model, and an analysis/chat model. The backend discovers and acquires the filings,
+preserves the original SEC artifacts byte-for-byte, and **sends the complete compatible set of
+relevant human-readable SEC-filed source documents intact to the selected parsing model**. It
+validates what comes back against the preserved bytes, sends the accepted parse to the selected
+summary model, and streams the results. Browsing completed results invokes no model.
 
-The insight the product is built around: a 10-K may run 100 pages, of which only a page or two is
-the actual financial statements. The rest is footnotes explaining *why* the company did what it
-did, and that is what investors actually need. The footnotes are the product.
+**The backend orchestrates. It does not attempt to understand a filing semantically before the
+model sees it.**
+
+WHAT "THE COMPLETE COMPATIBLE SET" MEANS, AND WHAT IT DOES NOT
+
+```
+every original artifact remains BYTE-EXACT
+machine artifacts are PRESERVED but are not automatically semantic parser input
+duplicate renderings of the same content are NOT submitted redundantly
+an unknown transport role FAILS CLOSED for review; it is never guessed at
+no semantic slicing, projection, multipart processing, truncation, or automatic model
+     substitution is authorized
+```
+
+The singular phrasing this replaced read as though only the primary document were sent. It is the
+whole relevant human-readable set, or the pairing is incompatible.
 
 ---
 
-## Delivery principle: prove the thread before widening it
+## Why this roadmap replaced the previous one
 
-This roadmap builds one complete vertical thread through every layer of the product before it
-builds any layer at full width.
-
-The reason is specific. The three riskiest unknowns in this project are:
+The previous roadmap sequenced a deterministic semantic parser, a universal filing ontology and a
+PostgreSQL schema ahead of ever calling a model — and validated all of it against five Apple
+filings. A representative corpus was then measured. It refuted the design.
 
 ```
-1. Can a model summarize a real footnote at the required numeric fidelity?
-2. What does that cost per footnote, per filing, and per issuer history?
-3. Do the zero-LLM read path and the Deep Analysis scope lock actually hold in running code?
+MEASURED 2026-08-02   112 issuers   613 filings   22 of 22 forms   6 eras   760 MB   0 throttles
+                      135 time-eligible quarters scanned (1993Q1-2026Q3); 2026Q4 pre-created, empty
+
+271 of 613  ~44%  of primary documents exceed ~200,000 estimated tokens
+169 of 613  ~28%  exceed ~500,000
+ 71 of 613  ~12%  exceed ~1,000,000   largest: JPMorgan Chase 10-K, 12.9 MB, ~4.3M est tokens
+1.28x to 24.11x   raw-to-visible character ratio, by transport format
+1.03x median      human-readable source set as a multiple of the primary document (p90 1.34x)
+4 to 283          files per filing package
+0 to 1,115        table open-tags in a single primary document
+120,120           EDGAR population of 10QSB, the 4th most common form in the family
 ```
 
-None of them is answered by building an issuer registry, a full-history backfill, or a
-120-fixture benchmark corpus. All three are answered by taking **one issuer through every layer**.
-Until they are answered, breadth work is investment against an unvalidated thesis.
+**EVERY TOKEN FIGURE IN THIS DOCUMENT IS A CHARACTER-RATIO ESTIMATE** at 3.0 characters per token,
+never a provider tokenizer count. Percentages are generated from the measured counts above and
+rounded to the nearest whole percent: 271/613, 169/613 and 71/613.
 
-The previous version of this roadmap scheduled the vertical slice as Phase 1 at sprints 3 to 5,
-while scheduling summarization at sprints 18 to 21, the dashboard at 25 to 28, and Deep Analysis
-at 29 to 33 — so the slice depended on work scheduled up to thirty sprints after it. That
-contradiction is resolved here: **Sprints 3 through 7 contain every dependency the slice needs,
-and nothing else.**
+Apple, the issuer the whole previous architecture was validated against, is roughly one eighth the
+size of the largest filing in the corpus and sits in the easiest third of every distribution.
+
+---
+
+## Delivery principle: evidence, then contract, then schema
+
+```
+1. Measure a representative corpus.                      Phase 1
+2. Learn what real models actually return from it.       Phase 2
+3. Build the minimum orchestrator those results need.    Phase 3
+4. Only then design persistence.                         Phase 8
+```
+
+Designing the database first is what produced migration `0003`: 22 unit types, six dispositions
+and sixteen CHECK constraints describing an interpretation no model had ever produced.
 
 ---
 
@@ -48,415 +83,375 @@ and nothing else.**
 
 | Area | Status |
 |---|---|
-| Repository scaffold | IMPLEMENTED |
-| Governance documents | IMPLEMENTED |
+| Repository scaffold, governance | IMPLEMENTED |
 | SEC identity library | IMPLEMENTED |
-| SEC client foundation, rate limiting, throttle classification | IMPLEMENTED |
-| SEC HTTP client | IMPLEMENTED |
+| SEC client, rate limiting, throttle classification | IMPLEMENTED |
 | Object storage abstraction and hashing | IMPLEMENTED (filesystem); S3 PLANNED |
 | Configuration and User-Agent validation | IMPLEMENTED |
 | Observability foundation | IMPLEMENTED |
-| DERA link discovery and mirror ledger | IMPLEMENTED |
-| DERA live mirror | COMPLETE (78/78 packages, 25.36 GiB) |
+| DERA mirror and fact loader | IMPLEMENTED (78 packages; 2,845 facts loaded historically) |
 | LLM gateway, YAML boundary, payload compiler, boundary validator | IMPLEMENTED |
 | Mock model provider | IMPLEMENTED |
-| PostgreSQL schema and initial migration | IMPLEMENTED and APPLIED to a live database (Sprint 3) |
-| DERA TSV loading, validation, reconciliation | IMPLEMENTED and EXECUTED (Sprint 3; 2,845 facts, 4 filings) |
-| Filing discovery, one CIK | IMPLEMENTED (Sprint 3) |
-| Filing acquisition, inline-XBRL era | IMPLEMENTED (Sprint 3) |
-| Canonical footnote grouping, stages 1 to 5 | IMPLEMENTED and MEASURED (Sprint 4; 4 filings, 0 orphans, 0 unresolved tables) |
-| Footnote extraction and table parsing | IMPLEMENTED (Sprint 4) |
-| Offline-fixture regression for all four filings | IMPLEMENTED (Sprint 4 closeout hardening) |
-| Real provider adapter | PLANNED (Sprint 5); AWS identity policy IMPLEMENTED as governance |
-| Summarization pipeline | PLANNED (Sprint 5) |
-| Read API and dashboard | PLANNED (Sprint 6) |
-| Deep Analysis, FILING scope | PLANNED (Sprint 7) |
-| Issuer universe | PLANNED (Sprint 8+) |
-| All-time acquisition | PLANNED (Sprint 8+) |
-| AWS deployment | PLANNED (post-slice) |
+| Filing discovery, one CIK | IMPLEMENTED |
+| Filing acquisition and accession document inventory | IMPLEMENTED |
+| Footnote extraction, canonicalization, table parsing | DEMOTED to validation oracle |
+| Representative research corpus (112 issuers, 613 filings) | COMPLETE — Phase 1 |
+| Commit 1: preservation, reusable infrastructure, test-database isolation | COMMITTED and PUSHED, CI green |
+| Commit 2: architecture and governance realignment | IN PROGRESS |
+| Commit 3: withdrawal of the rejected parser implementation | NOT STARTED |
+| Empirical filing-diversity study | COMPLETE for the Phase 1 representative corpus; broaden only if later model experiments expose a material evidence gap |
+| Corpus integrity assertions (hash, accession-to-CIK, identity) | IMPLEMENTED |
+| Intact-input decision (Option A / B / C) | OPEN — Phase 1.5, blocks Phase 2 |
+| Deterministic semantic parser and content ontology | WITHDRAWN (ADR-0016) |
+| Local application database | REMOVED from the critical path |
+| PostgreSQL schema for artifacts | DEFERRED to Phase 8 |
+| Model catalog, four-role router | PLANNED (Phase 3) |
+| Real provider adapter | PLANNED (Phase 2) |
+| Parsed / summary / image artifacts | PLANNED (Phases 2, 4, 5) |
+| Beta UI | PLANNED (Phase 6) |
+| Deep Dive and chat | PLANNED (Phase 7) |
 
 ---
 
-## URGENT: Time-Sensitive Action
+# Phase 1 — Representative Filing Corpus  (COMPLETE)
+
+Acquire and measure real filings, across the COMPLETE SEC 10-K/10-Q reporting family, before
+designing anything.
+
+EXHAUSTIVE FORM-FAMILY DISCOVERY. Every time-eligible EDGAR quarterly master index from 1993Q1
+through 2026Q3 — 135 quarters, zero unavailable, all populated and contributing. The SEC had also
+pre-created a 2026Q4 directory; its index was a 236-byte header-only stub with zero data rows and
+contributed nothing. 41 distinct 10-family form strings enumerated and adjudicated: 22 direct
+substantive reports included, 19 near-matches excluded with a recorded reason. Every included form
+carries an authoritative SEC description read from a real filing-detail page and a verified
+accession. Qualifying-family logic is GENERATED from that inventory; an unreviewed future candidate
+fails the gate.
+
+DELIVERED
+- 112 issuers, 613 filings, 760,174,532 bytes, every object SHA-256 verified, 0 throttle events.
+- All 22 direct-report forms represented, including the small-business and transition families the
+  first pass missed entirely.
+- All six transport eras: pre-1996 SGML through current inline XBRL.
+- 138 amendments; 313 annual and 300 quarterly; 42 small-business, 36 transition, 25 Item-405.
+- Corpus integrity: 613/613 objects hash-verified, 0 missing, 0 duplicate (cik, accession) pairs,
+  0 accession-to-CIK ownership mismatches, 0 authoritative-name contradictions.
+- Human-readable source-set measured against filer-declared document tables on a 77-filing subset
+  spanning every era, large financials, industrials, technology, young issuers, small-business
+  forms, transition forms, amendments, image-heavy and PDF-bearing packages.
+
+THE DEFECT THIS PHASE EXISTED TO CATCH. The first pass filtered on guessed hyphenated strings
+`10-KSB` and `10-QSB`, matched almost nothing, and concluded the small-business family was
+"effectively absent". EDGAR uses `10KSB` and `10QSB`. The real population is roughly 190,000
+filings, and `10QSB` alone at 120,120 filings by 9,771 issuers is the FOURTH most common form in
+the entire family. A guessed allowlist produced a confident, precise, inverted conclusion.
+
+EXIT CRITERIA — MET. All eight family-discovery acceptance conditions pass.
+
+# Phase 1.5 — OPEN: LIVE CAPABILITY DISCOVERY AND INTACT-SOURCE COMPATIBILITY  (BLOCKS PHASE 2)
+
+STATUS: OPEN.
+
+## Live Bedrock capability discovery
+
+Nothing about the five candidates is known. Phase 1.5 discovers it:
 
 ```
-ID:              URGENT-01
-DESCRIPTION:     Mirror the SEC DERA Financial Statement and Notes datasets.
-PRIORITY:        P0
-STATUS:          COMPLETE  (Sprint 2, 2026-08-01)
-OWNER:           unassigned
-TARGET SPRINT:   2
-COMPLETION EVIDENCE:
-    78 of 78 discoverable packages persisted, 0 failed, 27,228,877,737 bytes (25.36 GiB).
-    Every package SHA-256 recorded and CRC-validated via zipfile.testzip().
-    Second full run: 0 downloaded, 78 already present. Idempotency proven.
-    Independent re-validation: 78/78 sha256 re-verified, 78/78 ZIP CRC re-verified, 0 failures.
-    Manifest: var/dera/manifest.json   Ledger: var/dera/ledger.json
-    The twelve monthly packages with no quarterly consolidation (2025_07 through 2026_06)
-    were secured first, in a separate run, before the bulk.
+which models are actually available          the exact model IDs and versions
+regional support                             modalities, text and image
+context limits                               output limits
+supported request formats                    prices
 ```
 
-The SEC retains only a rolling twelve months of monthly NOTES packages and deletes them once
-consolidated into quarterly packages. This was the only task in the project with an external
-deadline.
+PHASE 1.5 OWNS ALL NON-BILLABLE LIVE CAPABILITY DISCOVERY: actual availability, exact IDs and
+versions, regions, modalities, context limits, output limits, supported request formats, official
+pricing inputs, and intact-source compatibility. **Phase 2 CONSUMES that verified catalog; it does
+not repeat the discovery.**
 
-ACCEPTANCE CRITERIA: MET.
+**No identifier, limit or price is trusted until discovery returns it**, and none may be recorded
+anywhere as a settled fact before then.
+
+Candidates, all UNVERIFIED and none currently configured or accessible: GPT OSS 120B,
+NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4 Maverick, Qwen3 VL 235B.
+
+**PHASE 1.5 PERFORMS NO BILLABLE MODEL INVOCATION WITHOUT SEPARATE EXPLICIT APPROVAL.** Capability
+discovery is a catalog read. The first actual model experiment is Phase 2, and it is authorized
+separately with a cost ceiling.
+
+## Intact-source compatibility
+
+CURRENT AUTHORIZED MODE: INTACT_SOURCE_ONLY.
+
+For a filing and model pair:
+- determine the complete relevant human-readable source set;
+- determine actual provider compatibility once live capability discovery is authorized;
+- if the complete intact source set fits, the model may be used;
+- if it does not fit, that model is INCOMPATIBLE with that filing;
+- the UI disables or rejects that pairing and explains why;
+- another model may be selected ONLY by the user;
+- no automatic projection, splitting, truncation, or model substitution occurs.
+
+Original SEC artifacts are preserved byte-for-byte. Every relevant human-readable filed document
+is sent intact. No visible-content projection. No semantic slicing. No mechanical multipart. No
+silent truncation. No silent model substitution.
+
+FUTURE OPTIONS REQUIRING SEPARATE EXPLICIT APPROVAL, none authorized:
+- lossless mechanical multipart
+- lossless reversible visible-content projection
+- projection followed by multipart
+
+The corpus measurements for those options are retained as RESEARCH EVIDENCE ONLY. They are not the
+approved architecture. Option D in particular CONFLICTS with the intact-source requirement and must
+not be implemented unless the user later authorizes that exception; its lower token cost is not
+authorization.
+
+# Phase 2 — Model Contract and Parsing Experiment  (the first real go/no-go)
+
+Define a provisional flexible parser request and response, then run REAL parsing experiments
+against materially different corpus samples and let the observed responses reshape the contract.
+
+DELIVERABLES
+- Provisional flexible parser request and response contracts, raw text or one unfenced YAML 1.2
+  document, with the original-source exception for the intact artifact.
+- Consume the verified Phase 1.5 model catalog and compatibility results. Discovery is NOT
+  repeated here; Phase 2 begins from findings Phase 1.5 already established.
+- Real parsing runs across all five candidate models over corpus samples that differ by era,
+  industry, size, package shape and markup quality.
+- Measurements: whether the provider accepts the intact artifact, input and output tokens,
+  context compatibility, omissions, source coverage, citation fidelity, numeric fidelity, cost,
+  latency, and response variability across models and across reruns of the same model.
+- A revised elastic artifact format derived from what the models actually returned.
+
+EXPLICITLY OUT OF SCOPE. Any rigid database schema. Any universal semantic taxonomy.
+
+## The experiment has TWO levels
+
+### Level 1 — BREADTH VALIDATION
+
+At least one compatible approved parsing model must process representative intact filings covering:
 
 ```
-ID:              URGENT-02
-DESCRIPTION:     Second durable copy of the twelve irreplaceable monthly DERA packages.
-PRIORITY:        P1
-STATUS:          COMPLETE  (Sprint 3, 2026-08-01)
-TARGET SPRINT:   3
-COMPLETION EVIDENCE:
-    12 of 12 packages copied to a second, separate filesystem and verified.
-    2,145,477,071 bytes. Source device and destination device differ, confirmed by stat.
-    Every package: source SHA-256 verified against the mirror ledger, destination SHA-256
-    verified after copy, and ZIP CRC verified by reading every member.
-    Second run copied 0 bytes, reused 2,145,477,071, and re-verified every hash.
-    Source files were neither modified nor deleted.
-    Manifest and verification report written beside the copy.
-    CAVEAT: the destination mount is not persistent. No fstab entry exists, so the device
-    does not remount automatically after a reboot. The data is safe on a separate device;
-    the PATH is not guaranteed to be present. Re-verify after any reboot.
+all SIX transport eras                  standard annual and quarterly reports
+transition forms                        small-business forms
+Item-405 variants                       at least one amendment
+young issuers AND mature issuers        at least one image-bearing filing
+at least one large filing near a discovered context limit
 ```
 
----
+**Attempt at least one intact parser trial for EVERY ONE of the 22 exact substantive form
+strings**, where model compatibility and the approved cost ceiling permit it.
 
-## MVP Definition
+Any untested form must carry an explicit compatibility, availability or cost blocker recorded
+against that exact form string. Another form is never silently treated as equivalent, and a
+passing result is never invented.
 
-The MVP is complete only when all of the following are true. Unchanged from the original
-definition; the sequence for reaching it is what changed.
+### Level 2 — CROSS-MODEL COMPARISON
 
-1. At least one issuer works end to end.
-2. Several filings are ingested from source.
-3. Every actual footnote in those filings is represented as a canonical record.
-4. Every extracted canonical footnote has a stored, validated, active summary.
-5. Financial facts are traceable to the filed source.
-6. Derived metrics are deterministic and reproducible.
-7. Dashboard access causes zero model invocations, proven by test.
-8. Five-year data renders entirely from storage.
-9. A Deep Analysis session can be created and answers a question.
-10. Deep Analysis retrieves original filing evidence, not only summaries.
-11. Deep Analysis remains locked to one issuer and scope.
-12. A cross-ticker request is rejected without a model call.
-13. Token and cost accounting are recorded per invocation.
-14. Documentation is synchronized with implementation.
-15. A new engineer or language model can continue the project from the repository alone.
+Run all available approved parsing candidates against a SMALLER SHARED BENCHMARK SET spanning
+materially different eras, formats, sizes and issuers, measuring:
 
-**Every one of these is satisfied by the end of Sprint 7.** Nothing in Stage 2 below is required
-for the MVP.
+```
+response structure      omission rate         source coverage
+citation fidelity       numeric fidelity      cost
+latency                 repeat-run variability
+```
 
----
+Every model is NOT required to process all 22 forms; context limits and cost make that
+impossible for some. Level 2 is the comparison; Level 1 is the breadth, and neither substitutes
+for the other.
 
-# Stage 1 — The Vertical Thread (Sprints 3 to 7)
-
-One issuer. Every layer. No breadth.
-
-Issuer: **Apple Inc., CIK 0000320193**, chosen because its footnote structure is already
-verified against the live filing. No issuer-specific logic may enter the architecture; the
-architecture tests exist to catch it.
+ACCEPTANCE
+- Level 1 breadth is met across all six transport eras, or every gap carries a recorded blocker.
+- Every accepted parse passes coverage, citation and numeric validation against preserved bytes.
+- Incompatibility is reported before invocation with bytes, tokens, limit and alternatives.
+- Cost per filing is measured for the first time, per model, per era.
+- Response variability is quantified, not assumed.
 
 ---
 
-### Sprint 3 — Acquire one issuer's filings and establish reproducible fixtures
+# Phase 3 — Minimum Orchestrator
 
-STATUS: COMPLETE — all thirteen acceptance criteria met, audited in the sprint record
-DEPENDS ON: Sprint 2
-DETAILED PLAN AND OUTCOME: `docs/sprints/SPRINT-0003.md`
+Only what one safe parsing job requires.
 
-DONE. Filing discovery (134 filings, 1994-2026, reconciling 134 = 134 against `master.gz` with
-zero gaps). Inline-XBRL acquisition of the FY2025 10-K and three 10-Qs, 20 objects and 8.42 MiB
-preserved with provenance, idempotent at zero requests on re-run. Committed fixtures with a
-source manifest. The item-disclosure exclusion list tested against real acquired data.
+- Four independent model roles and their selection records.
+- Model capability discovery and the capability router.
+- Intact-source compatibility checks with the no-slicing policy.
+- Durable job state and resumption.
+- Cost preview and explicit per-job authorization before any billable call.
+- Object storage for originals, exact request bodies and exact response bodies.
+- Minimal generic artifact metadata — identity, lineage, validation, tokens, cost, latency.
+- Real-time progress streaming.
 
-DONE SINCE. PostgreSQL 18.4 installed locally, using peer authentication over the Unix socket, so
-no password is stored for local work. Deployed authentication remains an open decision. The migration applies, downgrades, and reapplies against it. Both live
-migration tests now pass rather than skip: the suite reported 203 passed, 0 skipped at that point.
-URGENT-02 discharged with a verified second copy on a separate filesystem.
+## The MINIMUM BETA CATALOG — required no later than Phase 3
 
-DONE LAST. The DERA fact load. 2,845 facts across the four filings, from four different packages,
-each load reconciled on nine checks including an exact numeric-total match against PostgreSQL's own
-`sum()`. A rerun re-reads the whole package and inserts nothing. The suite reached 337 passed, 0
-skipped at Sprint 3 completion, and CI now runs a PostgreSQL service container so the database
-tests execute there rather than skip. (Current totals are in `docs/testing/strategy.md`; the
-figures in this entry are the Sprint 3 record and are not restated as sprints add tests.)
+The beta UI cannot be built on a catalog that does not exist until Phase 8. Phase 3 therefore
+delivers the minimum local entity and filing catalog the product needs to operate, and Phase 6
+completes the user-facing experience over it.
 
-CARRIED FORWARD, not blocking. The backup mount is still not persistent across reboots; the exact
-`fstab` entry and validation sequence are in `docs/runbooks/dera-backup-mount.md` and applying it
-needs root. Acquired objects are not yet registered in `filing_document`.
+It must provide:
 
-OBJECTIVE. End the condition where nothing has been retrieved. Get four real Apple filings into
-the system, preserved with provenance, and make the canonical-footnote result reproducible
-offline.
+```
+stable CIK identity                    current authoritative filer name
+observed aliases                       current ticker where known
+historical ticker observations WHERE AUTHORITATIVE EVIDENCE EXISTS
+qualifying filing identities           exact filed forms, never normalized
+earliest known qualifying filing       latest known qualifying filing
+filing dates and report periods        local entity search
+filing-bounded timeframe selection
+incremental additions for the beta corpus and actively used entities
+```
 
-DELIVERABLES.
-- A live local PostgreSQL from the project's own `docker-compose.yml`.
-- The two skipped live migration tests executed, upgrade and downgrade, against that database.
-- DERA TSV loading for the single partition covering the target filings.
-- `packages/filing_discovery` for one CIK: `submissions.zip`, `filings.files[]` overflow, and
-  reconciliation against `master.gz`.
-- `packages/filing_acquisition` for the inline-XBRL era only.
-- Apple FY2025 10-K plus three 10-Qs, preserved with SHA-256 and full provenance.
-- A documented fixture strategy and the fixtures it produces.
-- `metric_definitions/item_disclosure_exclusions.yaml` exercised by a test.
-- URGENT-02 discharged.
+**NO FABRICATED HISTORICAL TICKER DATA.** Absent evidence is recorded as absent. A plausible
+reconstruction is not an observation.
 
-ACCEPTANCE CRITERIA.
-- `alembic upgrade head` and `alembic downgrade base` both succeed against a real PostgreSQL,
-  and the two previously skipped tests pass rather than skip.
-- One DERA partition is queryable and its row counts reconcile against the package.
-- Four Apple filings are preserved, hashed, and re-acquirable idempotently.
-- The filing list for CIK 0000320193 reconciles gap-free against `master.gz`.
-- A fresh clone runs the entire suite offline, with no network and no SEC access.
-- The repository grows by less than 25 MB.
+This is deliberately NOT the EDGAR universe. It is the entities the beta actually operates on,
+grown incrementally. Full-universe population is Phase 8.
 
-EXIT CRITERIA. All of the above, on real fetched data.
+EXPLICITLY OUT OF SCOPE FOR PHASE 3. A broad semantic database. A universe-wide import. A
+scheduler. Universe-scale alias reconciliation.
 
 ---
 
-### Sprint 4 — Reproduce and validate canonical-footnote extraction
+# Phase 4 — Image Workflow
 
-STATUS: COMPLETE — 4 filings, 43 canonical footnotes, 0 orphans; see docs/sprints/SPRINT-0004.md
-DEPENDS ON: Sprint 3, which is COMPLETE
+- Multimodal parser path: one model, one call, images inline.
+- Text parser plus separately selected image model.
+- Non-semantic image inventory: location, dimensions, hash, containing document.
+- Image-artifact linkage to source location and parsed artifact version.
+- No duplicate image interpretation.
 
-GATE SATISFIED. Every Sprint 3 exit criterion is met and audited in `docs/sprints/SPRINT-0003.md`:
-PostgreSQL, the live migration, both previously skipped tests, the DERA fact load with
-reconciliation, and URGENT-02.
-
-OBJECTIVE. Prove the footnote thesis in production code, against the fixtures, deterministically.
-
-DELIVERABLES. `packages/footnote_extractor`. `packages/footnote_canonicalizer` implementing
-**stages 1 through 5 only** — candidate discovery, item exclusion, role-URI attachment, TOC
-reconciliation, heading reconciliation. Per-attachment audit persistence. Completeness
-computation. `packages/table_parser` sufficient for the tables in the four fixture filings.
-
-EXPLICITLY OUT OF SCOPE. Stages 6 through 11. They are fallbacks for a failure mode that
-measured 0 of 46 on the verified filing. They are built in Stage 2 when breadth exposes the
-cases that need them.
-
-ACCEPTANCE CRITERIA.
-- Apple FY2025 10-K yields **exactly 13** canonical footnotes.
-- All **46 of 46** child blocks attach to a parent; zero orphans.
-- The three Item-408 and Item-1C disclosures are classified as `filing_section`, not footnotes.
-- Every attachment records method, confidence, evidence, and competing candidates.
-- A filing with a deliberately removed summary computes `PARTIAL`, never `COMPLETE`.
-- The three 10-Qs each produce a canonical footnote set with zero orphans.
-
-RISKS. Role-URI grouping is verified on one filing. Breadth validation is Stage 2 and this
-sprint's result must not be presented as a general guarantee.
+Corpus evidence, dated Phase 1, 2026-08-02: 187 of 613 filings carry at least one image, none
+before 1996 and 80 of 108 in the current era; 11 carry PDFs; the largest package carries 108
+images.
 
 ---
 
-### Sprint 5 — Real-model summarization, fidelity, and cost
+# Phase 5 — Summary Workflow
 
-STATUS: NOT STARTED
-DEPENDS ON: Sprint 4
-
-OBJECTIVE. Answer the two questions the project cannot currently answer: does it work, and what
-does it cost. **This is the go/no-go sprint.**
-
-AUTHENTICATION PREREQUISITE. Before the first Bedrock call, a developer identity must exist that
-is obtained through an approved external federated credential provider and scoped to only the
-Bedrock actions and model resources the benchmark needs. **No long-lived access key is created for
-this, at any point, by anyone.** The benchmark additionally requires a hard invocation budget, a
-hard dollar budget, an explicit model allowlist, an explicit region, and a manual start. The rule
-is `rules.md` section 3; the design is `docs/security/aws-identity-and-secrets.md`. The policy is
-already in force — it is enforced by tests today, before any provider code exists.
-
-DELIVERABLES.
-- `docs/llm/model-catalog.md`: verified model identifiers, region availability, context and
-  output limits, and observed prices — obtained by calling the provider, not from memory.
-- `packages/llm_gateway/providers/bedrock.py`, the first real provider adapter.
-- `packages/summarization`: one job per canonical footnote.
-- `packages/validation`: schema, identity, source-resolution, and numeric reconciliation against
-  `footnote_table` and `xbrl_fact` on value, unit, scale, sign, and period.
-- The **tier-1 smoke benchmark** — 15 footnotes, at least 2 candidate models — per
-  `docs/llm/model-benchmark.md`.
-- Measured parameters replacing every placeholder in `docs/llm/cost-model.md`.
-
-ACCEPTANCE CRITERIA.
-- 13 canonical footnotes produce 13 stored, validated, active summaries.
-- Numeric fidelity 1.0 across the smoke corpus; any error on 15 items is a real defect.
-- Every response is one unfenced YAML 1.2 document; zero boundary violations.
-- Every citation resolves to a source block belonging to that footnote.
-- `cost_per_footnote`, `cost_per_filing`, and extrapolated `cost_per_issuer_history` are
-  published as measured numbers.
-- Every invocation records tokens, cost, latency, prompt version, model identifier, and the
-  object-storage URIs of the exact request and response bodies.
-
-EXIT CRITERIA. The above, plus an explicit written go/no-go on unit economics. A tier-1 pass is
-provisional and does not select a production model.
+- Independently selected summary model.
+- A separate summary artifact that references the accepted parse.
+- Grounding validation against the parse and the original evidence.
+- Regeneration without reparsing; supersession invalidates dependent summaries.
 
 ---
 
-### Sprint 6 — The stored-data dashboard and the zero-LLM read path
+# Phase 6 — Functional Beta UI
 
-STATUS: NOT STARTED
-DEPENDS ON: Sprint 5
+- Completes the user-facing catalog experience over the Phase 3 minimum catalog: entity
+  typeahead searching current name, former names, SEC filer name, current ticker, historical
+  ticker and alias. An entity with no qualifying filing never appears.
+- Timeframe selection bounded below by the entity's earliest known qualifying filing, so the
+  control cannot offer a range the product cannot serve.
 
-OBJECTIVE. Prove requirement 9 in executable code, and render the product.
+**PHASE 6 CANNOT BE COMPLETE UNTIL THE MINIMUM BETA CATALOG IS COMPLETE.** It depends on Phase 3
+for the catalog, not on Phase 8.
+- Four model selectors, capability-aware, with disabled states explained.
+- Search button gated on validity, compatibility and budget.
+- Live progress. Original view, clean parsed view, summary view, model and cost view.
+- Persistent collapsible left search panel; light grey surfaces with translucent blue and green
+  accents.
 
-DELIVERABLES.
-- `packages/fiscal`, `packages/xbrl`, `packages/fact_lake`, `packages/financial_metrics`
-  sufficient for one issuer: duration-aware filtering, Q4 derivation, curated metric resolution.
-- Versioned Parquet publication with an atomic pointer flip.
-- `apps/api`: the read endpoints in `docs/api/openapi.yaml`.
-- `apps/web`: the screens in `docs/dashboard/ux-specification.md`.
-- `footnote_comparison` computation per `docs/footnotes/period-comparison.md`.
+## MINIMUM AUTHENTICATION — a Phase 6 prerequisite to binding beyond loopback
 
-ACCEPTANCE CRITERIA.
-- `test_dashboard_session_invokes_no_model` passes: a full browse records **zero**
-  `llm_invocation` rows. **This test lands in the same sprint as the first endpoint.**
-- Five-year and all-time views render entirely from storage.
-- A quarterly revenue series shows a fourth bar, labelled derived.
-- A filing with 12 of 13 summaries renders as *12 of 13* with the thirteenth listed.
-- Low-confidence and partial states render per the UX specification.
-- Ingestion writes while API workers read, with zero lock errors.
+Phase 6 produces a LAN-ACCESSIBLE beta, so Phase 6 owns the authentication that makes that safe.
+It is not deferred to a phase that does not exist yet.
 
----
+```
+localhost-only operation until authentication is enabled
+NO unauthenticated LAN exposure
+server-side sessions
+secure cookie behaviour where applicable
+CSRF protection for state-changing browser requests
+no provider credentials in the browser
+no browser-to-Bedrock path
+configurable bind address
+```
 
-### Sprint 7 — Filing-scoped Deep Analysis and cost containment
-
-STATUS: NOT STARTED
-DEPENDS ON: Sprints 5, 6
-
-OBJECTIVE. Prove requirements 10 through 14.
-
-DELIVERABLES.
-- `packages/deep_analysis` including `scope.py`, the single home for scope validation.
-- `FILING` scope only. `FOOTNOTE` and `TIMEFRAME` scopes are Stage 2.
-- The deterministic cross-issuer detector, positioned **before** any retrieval or model spend.
-- The bounded YAML action protocol in `docs/deep-analysis/action-protocol.yaml`.
-- `packages/retrieval` over the authorized corpus.
-- Budgets enforced pre-flight; conversation memory; citation validation.
-- The **Deep Analysis model benchmark**, adversarial subset included, per
-  `docs/llm/analysis-model-benchmark.md`.
-
-ACCEPTANCE CRITERIA.
-- A session scoped to Apple answers a real question with citations resolving to original
-  evidence, not to summaries.
-- A Microsoft comparison is refused with **zero** `llm_invocation` rows.
-- Every threat in `docs/deep-analysis/security.md` has a passing test.
-- A filing fixture containing "ignore previous instructions" produces no behaviour change.
-- Exceeding `max_cost_usd` refuses the turn.
-- Detector recall and precision are measured and published.
-
-EXIT CRITERIA. **All fifteen MVP criteria satisfied. The product is proven.**
+Full multi-user identity management may remain deferred. Binding beyond loopback without the list
+above may not.
 
 ---
 
-# Stage 2 — Widening (Sprint 8 onward)
+# Phase 7 — Deep Dive and Chat
 
-Nothing here starts until Stage 1 exits. Ordering within Stage 2 is revisited after Sprint 7,
-because the measured cost from Sprint 5 will change what is affordable.
-
-| Phase | Objective | Depends on | Was previously |
-|---|---|---|---|
-| W-1 | Issuer universe: temporal registry, listing observations, exclusion table, delisted handling | Sprint 7 | Phase 2, sprints 6–7 |
-| W-2 | All-time acquisition across all four eras; resumable backfill; reconciliation | W-1 | Phase 4, sprints 11–13 |
-| W-3 | Canonicalization stages 6–11; breadth validation across ≥25 issuers, all eras | W-2 | Phase 5, sprints 14–17 |
-| W-4 | Tier-2 benchmark, 120 fixtures; production model selection; batch processing | W-3 | Phase 6, sprints 18–21 |
-| W-5 | Full-corpus backfill | W-4 | Phase 6 |
-| W-6 | Remaining Deep Analysis scopes; pgvector retrieval | W-3 | Phase 9 |
-| W-7 | AWS deployment, Terraform, ECS | W-5 | Phase 7 |
-| W-8 | Pre-XBRL numeric extraction | W-2 | Phase 10, deferred |
-
-W-3 closes risk R-02, W-4 closes R-04, and W-8 closes the pre-2009 numeric gap. All three are
-genuinely valuable and none is required to prove the product.
-
-**W-7 authentication prerequisite.** Terraform authenticates through a temporary federated or
-OIDC-assumed role, and GitHub Actions assumes a deployment role through OpenID Connect. No AWS
-access key is stored as a GitHub secret, embedded in a provider block, or written into a variable
-file. Each ECS workload receives its own least-privilege task role, kept separate from the
-task-execution role. This is settled policy rather than a W-7 design decision: `rules.md` section
-3, detailed in `docs/security/aws-identity-and-secrets.md`.
+- Independently selected analysis/chat model.
+- Immutable entity and timeframe scope, loaded server-side.
+- Access to original evidence, not only summaries.
+- Durable conversations, citations, per-turn budgets and cost controls.
 
 ---
 
-## Sprint Breakdown
+# Phase 8 — Breadth and Persistence Optimization
 
-Every commit below is on `origin/main`. Sprint 3 landed as three commits because its work was
-approved and committed in three stages; that is the record, not a retelling.
+Only after real model outputs are understood.
 
-| Sprint | Objective | Status | Commits |
-|---|---|---|---|
-| 1 | Foundation, governance, SEC primitives, LLM boundary controls | COMPLETE | `835f21e` |
-| 2 | Execute DERA mirror download; PostgreSQL schema and migrations | COMPLETE | `804efbd` |
-| — | Alignment review; thread-first resequencing; governance amendment | COMPLETE | `275db19` |
-| — | CI repair: package installation and secret scanning | COMPLETE | `7ebfb82` |
-| — | README rewrite and project naming | COMPLETE | `e2b2d1b`, `4222479` |
-| 3 | Acquire one issuer's filings; reproducible fixtures | COMPLETE | `2672222`, `1e9f343`, `bc9aeb6` |
-| — | AWS identity and secret-management governance | COMPLETE | `60f3e00` |
-| 4 | Canonical-footnote extraction, stages 1–5 | COMPLETE | `468d0f2` |
-| — | Sprint 4 closeout hardening: 10-Q regressions, migration range, CI runtimes | COMPLETE | `1d05199` |
-| 5 | Real-model summarization; fidelity and cost measurement | NOT STARTED | — |
-| 6 | Dashboard and the zero-LLM read path | NOT STARTED | — |
-| 7 | Filing-scoped Deep Analysis and cost containment | NOT STARTED | — |
-| 8+ | Stage 2 widening, order revisited after Sprint 7 | NOT STARTED | — |
+- Final PostgreSQL design, derived from accepted artifacts.
+- Final Redis design.
+- Derived indexes and search facets.
+- Optional deterministic fast paths, where the corpus shows they are safe.
+
+## CATALOG EXPANSION — Phase 8 only
+
+Phase 8 EXPANDS the working minimum catalog built in Phase 3. It does not create it, and nothing
+in Phase 6 waits for it.
+
+```
+complete EDGAR-wide entity population       complete historical qualifying filing acquisition
+universe-scale alias and name-history reconciliation
+scheduled incremental synchronization       durable checkpoints
+amendment monitoring                        newly qualifying issuer discovery
+performance optimization                    search-index optimization
+large-scale backfill                        long-term operational scheduling
+```
 
 ---
 
 ## Risks Register
 
-| ID | Risk | Severity | Mitigation | Status |
-|---|---|---|---|---|
-| R-01 | DERA monthly packages deleted before mirroring | HIGH | URGENT-01 discharged in Sprint 2; all 78 packages held and re-validated | CLOSED |
-| R-02 | Role-URI grouping verified on one issuer only — four filings, one filing agent, one era | HIGH | W-3 breadth validation across ≥25 issuers. Not blocking Stage 1, which is explicitly one issuer | OPEN |
-| R-03 | Pre-2009 filings have no role URIs | MEDIUM | Text-only grouping with lower confidence, surfaced in the UI | OPEN |
-| R-04 | Provider catalog and pricing unverified | HIGH | **Moved forward to Sprint 5** from Phase 6. Blocking gate before any cost commitment | OPEN |
-| R-05 | Item-disclosure exclusion list drifts as SEC adds mandates | MEDIUM | `metric_definitions/item_disclosure_exclusions.yaml` with an unknown-namespace review policy | MITIGATED |
-| R-06 | SEC access policy may change | MEDIUM | Revalidate before each ingestion phase | OPEN |
-| R-07 | Scope-classifier false negatives leak Deep Analysis cost | MEDIUM | Detector measured independently in Sprint 7; budgets are the backstop | OPEN |
-| R-08 | Twelve irreplaceable DERA monthly packages exist in one location | HIGH | URGENT-02 discharged: verified second copy on a separate filesystem | CLOSED |
-| R-10 | No PostgreSQL is reachable on the development machine | HIGH | PostgreSQL 18.4 installed and running; migration applied; both live tests pass | CLOSED |
-| R-09 | Unit economics unknown; the product may be unaffordable at corpus scale | HIGH | **Sprint 5 is an explicit go/no-go.** Previously unresolved until sprint ~20 | OPEN |
+| ID | Risk | Severity | Status |
+|---|---|---|---|
+| R-20 | Intact submission is unaffordable or impossible for a large fraction of filings. Dated Phase 1 evidence: 44% of primary documents exceed ~200k estimated tokens, 12% exceed ~1M | HIGH | OPEN. Phase 1.5 measures real limits; Phase 2 measures cost. The no-slicing policy makes it a visible failure, not a silent truncation |
+| R-21 | No candidate model accepts a materially sized modern filing intact | HIGH | OPEN. Phase 2 |
+| R-22 | The five user-approved candidate LABELS have not yet been mapped to verified Bedrock model IDs, versions, regions, modalities, limits or prices. They are labels, not provider identifiers | HIGH | OPEN. Phase 1.5 resolves the mapping |
+| R-23 | Model parse output varies between reruns, weakening the completeness guarantee | HIGH | Mitigated by versioned candidate artifacts plus per-version coverage validation |
+| R-24 | Token estimates are a character ratio, unfit for a compatibility gate | MEDIUM | Use provider token counting in Phase 2 |
+| R-25 | Pre-2001 filing components are often not individually addressable through EDGAR; the complete-submission text may be the only retrievable source artifact, so the input contract must not assume a per-document URL | MEDIUM | Measured. Design constraint, not a defect. SUPERSEDES a withdrawn earlier finding that a third of filings declared no primary document, which came from index.json icon metadata; all 613 filings resolve one |
+| R-26 | Malformed markup is normal before 2005 | MEDIUM | Measured. Transport tolerance required |
+| R-27 | Corpus form-family coverage | HIGH | CLOSED. The initial guessed form filter missed small-business and transition forms. Exhaustive full-index discovery later identified and represented all 22 reviewed direct substantive form strings |
+| R-28 | SEC identification must be validated before every acquisition run. The monitored contact remains outside tracked source and must never be replaced with a placeholder | MEDIUM | OPEN, operational. Enforced at startup by configuration validation |
+| R-30 | Uniqueness rules keyed on accession alone reject valid EDGAR co-registrations | MEDIUM | CLOSED. Key is `(cik, accession)`; ownership verified from the archive path |
+| R-29 | The configured SEC User-Agent contained a placeholder contact address, blocking acquisition | HIGH | CLOSED, historical. A real monitored contact was configured in the git-ignored `.env` and passed validation before the corpus was expanded. The address is not recorded in tracked source |
+| R-06 | SEC access policy may change | MEDIUM | Revalidate before each ingestion phase |
+| R-09 | Unit economics unknown | HIGH | Phase 2 produces the first measured figure |
 
 ---
 
 ## Deferred Work
 
-| ID | Item | Reason | Revisit when |
-|---|---|---|---|
-| D-01 | Form types 20-F, 40-F, 8-K, DEF 14A, S-1 | Not in MVP scope | After Stage 1 |
-| D-02 | Delisted issuer historical backfill via Internet Archive | Requires daily snapshots to accrue first | After W-1 |
-| D-03 | OpenSearch retrieval | pgvector sufficient until measured otherwise; ADR-0007 | If retrieval quality or scale demands it |
-| D-04 | Pre-XBRL numeric extraction | W-8 | After W-2 |
-| D-05 | Real user authentication | Local single-user implementation; ADR-0014 | Before public deployment |
-| D-06 | Canonicalization stages 6–11 | Fallbacks for a case that measured 0 of 46 | W-3 |
-| D-07 | Tier-2 120-fixture benchmark | Tier-1 smoke benchmark suffices to prove the pipeline | W-4 |
-| D-08 | `FOOTNOTE` and `TIMEFRAME` analysis scopes | `FILING` scope proves the security model | W-6 |
-| D-09 | Terraform and ECS implementation | ADR-0008 and ADR-0009 are PROVISIONAL until W-7 | W-7 |
+| ID | Item | Revisit |
+|---|---|---|
+| D-20 | Final PostgreSQL schema | Phase 8 |
+| D-21 | Redis data model | Phase 8 |
+| D-22 | Entity-catalog SCHEDULER and universe-scale expansion | Phase 8. The minimum beta catalog itself is Phase 3 |
+| D-23 | Parquet and DuckDB serving (ADR-0002) | Phase 8 |
+| D-24 | pgvector retrieval (ADR-0007) | Phase 8 |
+| D-25 | Terraform and ECS (ADR-0008, ADR-0009) | after the beta runs on LAN |
+| D-01 | Form types beyond the 10-K and 10-Q families | after the beta |
+| D-05 | FULL multi-user identity management (ADR-0014) | after the beta. The MINIMUM authentication and session protection required before binding beyond loopback is Phase 6 work, not deferred |
 
 ---
 
 ## Known Limitations
 
-1. The active universe excludes issuers that never filed a 10-K or 10-Q, which removes foreign
-   private issuers filing 20-F. Their exclusion reason is preserved so they can be enabled later.
-2. Any analysis built on the current-listings universe is survivorship-biased until historical
-   listing observations accrue.
-3. Canonical grouping confidence is verified on exactly one issuer: four Apple filings, one filing
-   agent, one era, all inline-XBRL. 117 of 117 child blocks attached with zero orphans across
-   those four, and each filing is now held by an offline fixture regression. That is a stronger
-   result than Sprint 4 opened with and it is still one issuer. Do not present the 100 percent
-   attachment result as a general guarantee; breadth validation is Stage 2 phase W-3.
-4. Structured numeric history is XBRL-bound and effectively complete only from 2011 onward,
-   though documents and footnote text reach the 1990s.
-5. No cost figure exists for any part of the corpus. Sprint 5 produces the first measured one.
-   Any earlier number was withdrawn as unusable, see `docs/llm/cost-model.md`.
-6. Structured numeric history exists for four filings only. Widening it requires registering more
-   issuers and filings, which is Stage 2 phase W-1: `xbrl_fact` has foreign keys to `issuer` and
-   `filing`, so the loader is per-accession by construction.
-7. Loaded DERA periods are month-end approximations and every row is `UNVALIDATED`. DERA rounds
-   `ddate` to the nearest month end and publishes no period start at all. Apple's FY2025 ended
-   2025-09-27 and DERA records 2025-09-30. Exact filed boundaries arrive with the XBRL instance
-   in Sprint 6 and supersede these rows through the append-only restatement path.
-8. Idempotency of the fact load rests on a read-then-insert inside one transaction, serialized by
-   a transaction-scoped advisory lock, not on a unique index over
-   `(accession, source_dataset, source_row_id)`. Migration `0001_initial` is SEALED, so that index
-   is a second migration. Correct for today's single-writer ingest; required before concurrent
-   ingest.
+1. No model has ever been invoked by this project. Every cost figure is a placeholder.
+2. The corpus is 613 filings out of millions. It is representative by construction, not complete.
+3. Token counts throughout are character-ratio estimates, explicitly labelled as such.
+4. The corpus represents all 22 reviewed direct substantive form strings, but its 613 filings
+   remain a representative sample rather than the complete EDGAR population.
+5. Structured numeric history remains XBRL-bound and effectively complete only from 2011.
+6. No application database or active product persistence currently exists. PostgreSQL remains
+   installed solely for isolated migration and persistence-integration testing through
+   `fintek_test` and `fintek_integration_test`. Those are test infrastructure, not product
+   persistence.
 
 ---
 

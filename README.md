@@ -1,55 +1,92 @@
 # Kopexx
 
-Kopexx pulls 10-K and 10-Q filings from SEC EDGAR, extracts the financial data and the notes to
-the financial statements, and writes a plain-language summary of every footnote. Summaries are
-generated offline and stored, so browsing the dashboard never calls a model. A separate Deep
-Analysis mode opens a chat session locked to one company and one set of filings, for digging into
-something specific.
+Kopexx pulls 10-K and 10-Q filings from SEC EDGAR, preserves the original documents exactly as SEC
+published them, and then hands each filing **intact** to a language model you choose to work out
+what it actually says. What comes back is checked against the preserved bytes before anyone sees
+it. A second model you choose turns that into plain-language summaries. Browsing a finished result
+never calls a model at all.
 
-The reason to bother: most of a 10-K is footnotes. The statements themselves are a page or two;
-the rest explains the accounting policy choices, the debt covenants, the tax positions, the
-contingencies. That is the part worth reading and the part nobody has time to skim. Summarizing
-all of them — not the handful a model finds interesting — is the whole idea.
+The reason to bother: a 10-K is a hundred pages of disclosure almost nobody reads in full.
+Business, risk factors, legal proceedings, MD&A, controls, the statements, the notes behind them,
+the exhibits, the certifications. Covering *all* of it — not the handful of sections something
+finds interesting — is the whole idea.
 
-**Under active development. Not usable yet.**
+**Under active development. Not usable yet. No model has ever been called.**
 
 > **On the name.** The GitHub repo is `kopexx`. `FinTek` is the internal project name and the
-> Python package namespace, so it turns up in paths, the database name, and environment variables.
-> Same project.
+> Python package namespace, so it turns up in paths and environment variables. Same project.
 
-## Status
+## The four models
 
-**Sprint 4 of 7.** Four Apple filings have been through every layer that exists: discovered,
-fetched, hashed, loaded, reconciled, and split into footnotes. Nothing has been summarized yet and
-nothing is deployed.
+You pick all four, independently, every time you run a job. Nothing is chosen for you and nothing
+silently falls back to something else.
 
-The plumbing:
+| Role | What it does |
+|---|---|
+| **Parsing** | Reads the intact filing and works out its structure |
+| **Image** | Handles charts and images, but only if your parsing model can't see them itself |
+| **Summary** | Turns an accepted parse into summaries |
+| **Analysis / chat** | Answers questions about one company over one timeframe |
 
-- SEC HTTP client — rate limiting, throttle classification (SEC signals a block with a 403 and an
-  HTML body, not a 429), and assertions that reject a directory listing served as a filing
-- CIK, accession, and URL normalization, in exactly one place
-- Object storage with content hashing; configuration validated at startup; structured logging
-- The model gateway and its content boundary, running against an in-process mock
-- A 24-table PostgreSQL schema, applied to a live database
+The candidates for the beta are GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama
+4 Maverick and Qwen3 VL 235B. **None of them is configured or reachable right now**, and their
+real IDs, limits and prices haven't been looked up yet.
 
-The data, all of it real:
+## Why the model does the parsing
 
-- The complete SEC DERA Financial Statement and Notes mirror — **78 packages, 25.36 GiB**, every
-  one hash- and CRC-verified. The monthly packages SEC deletes after twelve months were pulled
-  first
-- **134** Apple filings discovered back to 1994, reconciled gap-free against SEC's quarterly
-  index. Four preserved in full, with provenance
-- **2,845** facts loaded across those four, each load checked nine ways before it counts
+The first four sprints built the opposite: a deterministic parser that decided in code what a Part,
+an Item, a footnote and a signature block were. It worked beautifully — on Apple, which was the
+only company it had ever seen.
 
-And the part the project exists for:
+So a real corpus was acquired to check: **112 issuers, 613 filings, six transport eras, every
+object hash-verified.** It disagreed. Filing packages run from 4 to 283 files. Malformed table
+markup is normal before 2005. An entire era exposes no individual documents at all — only one big
+submission file. 44 percent of primary documents are over roughly 200,000 estimated tokens, and the
+largest is eight times the size of the Apple filing that had been treated as the worst case.
 
-- **43 canonical footnotes** across the four filings
-- **117 of 117** child disclosure blocks attached to the right parent. Zero orphans
-- Every attachment records its method, its confidence, the evidence, and the candidates it beat
-- No model participates in any of it. Every decision is a string comparison or a count
+Every deterministic rule that fit Apple would have needed an exception per company per era, and
+every exception is a place where a paragraph quietly disappears. So the model interprets, and the
+backend proves the result against the original bytes. Full reasoning:
+[ADR-0016](docs/adr/ADR-0016-corpus-first-model-first-architecture.md).
 
-Still missing: summarization, the dashboard, Deep Analysis. Those are Sprints 5 through 7 in
-[roadmap.md](roadmap.md), which runs one company through every layer before widening to more.
+The old footnote work wasn't wasted — 43 canonical footnotes across four Apple filings, 117 of 117
+child blocks attached correctly — but it's now a **benchmark for grading a model**, not the
+definition of a correct parse.
+
+## Nothing is sent in pieces
+
+A filing either fits in your chosen parsing model, or that model can't be used for it. Full stop.
+
+Nothing gets truncated, sliced, summarized-before-summarizing, or split into chunks, and no other
+model gets quietly substituted. If it doesn't fit, you're told so — with the sizes and the limit —
+and you pick a different model. That's the only honest way to promise nothing was dropped.
+
+## Complete content, or an honest gap
+
+Every human-readable range of a processed filing has to show up in the parse or be explicitly
+marked unresolved. Every footnote the parse finds stays its own node with its own summary — never
+merged into one lump called "Notes". If something can't be resolved, the filing reports `PARTIAL`
+or `REVIEW_REQUIRED` rather than rounding itself up to complete.
+
+The backend proves this against the preserved bytes. It doesn't take the model's word for it.
+
+## Where the project actually is
+
+| Phase | Status |
+|---|---|
+| **Phase 1** — representative filing corpus | **COMPLETE** |
+| **Phase 1.5** — intact-source compatibility | **OPEN**, and it blocks Phase 2 |
+| **Phase 2** — model contract and first real parsing experiments | **BLOCKED**, needs authorization |
+| Phases 3–8 — orchestrator, images, summaries, UI, chat, persistence | not started |
+
+**What exists today.** The SEC client with rate limiting and throttle classification; CIK,
+accession and URL handling in one place; filing discovery; byte-exact acquisition with hashing and
+provenance; the accession document inventory; the complete SEC DERA mirror (78 packages, 25.36 GiB,
+all verified); the model gateway and its content boundary running against an in-process mock; and
+the committed test fixtures and contracts.
+
+**What does not exist.** Any orchestrator. Any parsed artifact. Any summary. Any UI. Any Deep Dive.
+Any deployment. Any call to any model.
 
 ## Getting started
 
@@ -59,108 +96,77 @@ cp .env.example .env  # then set SEC_USER_AGENT
 make check            # format, lint, types, tests, migration reversibility
 ```
 
-`make check` is the gate, and CI runs the same targets. The Makefile is the only place they are
-defined, so the two cannot drift apart.
+`make check` is the gate, and CI runs the same targets — the Makefile is the only place they're
+defined, so the two can't drift apart.
 
-`SEC_USER_AGENT` is required — startup fails without it. SEC wants a descriptive User-Agent with a
-contact email on every request, and denylists library defaults like `python-requests/2.31.0`:
+`SEC_USER_AGENT` is required and startup fails without it. SEC wants a descriptive User-Agent with
+a contact email on every request and denylists library defaults:
 
 ```
 SEC_USER_AGENT="Kopexx Research you@example.com"
 ```
 
-No model credentials are needed. The default provider is an in-process mock that exercises the
-whole gateway path offline.
+**No model credentials are needed, and none will work.** The default provider is an in-process mock
+that exercises the whole gateway path offline.
 
-Most of the suite runs without a database and skips what needs one, with a reason. For everything:
-
-```bash
-make db-upgrade         # schema
-make db-create-test     # the disposable database destructive tests use
-make test-no-skips      # fails if anything skips
-```
-
-Two things worth running by hand:
+### Running the full suite
 
 ```bash
-python scripts/load_dera_partition.py 0000320193-25-000079
-python scripts/mirror_dera.py --dry-run
+make db-create-test          # disposable database for destructive migration tests
+make db-create-integration   # disposable database for persistence integration tests
+make db-upgrade-integration  # its schema
+make test-no-skips           # fails if anything skips
+make coverage                # with the 85% gate
 ```
 
-The loader exits non-zero unless all nine reconciliation checks pass. Running it twice inserts
-nothing the second time.
+Both database targets refuse to run unless they can prove the target is disposable and distinct.
+Setup, including the one privileged step: [docs/runbooks/test-database.md](docs/runbooks/test-database.md).
 
 ## Databases
 
-Two, deliberately:
+Three names, and **the application one deliberately doesn't exist**:
 
 ```
-DATABASE_URL       fintek        the application database, holds loaded facts
-TEST_DATABASE_URL  fintek_test   disposable; migration tests drop every table in it
+DATABASE_URL                    fintek                    not created; nothing reads or writes it
+TEST_DATABASE_URL               fintek_test               migration tests drop every table in it
+INTEGRATION_TEST_DATABASE_URL   fintek_integration_test   persistence tests load and clean it
 ```
-
-They have to be different, and a guard refuses to run destructive tests until it can prove they
-are — comparing parsed host, port, socket, and database name rather than the configured strings.
-`@localhost/fintek` and `@127.0.0.1:5432/fintek` are different strings and the same database.
 
 Not hypothetical. The migration round-trip test once pointed at the application database, and
-`make check` dropped every table and deleted 2,845 loaded facts while reporting green. Setup and
-the full story: [docs/runbooks/test-database.md](docs/runbooks/test-database.md).
+`make check` dropped every table and deleted 2,845 loaded facts while reporting green. A guard now
+refuses to run anything destructive until it can prove the target is separate — comparing parsed
+host, port, socket and database name, never the configured strings, because `@localhost/fintek` and
+`@127.0.0.1:5432/fintek` are different strings and the same database.
 
-Locally, PostgreSQL uses peer authentication over the Unix socket — the kernel vouches for the
-connecting user, the role has no password verifier, and `DATABASE_URL` is a role name and a socket
-path with nothing secret in it. That works only because client and server share a host.
+The final schema is deliberately undesigned. It follows real model output, not the other way round
+— guessing it early is exactly what produced the ontology that had to be withdrawn.
 
-CI is different on purpose: a disposable password written openly into the workflow, for a
-container that lives one job and holds public SEC data.
+## Why AWS isn't set up
 
-Neither is a deployment answer. How a deployed database authenticates is still undecided.
+Because nothing needs it yet, and configuring it early would invite exactly the kind of
+"it's-basically-working" claim this project has already had to unwind twice. Phase 1.5 is where
+model availability, IDs, limits and prices get discovered for real, and it hasn't run.
+
+When it does: Kopexx never handles a long-lived AWS key. Credentials come from federation or an
+assumed role, always temporary. See [docs/security/aws-identity-and-secrets.md](docs/security/aws-identity-and-secrets.md).
 
 ## Layout
 
 ```
-packages/            thirteen libraries: SEC identity and HTTP, storage, configuration,
-                     observability, the DERA mirror and fact loader, filing discovery and
-                     acquisition, footnote extraction and canonicalization, table parsing,
-                     the model gateway, and the database schema
+packages/            SEC identity and HTTP, storage, configuration, observability, the DERA
+                     mirror and fact loader, filing discovery and acquisition, the model
+                     gateway, the schema, and the demoted footnote/table benchmark packages
 migrations/          Alembic
 prompts/             versioned prompt files
-metric_definitions/  curated concept priorities and footnote exclusions
+metric_definitions/  curated concept priorities
 scripts/             operational entry points
-tests/               unit, integration, and architecture
+tests/               unit, integration, architecture, security
 docs/                specs, ADRs, runbooks, sprint records
 ```
 
-Packages get created when their code is written, not before. Reserved names, and the sprint each
-one is due in, are in [techspecs.md](techspecs.md) section 2.
-
-## Design constraints
-
-A handful of things are load-bearing. Changing any of them breaks assumptions somewhere else.
-
-**Every canonical footnote gets a stored summary.** Not the material ones, not a merged one. A
-filing with incomplete coverage displays as incomplete rather than getting rounded up — the count
-is computed, never assumed.
-
-**Ordinary dashboard reads never invoke a model.** Searching, opening a filing, changing a
-timeframe, expanding a footnote: all served from stored data. Summarization is a batch job that
-runs offline.
-
-Deep Analysis is the one place a model answers a live question, and it is hemmed in on purpose —
-bound to one company and one corpus for the life of the session, metered against turn, token, and
-cost budgets. The client sends a session ID and a message. Scope is loaded server-side, so a
-tampered request cannot widen it.
-
-**Filed documents and deterministic facts are the source of truth.** Summaries index the filings;
-they are not evidence. Any number a user sees traces back to a specific accession, concept, and
-period.
-
-Filed facts are immutable. A restatement appends a new row, and a trigger rejects any attempt to
-update an old one.
-
-Most of these have tests in `tests/architecture/` that fail if they stop being true.
+Packages get created when their code is written, not before.
 
 ---
 
-Everything else — the rules, what is built, what is next, and why each decision went the way it
-did — lives in [rules.md](rules.md), [roadmap.md](roadmap.md), and [techspecs.md](techspecs.md).
+The rules, what's built, what's next, and why each decision went the way it did:
+[rules.md](rules.md), [roadmap.md](roadmap.md), [techspecs.md](techspecs.md).
