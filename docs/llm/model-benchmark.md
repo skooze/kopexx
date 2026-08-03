@@ -14,7 +14,13 @@
 > no application database exists. **Grading a parsing model against a deterministic parse is now
 > prohibited** (`rules.md` section 21 rule 15).
 >
-> **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
+> **UPDATED 2026-08-03 BY PHASE 1.** AWS identity is verified and all five candidates have been
+> reached. That is REACHABILITY, not a benchmark: seven one-word invocations proved transport,
+> authorization and request format, and measured nothing about quality. **NO BENCHMARK HAS BEEN
+> RUN.** The verified identifiers, regions, modalities, limits and prices are in
+> `bedrock-capability-snapshot.yaml` and are not repeated here.
+>
+> **NO SEC FILING HAS BEEN SENT TO ANY MODEL.** Authoritative:
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
 
@@ -32,9 +38,22 @@ placeholder.
 
 GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4 Maverick, Qwen3 VL 235B.
 
-**None is currently configured or accessible.** Model IDs, versions, regions, modalities, context
-and output limits, supported request formats and prices are DISCOVERED LIVE in Phase 1 and are
-never hardcoded. No identifier in this repository is trusted until discovery returns it.
+**All five were mapped, reached and priced on 2026-08-03.** Model IDs, versions, regions,
+modalities, context and output limits, supported request formats and prices were DISCOVERED LIVE
+and are recorded in `bedrock-capability-snapshot.yaml`. **No identifier in this repository is
+trusted until discovery returns it, and none is hardcoded anywhere.**
+
+Three facts from that discovery shape what Phase 2 can attempt:
+
+```
+context windows differ by 8x across the five, 128K to 1M, and output limits by 4x, 8K to 32K
+one candidate cannot be invoked by model id at all and requires a cross-region inference profile
+one candidate is not offered in the primary region, though its own model card says it is
+```
+
+Against dated Phase 0 evidence that 44 percent of primary corpus documents exceed ~200,000
+estimated tokens, the context spread is the difference between a model that can take an intact
+filing and one that cannot. That is measured now instead of assumed.
 
 ## What Phase 2 measures, per role
 
@@ -111,6 +130,11 @@ Among models passing every gate, the **cheapest** is selected.
 The benchmark runs under a least-privilege identity holding only the Bedrock actions and model
 resources it needs. Broad administrator access to ease model discovery is prohibited; discovery is
 a one-time convenience and the permission outlives it.
+
+**DISCLOSED: Phase 1 discovery ran under an IAM Identity Center `AdministratorAccess` role**, the
+identity supplied for that task. It was a one-time manual discovery producing a document, not a
+running capability, and no CI job holds an AWS role. The requirement above is unchanged and binds
+before any repeatable or automated invocation path. ADR-0018 section 7.
 
 Permissions are separated for model discovery, standard-summary invocation, Deep Analysis
 invocation, request/response object access, and cost metadata. **Deep Analysis and standard

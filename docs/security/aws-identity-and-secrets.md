@@ -1,7 +1,15 @@
 # AWS Identity and Secret Management
 
 IMPLEMENTATION STATUS: this policy is IMPLEMENTED GOVERNANCE and is enforced by tests today.
-The Bedrock provider it constrains is PLANNED (Sprint 5) and does not exist.
+The Bedrock provider adapter it constrains is PLANNED (Phase 2) and does not exist.
+
+**FIRST EXERCISED 2026-08-03, IN PHASE 1.** AWS was reached for the first time — control-plane
+discovery and seven minimal model invocations — under temporary IAM Identity Center credentials
+resolved by the AWS CLI's own provider chain. No static key exists, none was created, nothing under
+the credential cache was opened, and no credential value appears in any tracked file, log or
+evidence artifact. The account identifier, the local profile name and the role session stayed on the
+host, out of Git, per the Configuration section below. Procedure:
+`../runbooks/bedrock-capability-discovery.md`.
 
 AUTHORITATIVE FOR: how Kopexx resolves AWS identity, and what may hold a secret.
 MANDATORY RULE: `rules.md` section 3, AWS-IDENTITY-AND-SECRETS-INVARIANT.
@@ -117,7 +125,7 @@ documentation.
 
 ---
 
-## Bedrock provider requirements — Sprint 5
+## Bedrock provider requirements — Phase 2
 
 The adapter at `packages/llm_gateway/providers/bedrock.py`, when written, must:
 
@@ -169,11 +177,18 @@ expiration time, when safely available
 It must never report access-key identifiers, secret-access-key values, session tokens, credential
 cache paths, signed request headers, or a full environment dump.
 
-### Sprint 4 requires no AWS identity
+### The default suite requires no AWS identity, and still does not
 
-The mock provider continues to work with no AWS identity at all, and the default suite must never
-require one. A test that silently needs AWS access is a test that will skip in every environment
-that lacks it — the failure mode this project has already corrected twice.
+The mock provider works with no AWS identity at all, and the default suite must never require one. A
+test that silently needs AWS access is a test that will skip in every environment that lacks it —
+the failure mode this project has already corrected twice.
+
+**This survived Phase 1 intact.** A real provider was reached; not one test reaches it.
+`tests/architecture/test_phase1_aws_boundary.py` fails the build if a test imports a provider SDK or
+shells out to the CLI, if a shipped package acquires an AWS import or a region literal, if ordinary
+CI gains an `id-token` permission or a credential step, or if the smoke tooling or its evidence
+becomes tracked. The instrument that can spend money lives under the gitignored `var/local-tools/`
+and refuses to run without an explicit opt-in flag.
 
 ---
 
@@ -342,9 +357,16 @@ dollar cost                       success or failure classification
 
 ## Least-privilege Bedrock
 
-The Sprint 5 developer identity and the future summarization role receive only the Bedrock actions
+The Phase 2 developer identity and the future summarization role receive only the Bedrock actions
 and model resources the benchmark requires. **Broad administrator access to make model discovery
 easier is prohibited** — discovery is a one-time convenience, and the permission outlives it.
+
+**DISCLOSED, 2026-08-03.** Phase 1 discovery ran under an IAM Identity Center `AdministratorAccess`
+role, which was the identity supplied for that task. It was performed once, by hand, and produced a
+dated document rather than a running capability; no CI job holds an AWS role and no code in
+`packages/` can reach AWS at all. The rule above is not relaxed by that and binds before any
+repeatable or automated invocation path is built. `../adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`
+section 7.
 
 Permissions are separated for:
 

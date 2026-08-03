@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from .errors import MissingModelRegionError
 from .user_agent import validate_user_agent
 
 
@@ -58,13 +59,38 @@ class StorageSettings:
 
 @dataclass(frozen=True)
 class LlmSettings:
-    """Model gateway configuration."""
+    """Model gateway configuration.
+
+    THE REGION HAS NO DEFAULT, AND THAT IS A CORRECTION. It defaulted to a hardcoded `us-east-1`,
+    which is the form-family defect with a bill attached: a guessed value in runtime source, no
+    reviewed contract behind it, and a silent success when the operator sets nothing. Phase 1
+    discovery is what made the cost of that concrete — of the five approved candidates, one is not
+    available in `us-east-1` at all, so an unset region would have made a real model appear
+    unavailable for a reason nobody could see in the code. `None` means unset; a real provider
+    fails closed on it.
+
+    `standard_model_id` and `analysis_model_id` are a TWO-ROLE shape that predates the four-role
+    product. They are deliberately not replaced with a guessed four-role shape here: the roles are
+    resolved through the reviewed capability snapshot by `packages/model_catalog`, and inventing a
+    parallel set of identifier fields would give the same fact two homes.
+    """
 
     provider: str = "mock"
     standard_model_id: str = "mock-model-v1"
     analysis_model_id: str = "mock-model-v1"
-    region: str = "us-east-1"
+    region: str | None = None
     max_output_tokens: int = 4096
+
+    def __post_init__(self) -> None:
+        # The mock provider performs no network call and needs no region. Any other provider does,
+        # and refusing at startup is the difference between one clear error and a run that reaches
+        # the wrong regional endpoint.
+        if self.provider != "mock" and not self.region:
+            raise MissingModelRegionError(
+                f"provider {self.provider!r} requires a region and none is configured. Set "
+                "AWS_REGION to a region the selected model was actually verified in; there is no "
+                "default, because a default is how a guessed region survives review."
+            )
 
 
 @dataclass(frozen=True)
@@ -97,7 +123,9 @@ class Settings:
                 provider=source.get("LLM_PROVIDER", "mock"),
                 standard_model_id=source.get("LLM_STANDARD_MODEL_ID", "mock-model-v1"),
                 analysis_model_id=source.get("LLM_ANALYSIS_MODEL_ID", "mock-model-v1"),
-                region=source.get("AWS_REGION", "us-east-1"),
+                # No fallback. An absent AWS_REGION stays absent and is rejected by
+                # LlmSettings.__post_init__ for any provider that actually needs one.
+                region=source.get("AWS_REGION") or None,
             ),
             environment=source.get("ENVIRONMENT", "local"),
         )

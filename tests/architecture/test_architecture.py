@@ -163,7 +163,7 @@ def test_sec_identity_logic_has_a_single_home() -> None:
 # Packages that are pure logic and must stay free of infrastructure, per the dependency
 # direction in rules.md section 4. Add to this set as each lower-layer package is created;
 # the test below fails if a listed package is missing, so the list cannot silently go stale.
-PURE_LOGIC_PACKAGES = ("sec_identity",)
+PURE_LOGIC_PACKAGES = ("sec_identity", "model_catalog")
 
 
 def test_pure_logic_packages_have_no_infrastructure_imports() -> None:

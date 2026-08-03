@@ -7,6 +7,16 @@ class ConfigurationError(Exception):
     """Base class for configuration failures."""
 
 
+class MissingModelRegionError(ConfigurationError):
+    """A real model provider was selected with no region configured.
+
+    There is deliberately no default. The region used to default to a hardcoded `us-east-1`, and
+    Phase 1 discovery showed why that is unsafe rather than convenient: one of the five approved
+    candidates is not offered in `us-east-1` at all, so a silent default would report a real model
+    as unavailable and leave nothing in the code to point at.
+    """
+
+
 class InvalidUserAgentError(ConfigurationError):
     """The configured SEC User-Agent is missing, generic, or lacks a contact address.
 

@@ -9,7 +9,13 @@
 > Authoritative for what was deleted and why:
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
 >
-> **NO MODEL HAS BEEN INVOKED. AWS IS NOT CONFIGURED. NO DATABASE EXISTS.**
+> **UPDATED 2026-08-03 BY PHASE 1.** Two modules were added — `tests/unit/test_model_catalog.py` and
+> `tests/architecture/test_phase1_aws_boundary.py` — and the suite went from 309 to 375 tests at
+> 92.14 percent coverage. **The suite still has NO environmental precondition.** Phase 1 reached a
+> real provider, and not one test does: the catalog tests build their own synthetic snapshots, and
+> the architecture tests assert that no test, no package and no CI job can reach AWS at all.
+>
+> **NO SEC FILING HAS BEEN SENT TO ANY MODEL. NO DATABASE EXISTS.**
 
 IMPLEMENTATION STATUS: unit, architecture and security layers IMPLEMENTED. Integration, golden,
 property and performance layers PLANNED — there is currently nothing to integrate with.
@@ -19,8 +25,8 @@ property and performance layers PLANNED — there is currently nothing to integr
 ## The suite as it stands
 
 ```
-309 tests, 0 skipped, 90.89 percent coverage against an 85 percent gate
-19 test modules: 14 unit, 5 architecture
+375 tests, 0 skipped, 92.14 percent coverage against an 85 percent gate
+21 test modules: 15 unit, 6 architecture
 ```
 
 **The suite has NO environmental precondition.** No database, no network, no credentials, no
@@ -30,6 +36,7 @@ PostgreSQL" was an available excuse for a skip; it is gone.
 
 | Module | Tests | Subject |
 |---|---|---|
+| `tests/unit/test_model_catalog.py` | 50 | label mapping, availability, multimodal proof, cost ceiling, retry ceiling |
 | `tests/unit/test_llm_boundary.py` | 26 | model content boundary, compiler, gateway, budget |
 | `tests/unit/test_filing_discovery.py` | 18 | overflow shard, `master.gz` reconciliation, era routing, the supplied qualifying-form set |
 | `tests/unit/test_yaml_parser.py` | 16 | hardened YAML 1.2 safe parser, alias and depth budgets |
@@ -48,6 +55,7 @@ PostgreSQL" was an available excuse for a skip; it is gone.
 | `tests/unit/test_filing_fixtures.py` | 8 | original-source hash verification, no derived output committed |
 | `tests/unit/test_configuration.py` | 6 | User-Agent gate, rate bounds, cooldown floor |
 | `tests/unit/test_storage.py` | 6 | atomic writes, path traversal, hashing |
+| `tests/architecture/test_phase1_aws_boundary.py` | 12 | no AWS in the product, no account in the repository, no spend in CI |
 | `tests/architecture/test_markdown_lint.py` | 5 | fences, swallowed headings, relative links |
 
 ## What the suite covers
@@ -76,6 +84,14 @@ CI reconciliation            the workflow parsed and asserted against the Makefi
 API contract                 OpenAPI parse, every local ref resolved, no server declared
 documentation                fences, swallowed headings, relative links resolve on disk
 corpus integrity             identity and form-family contracts over the research corpus
+model capability             label mapping, unique/ambiguous/missing, availability, region
+multimodal claims            a Multimodal badge requires a VERIFIED image invocation, not a flag
+no silent substitution       no default model, no fallback, no widened region, no downgraded role
+cost ceiling                 a worst-case bound authorized BEFORE the call, reserved then settled
+retry ceiling                one retry, and never because the wording was disliked
+AWS boundary                 no provider SDK, no CLI subprocess, no model id or region literal in
+                             shipped source; no account id, ARN or SSO URL in any tracked file;
+                             no id-token, no credential and no model call in ordinary CI
 ```
 
 ## Three guards that exist because something got past
@@ -104,6 +120,11 @@ set is REJECTED, so discovery cannot return nothing and report success.
 ## Rules that apply to every layer
 
 **A skip is not a pass.** See above.
+
+**A test may not depend on a network, a credential or a cloud account.** Phase 1 reached Bedrock;
+no test does. `test_the_suite_needs_no_aws_identity` fails the build if a test imports a provider
+SDK or shells out to the AWS CLI, and the smoke tool that CAN spend money lives under the gitignored
+`var/local-tools/`, refuses to run without an explicit opt-in flag, and is asserted to be untracked.
 
 **A test may not depend on an untracked file.** One did — it read the developer's gitignored
 `.env` — and it passed locally while being incapable of passing in CI. Fixtures come from the

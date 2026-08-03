@@ -93,3 +93,25 @@ price is unknown must not be invocable, because an unknown cost is not a small c
 Returns deterministic YAML so the full pipeline, including boundary validation, safe parsing, and
 audit persistence, is exercised without network access or spend. Used in every test and in local
 development.
+
+---
+
+## Verified capabilities live in one place — added 2026-08-03, Phase 1
+
+The abstraction above describes how a provider is called. What a specific model can actually do —
+its real identifier, the regions it answers in, whether it needs an inference profile, whether it
+truly accepts images, its context and output limits, and its official price inputs — is EVIDENCE,
+dated, and is recorded in exactly one file:
+
+`bedrock-capability-snapshot.yaml`
+
+`packages/model_catalog` is the only code that reads it, and it carries no model identifier, no
+region, no limit and no price of its own. An architecture test parses shipped source and fails on a
+provider identifier or region literal, for the same reason the qualifying-form set is supplied
+rather than hardcoded.
+
+**Do not copy a capability into this document, into `techspecs.md`, or into a provider adapter.** A
+capability recorded twice drifts, and the copy is always the one that gets believed.
+
+Reproduce the discovery: `../runbooks/bedrock-capability-discovery.md`.
+Why a snapshot rather than an adapter: `../adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.

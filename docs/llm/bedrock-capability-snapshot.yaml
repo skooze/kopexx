@@ -1,0 +1,258 @@
+# Bedrock capability snapshot — the reviewed contract packages/model_catalog is SUPPLIED with.
+#
+# THIS FILE IS EVIDENCE, NOT A GUESS. Every value below was returned by a live AWS API or read from
+# an official AWS model card on the stated date. Nothing here is inferred from a model's public
+# reputation, and no value was carried forward from an earlier version of this repository, which
+# had never reached a provider at all.
+#
+# IT IS DATED, AND IT IS NOT A PERMANENT CONSTANT. Bedrock adds models, moves them between regions,
+# changes prices and retires versions. Re-run the discovery in docs/runbooks/bedrock-capability-
+# discovery.md and replace this file wholesale; do not edit one field by hand and leave the rest
+# claiming a date it no longer has.
+#
+# SUPPLIED, NEVER HARDCODED. This is the same rule the form-family contract established after a
+# guessed allowlist in runtime source produced a confident, precise and inverted conclusion:
+# packages/model_catalog carries NO model identifier, region, price or limit of its own. It is
+# given this document and refuses to run without one.
+#
+# NO ACCOUNT-SPECIFIC MATERIAL. No account id, no SSO start URL, no profile name, no role session,
+# no credential path. docs/security/aws-identity-and-secrets.md forbids account identifiers in
+# tracked configuration and this repository is public. Where the account matters, the verification
+# runbook says so and the value stays on the host.
+
+snapshot_version: "1"
+verified_on: "2026-08-03"
+verified_from_region: "us-east-1"
+verification_method: >-
+  Live bedrock:ListFoundationModels, bedrock:GetFoundationModel,
+  bedrock:GetFoundationModelAvailability, bedrock:ListInferenceProfiles and
+  bedrock:GetInferenceProfile calls, plus one minimal bedrock-runtime:Converse invocation per
+  accessible candidate, under a temporary IAM Identity Center role resolved by the AWS CLI
+  provider chain. No static credential exists and none was created.
+
+price_source: AWS Price List API, service code AmazonBedrock, on-demand standard service tier
+price_effective_date: "2026-07-01"
+price_currency: USD
+price_unit: per 1000 tokens
+price_note: >-
+  Bedrock prices these candidates by token in both directions and publishes no separate image
+  price; image input is billed as input tokens. Flex, priority and batch tiers carry different
+  published rates and are NOT recorded here, because the only tier this project has authorized is
+  standard on-demand. Recording a cheaper tier the code does not request would understate cost.
+
+smoke_protocol:
+  text_prompt: hello if you can read this please respond with hello only
+  image_prompt: read the image and respond with hello only
+  image_sha256: "54b47a3b0dbf2751d599c3019ab0339d009cf5aaf0a89004b5c2c9f1e7e679df"
+  image_description: a 186x54 greyscale PNG, 173 bytes, showing only the word HELLO
+  max_output_tokens: 8
+  temperature: 0
+  streaming: false
+  system_prompt: none
+  tools: none
+  conversation_history: none
+  note: >-
+    The gate proves transport and authorization only — that the identity reaches Bedrock Runtime,
+    that the identifier is valid, that the role may invoke it, that the request format is accepted
+    and that a response returns. It is not a quality measurement and no SEC content was sent.
+
+candidates:
+
+  - label: GPT OSS 120B
+    provider: OpenAI
+    model_id: "openai.gpt-oss-120b-1:0"
+    model_name: gpt-oss-120b
+    version_qualifier: "1:0"
+    mapping: UNIQUE
+    mapping_evidence: >-
+      One model in the account is named gpt-oss-120b. GPT OSS Safeguard 120B
+      (openai.gpt-oss-safeguard-120b) is a separately named and separately priced model and is NOT
+      this label.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1"]
+    inference_profile_required: false
+    inference_profile_id: null
+    text_input: true
+    image_input: false
+    multimodal: false
+    image_verified: false
+    context_tokens: 128000
+    max_output_tokens: 16000
+    invocation_apis: [Converse, InvokeModel, ChatCompletions, Responses]
+    streaming_supported: true
+    price_input_per_1k: 0.00015
+    price_output_per_1k: 0.0006
+    price_image: none published; image input not supported
+    smoke_transport: ACCEPTED
+    smoke_instruction: NONCOMPLIANT
+    smoke_note: >-
+      Transport, authorization and request format all verified. The gate's mandatory 8-token
+      output cap was consumed entirely by a reasoningContent block, so the text block came back
+      empty with stopReason max_tokens. A separate one-off diagnostic at 64 output tokens returned
+      reasoningContent followed by the text "hello", stopReason end_turn — exact compliance. This
+      is a REQUEST-SIZING fact, not a capability defect.
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      Emits reasoning content before answer text on the Converse path. max_output_tokens must be
+      budgeted for reasoning PLUS the answer, or a caller receives a well-formed response with no
+      text in it. Smallest documented context of the five, at 128K.
+
+  - label: NVIDIA Nemotron 3 Super 120B
+    provider: NVIDIA
+    model_id: nvidia.nemotron-super-3-120b
+    model_name: NVIDIA Nemotron 3 Super 120B A12B
+    version_qualifier: none published
+    mapping: UNIQUE
+    mapping_evidence: >-
+      Exact model-name match. The other NVIDIA models in the account are Nemotron Nano 9B v2,
+      Nemotron Nano 12B v2 VL and Nemotron Nano 3 30B, none of which is a 120B Super.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1"]
+    inference_profile_required: false
+    inference_profile_id: null
+    text_input: true
+    image_input: false
+    multimodal: false
+    image_verified: false
+    context_tokens: 256000
+    max_output_tokens: 32000
+    invocation_apis: [Converse, InvokeModel, ChatCompletions]
+    streaming_supported: true
+    price_input_per_1k: 0.00015
+    price_output_per_1k: 0.00065
+    price_image: none published; image input not supported
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: returned exactly hello, stopReason end_turn, 2 output tokens
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      Largest published output limit of the five, at 32K, over a 256K context.
+
+  - label: Qwen3 235B A22B
+    provider: Qwen
+    model_id: "qwen.qwen3-235b-a22b-2507-v1:0"
+    model_name: Qwen3 235B A22B 2507
+    version_qualifier: "2507-v1:0"
+    mapping: UNIQUE
+    mapping_evidence: >-
+      The only non-vision 235B A22B model in Bedrock. Qwen3 VL 235B A22B is the fifth candidate on
+      this list and is a different model. 2507 is the provider's own release qualifier and is part
+      of the identifier, not an alternative to it.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-west-2", "us-east-2", "eu-central-1", "eu-north-1", "ap-northeast-1", "ap-south-1"]
+    inference_profile_required: false
+    inference_profile_id: null
+    text_input: true
+    image_input: false
+    multimodal: false
+    image_verified: false
+    context_tokens: 256000
+    max_output_tokens: 8000
+    invocation_apis: [Converse, InvokeModel, ChatCompletions]
+    streaming_supported: true
+    price_input_per_1k: 0.00022
+    price_output_per_1k: 0.00088
+    price_image: none published; image input not supported
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: returned exactly hello, stopReason end_turn, 2 output tokens, invoked in us-west-2
+    blocker: null
+    disabled_reason: >-
+      Not available in us-east-1, the project's primary region. Selecting it is a deliberate
+      cross-region choice the user makes, never a substitution the backend performs.
+    compatibility_note: >-
+      DOCUMENTATION DISCREPANCY, RECORDED RATHER THAN RECONCILED. The AWS model card lists
+      us-east-1 as in-region available. The live control plane disagrees: ListFoundationModels in
+      us-east-1 does not return this model, and both GetFoundationModel and
+      GetFoundationModelAvailability answer ValidationException, "The provided model identifier is
+      invalid". The live API is authoritative for what an account can actually reach, so
+      us-east-1 is NOT recorded as a verified region. Prices here are the us-west-2 prices, which
+      is where the gate ran.
+
+  - label: Llama 4 Maverick
+    provider: Meta
+    model_id: "meta.llama4-maverick-17b-instruct-v1:0"
+    model_name: Llama 4 Maverick 17B Instruct
+    version_qualifier: "v1:0"
+    mapping: UNIQUE
+    mapping_evidence: >-
+      Exact match. Llama 4 Scout 17B Instruct is a different Llama 4 model and is not this label.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1"]
+    inference_profile_required: true
+    inference_profile_id: "us.meta.llama4-maverick-17b-instruct-v1:0"
+    text_input: true
+    image_input: true
+    multimodal: true
+    image_verified: true
+    context_tokens: 1000000
+    max_output_tokens: 8000
+    invocation_apis: [Converse, InvokeModel]
+    streaming_supported: true
+    price_input_per_1k: 0.00024
+    price_output_per_1k: 0.00097
+    price_image: none published; image input billed as input tokens
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: >-
+      Text gate and image gate both returned exactly hello, stopReason end_turn. Both were invoked
+      through the cross-region inference profile; the bare model id is not directly invocable.
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      The ONLY candidate whose inferenceTypesSupported is INFERENCE_PROFILE rather than ON_DEMAND.
+      Invoking the bare model id fails. The US geo profile routes across us-east-1, us-east-2 and
+      us-west-2, which is a data-residency decision and not merely a throughput one. Largest
+      documented context of the five, at 1M tokens, against an 8K output limit.
+
+  - label: Qwen3 VL 235B
+    provider: Qwen
+    model_id: qwen.qwen3-vl-235b-a22b
+    model_name: Qwen3 VL 235B A22B
+    version_qualifier: none published on the bedrock-runtime id
+    mapping: UNIQUE
+    mapping_evidence: The only Qwen vision-language 235B model in Bedrock.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1"]
+    inference_profile_required: false
+    inference_profile_id: null
+    text_input: true
+    image_input: true
+    multimodal: true
+    image_verified: true
+    context_tokens: 256000
+    max_output_tokens: 8000
+    invocation_apis: [Converse, InvokeModel, ChatCompletions]
+    streaming_supported: true
+    price_input_per_1k: 0.00053
+    price_output_per_1k: 0.00266
+    price_image: none published; image input billed as input tokens
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: >-
+      Text gate and image gate both returned exactly hello, stopReason end_turn. The image gate
+      read the word HELLO out of a 173-byte PNG, so image input is verified on the actual
+      invocation path rather than assumed from a modality flag.
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      Most expensive of the five in both directions — roughly 3.5x the cheapest on input and 4.4x
+      on output — which matters for a product whose measured corpus puts 44 percent of primary
+      documents above ~200,000 estimated tokens.

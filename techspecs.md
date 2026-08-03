@@ -11,21 +11,29 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`, which builds on
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`.
 >
-> **NO MODEL HAS BEEN INVOKED. AWS IS NOT CONFIGURED. NO APPLICATION DATABASE EXISTS.**
+> **PHASE 1 COMPLETED 2026-08-03.** AWS identity is verified, all five approved candidate LABELS map
+> to real provider models, and every one of them has answered a minimal invocation — the first model
+> calls in this project's history, seven of them, USD 0.00023, no SEC content. The verified
+> identifiers, regions, modalities, limits and prices live in ONE place,
+> `docs/llm/bedrock-capability-snapshot.yaml`, and are not repeated here. Decision:
+> `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.
+>
+> **NO SEC FILING HAS BEEN SENT TO ANY MODEL. NO APPLICATION DATABASE EXISTS. NO PROVIDER ADAPTER
+> EXISTS.**
 
 Sections marked `PLANNED` describe work that does not exist. `roadmap.md` is authoritative for
 sequencing.
 
-LAST SYNCHRONIZED WITH CODE: 2026-08-03, the cleanup commit.
+LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 1.
 
 VERIFICATION, measured locally on that date:
 
 ```
-309 tests passing, 0 skipped          coverage 90.89 percent against an 85 percent gate
+375 tests passing, 0 skipped          coverage 92.14 percent against an 85 percent gate
 ruff format and lint clean            across `packages tests`
-mypy clean                            40 source files in `packages`
+mypy clean                            `packages`
 wheel and sdist built and inspected   packages/ and dist-info only
-external import check                 8 runtime packages import; 5 deleted packages do not
+external import check                 9 runtime packages import; 5 deleted packages do not
 gitleaks clean over history and tree  pip-audit clean
 ```
 
@@ -33,7 +41,7 @@ gitleaks clean over history and tree  pip-audit clean
 
 # 1. CURRENT STATE
 
-## 1.1 Runtime packages — eight, 40 modules, 3,469 lines
+## 1.1 Runtime packages — nine
 
 None of them interprets meaning.
 
@@ -47,6 +55,8 @@ packages/filing_discovery    qualifying-filing discovery against a SUPPLIED form
 packages/filing_acquisition  byte-exact acquisition with provenance                        3
 packages/llm_gateway         the model chokepoint, boundary validator and YAML 1.2 parser 12
                              running against an in-process mock. NO REAL PROVIDER ADAPTER.
+packages/model_catalog       verified capabilities, label mapping and the cost ceiling      5
+                             READS a supplied snapshot. No AWS import, no ARN, no region.
 ```
 
 ## 1.2 Dependency graph — measured, not asserted
@@ -60,6 +70,7 @@ sec_client           -> configuration
 llm_gateway          -> (none)
 filing_discovery     -> sec_identity
 filing_acquisition   -> sec_identity, storage
+model_catalog        -> llm_gateway   (the hardened YAML 1.2 parser, not reimplemented)
 ```
 
 No cycles. No package imports a database driver, a web framework, or a provider SDK. Two packages —
@@ -146,6 +157,8 @@ Why each, once, in `docs/adr/ADR-0017`.
 | Filing discovery and master-index reconciliation | `filing_discovery` | IMPLEMENTED |
 | Filing acquisition, inline-XBRL era only | `filing_acquisition` | IMPLEMENTED |
 | LLM content boundary, YAML 1.2, budget, audit | `llm_gateway` | IMPLEMENTED against a mock |
+| Verified capability catalog, label mapping, cost ceiling | `model_catalog` | IMPLEMENTED — Phase 1 |
+| Four-role model router | `model_catalog` | PLANNED, Phase 2 |
 | AWS identity and secret policy | governance + `tests/architecture` | IMPLEMENTED as governance; NO AWS CODE EXISTS |
 | Filed-document lister, non-classifying | — | PLANNED, Phase 2 |
 | Real provider adapter | `llm_gateway/providers/` | PLANNED, Phase 2 |
@@ -164,7 +177,6 @@ module, and an architecture test rejects an empty stub.
 | Filed-document lister | `packages/filing_acquisition/documents.py` | 2 |
 | Source-set assembly and compatibility | `packages/source_transport` | 2 |
 | Coverage validation of model output | `packages/coverage_validation` | 2 |
-| Four-role model catalog and router | `packages/model_catalog` | 2 |
 | Orchestrator: parent runs and child jobs | `packages/orchestrator` | 2 |
 | API | `apps/api` | 2 |
 | Web dashboard | `apps/web` | 2 |
@@ -214,11 +226,21 @@ PUBLIC INTERFACE. `Settings.from_env`, `SecAccessSettings`, `StorageSettings`, `
 INVARIANTS. A User-Agent must exist, must contain a contact email, and must not match a library
 default. Global rate within `(0, 10]`. Throttle cooldown at least 600 seconds.
 
-KNOWN GAP. `LlmSettings` carries `standard_model_id` and `analysis_model_id`, a two-role shape that
-predates the four-role product. It is deliberately NOT replaced with a guessed four-role shape: the
-real catalog is built from verified capability discovery, which has not run.
+DEFECT FIXED IN PHASE 1. `LlmSettings.region` defaulted to a hardcoded `"us-east-1"`. That is the
+form-family defect with a bill attached: a guessed value in runtime source, no reviewed contract
+behind it, and a silent success when the operator sets nothing. Phase 1 made the cost concrete — one
+of the five approved candidates is not offered in `us-east-1` at all, so an unset region would have
+reported a real model as unavailable with nothing in the code to point at. The default is gone,
+`AWS_REGION` has no fallback, and a non-mock provider with no region raises
+`MissingModelRegionError` at construction. The mock still needs none, so the suite keeps its zero
+environmental preconditions.
 
-TESTS. 6 in `tests/unit/test_configuration.py`.
+KNOWN GAP. `LlmSettings` carries `standard_model_id` and `analysis_model_id`, a two-role shape that
+predates the four-role product. It is deliberately NOT replaced with a guessed four-role shape:
+roles resolve through the reviewed capability snapshot in `packages/model_catalog`, and a parallel
+set of identifier fields here would give the same fact two homes.
+
+TESTS. 10 in `tests/unit/test_configuration.py`.
 
 ### 3.3 `packages/sec_client` — IMPLEMENTED
 
@@ -405,12 +427,51 @@ output limit — no model has been reached and no limit is known.
 
 TESTS. 26 in `test_llm_boundary.py`, 16 in `test_yaml_parser.py`.
 
+### 3.9 `packages/model_catalog` — IMPLEMENTED in Phase 1, half of its eventual scope
+
+RESPONSIBILITY. Answer three questions about a user-facing model LABEL without guessing at any of
+them: does it resolve to exactly one real provider model, may it fill this role in this region, and
+what would an invocation cost at worst before it is made.
+
+PUBLIC INTERFACE. `load_snapshot`, `CapabilitySnapshot`, `ResolvedModel`, `ModelCapability`,
+`ModelRole`, `Availability`, `Mapping`, `SmokeTransport`, `SmokeInstruction`, `PriceInputs`,
+`SpendLedger`, `RetryBudget`, and the typed error hierarchy.
+
+DEPENDENCIES. `packages/llm_gateway`, for the hardened YAML 1.2 safe parser only. That parser is
+the single home for YAML parsing and rules.md section 5 forbids a second copy.
+
+INVARIANTS.
+- **No model identifier, region, limit or price appears in this source.** Every one is supplied
+  from `docs/llm/bedrock-capability-snapshot.yaml`, and an architecture test parses shipped source
+  and fails on a provider identifier or region literal. Same discipline, same reason, as the
+  qualifying-form set.
+- **There is no default snapshot path and no fallback.** A fallback is how a stale catalog keeps
+  answering after the real one has moved.
+- **`multimodal` is validated against `image_verified` in the constructor.** A record cannot carry
+  the badge without a real image invocation behind it. A published modality flag is a claim.
+- **Resolution raises rather than substituting.** No default model, no fallback, no widened region,
+  no downgraded role, no choice between ambiguous matches — rules.md section 21 rules 8, 9, 10.
+- **A disabled candidate is RETURNED with a concrete reason, not filtered away.** A candidate that
+  silently vanishes from a selector is indistinguishable from one that was never approved.
+- **Money is `Decimal`, converted through `str`.** `Decimal(0.00015)` is
+  `0.000149999999999999993145...`, which is what the binary double holds; over a corpus that stops
+  being invisible.
+- **The cost reservation is charged immediately and settled against measured usage.** Charging only
+  on success would let a run of billable rejections walk past the ceiling.
+- **One retry, and only for a transient reason.** Retrying until a model says what you wanted is
+  prompt tuning with the measurement removed.
+
+NOT IMPLEMENTED. The four-role router. Phase 2.
+
+TESTS. 50 in `tests/unit/test_model_catalog.py`, all hermetic, plus 12 repository guards in
+`tests/architecture/test_phase1_aws_boundary.py`.
+
 ---
 
 # 4. Repository structure
 
 ```
-packages/        8 runtime libraries, 40 modules
+packages/        9 runtime libraries
 prompts/         versioned .txt and .yaml, never .md — deep-analysis only
 tests/           unit, architecture, fixtures
 docs/            architecture, sec, llm, deep-analysis, api, data-dictionary, testing,
@@ -490,7 +551,10 @@ Not implemented: authentication of any kind, and there is nothing to authenticat
    limit is aggregate across machines.
 2. Token estimation is a character-ratio heuristic, adequate for budget guards and relative
    comparison, not for billing reconciliation.
-3. The provider catalog and pricing are entirely unverified. BLOCKING for any cost commitment.
+3. The capability snapshot is dated evidence and goes stale silently: nothing in the repository can
+   detect that a provider changed a price, moved a model or retired a version. Official price
+   INPUTS are now verified; the token counts they multiply are not, so every cost figure in
+   `docs/llm/cost-model.md` remains a placeholder. Still BLOCKING for any cost commitment.
 4. Filing acquisition covers the inline-XBRL era only. The other five transport eras have no
    acquisition path.
 5. The complete filed-document set of an accession cannot currently be listed. The module that did

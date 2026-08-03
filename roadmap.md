@@ -1,9 +1,10 @@
 # roadmap.md — Kopexx Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of the 2026-08-03 cleanup)
-LAST UPDATED: 2026-08-03, prepared against published baseline `6efaf48`.
-ARCHITECTURE DECISIONS: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and
-`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 1, 2026-08-03)
+LAST UPDATED: 2026-08-03, after Phase 1 completed against published baseline `d093e73`.
+ARCHITECTURE DECISIONS: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
+`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and
+`docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`
 SEQUENCING PRINCIPLE: evidence before architecture; architecture before schema; a working parser
 review loop before anything that depends on parsed data.
 
@@ -38,9 +39,9 @@ retries through a different model, or turns a parser-only run into a full pipeli
 
 ```
 PHASE 0    Corpus evidence                            COMPLETE
-PHASE 0.5  Repository cleanup and corpus reverify     COMPLETE  (this commit)
-PHASE 1    Secure AWS and model-access verification   NEXT — nothing after it can start
-PHASE 2    Parser experiments + review UI, together   BLOCKED on Phase 1
+PHASE 0.5  Repository cleanup and corpus reverify     COMPLETE
+PHASE 1    Secure AWS and model-access verification   COMPLETE  2026-08-03
+PHASE 2    Parser experiments + review UI, together   NEXT — needs explicit authorization
 PHASE 3    Optional model stages: image, summary, chat
 PHASE 4    Persistence, approval gate and reuse
 PHASE 5    Background population
@@ -49,9 +50,15 @@ PHASE 7    Deep Dive
 PHASE 8    Breadth and optimization
 ```
 
-**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.
-NO APPLICATION DATABASE EXISTS.** Every cost figure anywhere in this repository is a placeholder;
-the first real measurement is Phase 2.
+**AWS IS CONFIGURED AND FIVE MODELS HAVE ANSWERED.** Seven minimal invocations on 2026-08-03, total
+spend USD 0.00023 under an authorized USD 1.00 ceiling, proving reachability and nothing else. The
+verified identifiers, regions, modalities, limits and prices are in
+`docs/llm/bedrock-capability-snapshot.yaml` and are not repeated anywhere else.
+
+**NOTHING IS DEPLOYED. NO SUMMARY EXISTS. NO APPLICATION DATABASE EXISTS. NO SEC FILING HAS BEEN
+SENT TO ANY MODEL.** Every cost figure in `docs/llm/cost-model.md` remains a placeholder — official
+price INPUTS are now known, but the token counts they multiply are not, and the first measured cost
+per filing is Phase 2.
 
 | Area | Status |
 |---|---|
@@ -66,11 +73,13 @@ the first real measurement is Phase 2.
 | LLM gateway: boundary, YAML 1.2, budget, audit, mock provider | IMPLEMENTED |
 | Representative research corpus (112 issuers, 613 filings) | COMPLETE — Phase 0 |
 | Corpus integrity, identity and form-family contracts | IMPLEMENTED and REVERIFIED 2026-08-03 |
+| Verified model capability catalog and cost ceiling | IMPLEMENTED — Phase 1, `packages/model_catalog` |
 | Deterministic semantic parser, canonical footnotes, table ownership | **DELETED** (ADR-0017) |
 | DERA mirror and fact loader | **DELETED** (ADR-0017); the mirrored data is untouched |
 | Application PostgreSQL schema, ORM, Alembic migrations | **DELETED** (ADR-0017) |
 | Filed-document lister, non-classifying | NOT STARTED — Phase 2 |
-| Secure AWS access, Bedrock capability discovery | NOT STARTED — Phase 1 |
+| Secure AWS access, Bedrock capability discovery | COMPLETE — Phase 1, 2026-08-03 |
+| Four-role model router | NOT STARTED — Phase 2, completes `packages/model_catalog` |
 | Real provider adapter | NOT STARTED — Phase 2 |
 | Parser-review UI | NOT STARTED — Phase 2, built WITH the parser experiments |
 | Parsed / image / summary / chat artifacts | NOT STARTED — Phases 2, 3 |
@@ -113,7 +122,7 @@ THE DEFECT THIS PHASE EXISTED TO CATCH. The first pass filtered on guessed hyphe
 issuers — the FOURTH most common form in the entire family. A guessed allowlist produced a
 confident, precise, inverted conclusion.
 
-# PHASE 0.5 — Repository cleanup and corpus reverification (COMPLETE, this commit)
+# PHASE 0.5 — Repository cleanup and corpus reverification (COMPLETE, `d093e73`)
 
 The cleanup gate that had to close before any AWS work.
 
@@ -134,10 +143,31 @@ Authoritative explanation: `docs/adr/ADR-0017`. It is not repeated elsewhere.
 
 ---
 
-# PHASE 1 — SECURE AWS AND MODEL-ACCESS VERIFICATION (NEXT)
+# PHASE 1 — SECURE AWS AND MODEL-ACCESS VERIFICATION (COMPLETE, 2026-08-03)
 
-**Nothing in Phase 2 or later can start until this completes.** No model has ever been reached, so
-every model fact this project might state is currently unknown.
+Full record: `docs/sprints/PHASE-0001-secure-aws-and-model-access.md`.
+Decision: `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.
+Reproduce: `docs/runbooks/bedrock-capability-discovery.md`.
+Evidence: `docs/llm/bedrock-capability-snapshot.yaml`, which is the ONLY place the verified
+identifiers, regions, modalities, limits and prices are written down. A capability recorded twice
+drifts.
+
+```
+identity            IAM Identity Center, temporary credentials through the SDK provider chain.
+                    No static key exists and none was created.
+control plane       all five candidate LABELS mapped UNIQUELY to real provider models
+runtime             5 text gates and 2 image gates, all ACCEPTED
+multimodal          2 of 5 verified BY INVOCATION — each read a word out of a 173-byte PNG
+spend               USD 0.00023 against an authorized USD 1.00 ceiling
+ordinary CI         still AWS-free: contents:read only, no id-token, no credential, no SDK
+```
+
+**Four findings that constrain Phase 2.** Llama 4 Maverick cannot be invoked by its model id and
+requires a cross-region inference profile that routes across three regions. Qwen3 235B A22B is not
+available in `us-east-1` although its model card says it is. Context limits span 128K to 1M and
+output limits 8K to 32K across the five, against dated Phase 0 evidence that 44 percent of primary
+corpus documents exceed ~200,000 estimated tokens. One candidate emits reasoning content before its
+answer, so an output budget sized for the answer alone returns nothing.
 
 ## Credentials
 
@@ -169,20 +199,24 @@ context limit                output limit
 supported request formats    official price inputs
 ```
 
-**These are labels, not verified Bedrock model identifiers.** No availability, modality, limit,
-region or price may be recorded anywhere as settled until discovery returns it.
+**These were labels, not verified Bedrock model identifiers.** Discovery returned all of it on
+2026-08-03 and the results live in `docs/llm/bedrock-capability-snapshot.yaml`. **The rule survives
+the phase:** no availability, modality, limit, region or price may be recorded anywhere as settled
+until discovery returns it, and re-running discovery replaces that file wholesale rather than
+patching one field into a document still carrying an older date.
 
-## Exit criteria
+## Exit criteria — all met 2026-08-03
 
-- Secure credential resolution works with no static key anywhere.
-- Bedrock access verified.
+- Secure credential resolution works with no static key anywhere. **MET.**
+- Bedrock control-plane and runtime access verified. **MET.**
 - Every candidate label mapped to a real model ID, or recorded unavailable with the reason.
-- **One real response obtained from every required available model.** This is the first model
-  invocation in the project's history and it requires explicit authorization with a cost ceiling.
+  **MET — five of five mapped uniquely.**
+- **One real response obtained from every required available model. MET** — five text gates and two
+  image gates, all accepted, under an authorized ceiling, for USD 0.00023.
 
 ---
 
-# PHASE 2 — PARSER EXPERIMENTS AND THE REVIEW UI, BUILT TOGETHER
+# PHASE 2 — PARSER EXPERIMENTS AND THE REVIEW UI, BUILT TOGETHER (NEXT)
 
 The previous roadmap placed the UI at Phase 6, after images, summaries and chat. That is too late:
 **a parsed artifact cannot be evaluated without looking at it beside the filing it came from.**
@@ -611,9 +645,11 @@ breadth.
 |---|---|---|---|
 | R-20 | Intact submission is unaffordable or impossible for a large fraction of filings. Dated Phase 0 evidence: 44% of primary documents exceed ~200k estimated tokens, 12% exceed ~1M | HIGH | OPEN. Phase 1 measures real limits; Phase 2 measures cost. The no-slicing policy makes it a visible failure, not a silent truncation |
 | R-21 | No candidate model accepts a materially sized modern filing intact | HIGH | OPEN. Phase 2 |
-| R-22 | The five candidate LABELS have not been mapped to verified model IDs, versions, regions, modalities, limits or prices | HIGH | OPEN. Phase 1 resolves the mapping |
+| R-22 | The five candidate LABELS have not been mapped to verified model IDs, versions, regions, modalities, limits or prices | HIGH | CLOSED 2026-08-03. All five mapped uniquely, reached, and recorded in `docs/llm/bedrock-capability-snapshot.yaml`. The snapshot goes stale silently, which is R-33 |
 | R-23 | Model parse output varies between reruns, weakening the completeness guarantee | HIGH | OPEN. Repeat-run variability is a measured Phase 2 output; artifacts are versioned and superseded, never overwritten |
-| R-24 | Token estimates are a character ratio, unfit for a compatibility gate | MEDIUM | OPEN. Use provider token counting from Phase 1 |
+| R-24 | Token estimates are a character ratio, unfit for a compatibility gate | MEDIUM | OPEN. Bedrock returns exact usage per invocation, so Phase 2 measures rather than estimates; the pre-spend guard is still a character ratio and remains an upper bound, not a count |
+| R-33 | The capability snapshot goes stale silently. Nothing in the repository can detect that a provider changed a price, moved a model between regions or retired a version | MEDIUM | OPEN. Mitigated by the date carried onto every record, the runbook that regenerates it, and the rule that it is replaced wholesale. Re-run before any Phase 2 cost commitment |
+| R-34 | Phase 1 discovery ran under a broad administrator role, which the security policy permits for one-time manual discovery but not for a durable path | MEDIUM | OPEN. A least-privilege Bedrock policy is required before any repeatable or automated invocation. No CI job holds an AWS role. ADR-0018 section 7 |
 | R-25 | Pre-2001 filing components are not individually addressable through EDGAR; the complete-submission text may be the only retrievable artifact, so the input contract must not assume a per-document URL | MEDIUM | Measured. Design constraint, not a defect |
 | R-26 | Malformed markup is normal before 2005 | MEDIUM | Measured. Transport tolerance required |
 | R-27 | Corpus form-family coverage | HIGH | CLOSED. All 22 reviewed direct substantive form strings represented and reverified 2026-08-03 |
@@ -655,13 +691,19 @@ breadth.
    designated homes for startup validation and structured logging and are wired in Phase 2.
 7. Filing acquisition is implemented for the inline-XBRL era only. The other five transport eras
    have no acquisition path.
+8. `packages/model_catalog` is half of its eventual self. The capability record, label mapping,
+   price inputs and cost ceiling exist; the four-role router is Phase 2.
+9. The capability snapshot is dated evidence and goes stale silently. Nothing in the repository can
+   detect that a provider changed a price or moved a model. R-33.
+10. Only the standard on-demand price tier is recorded. Flex, priority and batch tiers exist and are
+    not authorized; recording an unauthorized cheaper tier would understate cost.
 
 ---
 
 ## Completed History
 
-Sprints 1 through 4 are recorded in `docs/sprints/`. They remain historically accurate and are not
-rewritten. What they built and what became of it:
+Sprints 1 through 4 and Phase 1 are recorded in `docs/sprints/`. They remain historically accurate
+and are not rewritten. What they built and what became of it:
 
 - **Sprint 1** delivered the scaffold, governance, the SEC identity library, the SEC client
   foundation with rate limiting and throttle classification, configuration and User-Agent
@@ -677,3 +719,8 @@ rewritten. What they built and what became of it:
   filings, 117 of 117 child blocks attached, zero orphans. **The measurement stands. The
   implementation is deleted** — see ADR-0016 for why it was withdrawn and ADR-0017 for why it was
   not preserved as an oracle.
+- **Phase 1** verified secure AWS identity and mapped all five approved candidate LABELS to real
+  provider models, reaching every one of them for the first time in the project's history — seven
+  minimal invocations, USD 0.00023, no SEC content. **The evidence is
+  `docs/llm/bedrock-capability-snapshot.yaml`; the reader is `packages/model_catalog`.** See
+  ADR-0018 for why the durable output is a dated snapshot rather than a provider adapter.

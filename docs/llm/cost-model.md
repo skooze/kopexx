@@ -1,5 +1,22 @@
 # LLM Cost Model
 
+> **UPDATED 2026-08-03 BY PHASE 1. THE PRICE INPUTS ARE NOW REAL; EVERY COST FIGURE STILL IS NOT.**
+>
+> Official published input and output prices for all five approved candidates were read from the AWS
+> Price List API, standard on-demand tier, effective 2026-07-01, and are recorded in
+> `bedrock-capability-snapshot.yaml`. They are NOT repeated here, because a price copied into prose
+> goes stale silently.
+>
+> **That changes one half of the arithmetic and not the other.** A cost is a price multiplied by a
+> token count, and no filing has ever been sent to a model, so every token parameter below —
+> `T_src`, `T_tbl`, `T_out`, `R_retry` — remains a placeholder and every derived figure remains
+> unmeasured. The first real cost per filing is Phase 2.
+>
+> Total model spend by this project to date: **USD 0.00023**, seven one-word invocations under an
+> authorized USD 1.00 ceiling. `packages/model_catalog.SpendLedger` is the enforcement, and it
+> bounds the worst case BEFORE the call rather than reconciling after it.
+
+
 > **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
 > 613 filings across six transport eras** was acquired and measured — dated Phase 0 evidence, not a
 > permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.

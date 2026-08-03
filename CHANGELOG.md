@@ -7,7 +7,82 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 `Data migrations` and `Operational changes`.
 
 
-## Commit 3 — delete the rejected parser and the application persistence layer (2026-08-03, not yet committed)
+## Phase 1 — secure AWS access and model-capability verification (2026-08-03)
+
+**A MODEL RESPONDED FOR THE FIRST TIME IN THIS PROJECT'S HISTORY.** Seven minimal invocations, total
+spend USD 0.00023 against an authorized USD 1.00 ceiling. Every earlier statement in this repository
+about model availability, identifiers, limits or prices was a placeholder, and several were wrong.
+
+**NO SEC FILING WAS SENT TO ANY MODEL. NO PARSER EXPERIMENT BEGAN. ORDINARY CI REMAINS AWS-FREE.**
+One authoritative explanation, not repeated elsewhere:
+`docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.
+
+### Added
+
+- **`docs/llm/bedrock-capability-snapshot.yaml`** — the reviewed, dated capability contract. All
+  five approved candidate LABELS mapped UNIQUELY to real provider models, each with its availability,
+  access status, verified regions, inference-profile requirement, text and image capability, context
+  and output limits, invocation APIs, streaming support, official price inputs with their source and
+  effective date, and its smoke result. **It is the only place any of those facts is written down**;
+  a capability recorded twice drifts.
+- **`packages/model_catalog`** — the provider-neutral reader. It resolves a user-facing label to
+  something invocable, or raises with the sentence a user should read. It contains no AWS import, no
+  ARN, no endpoint, no credential, and **no model identifier, region, limit or price** — every one is
+  supplied from the snapshot, exactly as the qualifying-form set is supplied to `filing_discovery`.
+  Also carries `SpendLedger`, which bounds the worst-case cost of an invocation BEFORE it is made,
+  and `RetryBudget`, which permits one retry and only for a transient reason.
+- **`tests/architecture/test_phase1_aws_boundary.py`** — twelve guards: no provider SDK or CLI
+  subprocess in a shipped package, no provider identifier or region literal in shipped source, no
+  account id, account-bearing ARN, SSO URL or access-key identifier in any tracked file, no
+  `id-token` permission or credential step in ordinary CI, no test that reaches AWS, and the smoke
+  tooling and its evidence proven untracked and gitignored.
+- **`tests/unit/test_model_catalog.py`** — fifty hermetic tests, each building its own synthetic
+  snapshot.
+- `docs/runbooks/bedrock-capability-discovery.md`, which reproduces the whole phase, and
+  `docs/sprints/PHASE-0001-secure-aws-and-model-access.md`.
+
+### Fixed
+
+- **`LlmSettings.region` no longer defaults to a hardcoded `"us-east-1"`.** That is the form-family
+  defect with a bill attached: a guessed value in runtime source, no reviewed contract behind it,
+  and a silent success when the operator sets nothing. Phase 1 made the cost concrete — one of the
+  five approved candidates is **not offered in `us-east-1` at all**, so an unset region would have
+  reported a real model as unavailable with nothing in the code to point at. `AWS_REGION` now has no
+  fallback and a non-mock provider without a region raises `MissingModelRegionError` at
+  construction. The mock still needs none, so the suite keeps its zero environmental preconditions.
+
+### Findings that constrain Phase 2
+
+- **Llama 4 Maverick cannot be invoked by its model id.** Its inference type is `INFERENCE_PROFILE`,
+  not `ON_DEMAND`; callers use the US geo profile, which routes across three regions — a
+  data-residency fact, not only a throughput one.
+- **Qwen3 235B A22B is not available in `us-east-1`,** although the AWS model card lists it as
+  in-region available there. The control plane answers `ValidationException`. The live API is
+  recorded and the discrepancy is written down rather than reconciled away.
+- **Two of the five are genuinely multimodal, and both proved it by invocation** — each read the
+  word HELLO out of a 173-byte PNG. `multimodal` is validated against `image_verified` in the
+  dataclass constructor, so no record can carry the badge without the evidence.
+- **GPT OSS 120B passed transport and failed the instruction for a request-sizing reason.** The
+  gate's mandatory 8-token output cap was consumed by a `reasoningContent` block preceding the
+  answer, leaving an empty text block. A one-off diagnostic at 64 tokens returned reasoning followed
+  by `hello`. `max_output_tokens` must budget for reasoning PLUS the answer.
+- **Context limits span 128K to 1M and output limits 8K to 32K** across the five, against dated
+  Phase 0 evidence that 44 percent of primary corpus documents exceed ~200,000 estimated tokens.
+
+### Operational changes
+
+- Runtime dependencies are unchanged and remain exactly two: `ruamel.yaml` and `httpx`. **No AWS
+  SDK was added.** Discovery and the gates used the AWS CLI, which is official AWS tooling; the
+  Bedrock adapter and any SDK dependency are Phase 2, in the single home `rules.md` section 5 names.
+- 375 tests, 0 skipped, 92.14 percent coverage. The suite still has **no environmental
+  precondition** — no database, no network, no credentials.
+- **DISCLOSED:** Phase 1 discovery ran under an IAM Identity Center `AdministratorAccess` role, the
+  identity supplied for the task. The security policy permits a one-time manual discovery under a
+  broad role but not a durable path; the least-privilege Bedrock policy is required before any
+  repeatable or automated invocation, and no CI job holds an AWS role. ADR-0018 section 7.
+
+
+## Commit 3 — delete the rejected parser and the application persistence layer (2026-08-03, `d093e73`)
 
 Removes the withdrawn architecture from the active repository. ADR-0016 withdrew deterministic
 semantic parsing from product authority and DEMOTED the implementation to a benchmark oracle; this

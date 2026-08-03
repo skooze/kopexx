@@ -34,7 +34,8 @@ TEST_LOG := .pytest-last-run.log
 COV_PACKAGES := --cov=packages.sec_identity --cov=packages.configuration \
                 --cov=packages.sec_client --cov=packages.storage \
                 --cov=packages.llm_gateway --cov=packages.observability \
-                --cov=packages.filing_acquisition --cov=packages.filing_discovery
+                --cov=packages.filing_acquisition --cov=packages.filing_discovery \
+                --cov=packages.model_catalog
 
 .PHONY: help install fmt fmt-check lint typecheck test test-unit \
         test-architecture test-security test-no-skips coverage test-summary \

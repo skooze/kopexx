@@ -104,9 +104,14 @@ Four models, chosen independently by the user for every job: a PARSING model, an
 SUMMARY model, and an ANALYSIS/CHAT model. No role inherits another's model. No silent fallback.
 
 Approved beta candidates: GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4
-Maverick, Qwen3 VL 235B. **None is currently configured or accessible.** Model IDs, regions,
-modalities, limits and prices are discovered live in Phase 1.5, which has not run. Never claim a
-model is configured, reachable, benchmarked, or priced.
+Maverick, Qwen3 VL 235B. **All five were mapped, reached and priced on 2026-08-03 (Phase 1).** The
+verified identifiers, regions, modalities, limits and prices live in exactly one place —
+`docs/llm/bedrock-capability-snapshot.yaml` — and `packages/model_catalog` is the only code that
+reads them. Do not copy a model fact anywhere else; a capability recorded twice drifts.
+
+**Reachable is not benchmarked.** Seven one-word invocations proved transport and authorization.
+Nothing is known about parse quality, real token counts or cost per filing, and the first measured
+figures are Phase 2.
 
 **One issuer is a fixture, never a specification.** The architecture is derived from a measured
 corpus of 112 issuers and 613 filings across six transport eras — dated Phase 1 evidence, not a
@@ -218,15 +223,17 @@ The project is tracked in PHASES, not sprints. `roadmap.md` is authoritative.
 ```
 Phase 0    Representative filing corpus                  COMPLETE
 Phase 0.5  Repository cleanup and corpus reverification  COMPLETE
-Phase 1    Secure AWS and model-access verification      NEXT — nothing after it can start
-Phase 2    Parser experiments AND the review UI, TOGETHER
+Phase 1    Secure AWS and model-access verification      COMPLETE 2026-08-03
+Phase 2    Parser experiments AND the review UI, TOGETHER   NEXT — needs explicit authorization
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
            beta UI, Deep Dive, breadth                   NOT STARTED
 ```
 
-**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.
-NO APPLICATION DATABASE EXISTS.** Do not treat any cost figure as known: every parameter in
-`docs/llm/cost-model.md` is a placeholder, and the first real measurement is Phase 2.
+**NO SEC FILING HAS BEEN SENT TO ANY MODEL. NOTHING IS DEPLOYED. NO SUMMARY EXISTS. NO APPLICATION
+DATABASE EXISTS. NO PROVIDER ADAPTER EXISTS** — Phase 1 reached Bedrock with the AWS CLI, once, by
+hand, and `packages/model_catalog` holds no AWS import at all. Do not treat any cost figure as
+known: official price INPUTS are verified, the token counts they multiply are not, every parameter
+in `docs/llm/cost-model.md` is still a placeholder, and the first real measurement is Phase 2.
 
 **ONLY THE PARSING MODEL IS REQUIRED.** A parser-only run is a complete, valid run and is the first
 functional workflow built. The image, summary and analysis/chat selectors may be left blank, and

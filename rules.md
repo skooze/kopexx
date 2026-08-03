@@ -7,6 +7,10 @@ the complete-filing-coverage invariant in sections 1 and 3 by Sprint 4.1 (ADR-00
 Sections 15 to 21 may be strengthened without an ADR and may never be weakened — section 22.
 Section 21, PRODUCT-DIRECTION-INVARIANT, was added by Commit 2 on 2026-08-02.
 
+AMENDED 2026-08-03 by Phase 1 (ADR-0018), which added two single-home rows in section 5 for the
+verified capability catalog and its cost ceiling, and split the four-role routing row so the half
+that exists is not confused with the half that does not. Nothing was relaxed.
+
 AMENDED 2026-08-03 by the cleanup commit (ADR-0017), which DELETED the deterministic semantic
 parser, the application persistence layer, its migrations, and the DERA mirror and fact loader.
 Every amendment made that day is a STRENGTHENING or a correction of a statement that had become
@@ -478,13 +482,24 @@ Before writing a new function:
 | Qualifying form-family membership | the reviewed contract, SUPPLIED to `filing_discovery`; never a literal in runtime source |
 | Model invocation | `packages/llm_gateway/` |
 | Cost calculation | `packages/llm_gateway/cost_calculator.py` |
+| Verified model capabilities, prices and label mapping | `packages/model_catalog/` |
+| Cost-ceiling enforcement before a billable call | `packages/model_catalog/spend.py` |
 | Filed-document listing, non-classifying | `packages/filing_acquisition/documents.py` — RESERVED, Phase 2 |
 | Transport decoding, offsets and format detection | `packages/source_transport/` — RESERVED, Phase 2 |
 | Coverage validation of model output | `packages/coverage_validation/` — RESERVED, Phase 2 |
-| Four-role model routing and capability discovery | `packages/model_catalog/` — RESERVED, Phase 2 |
+| Four-role model routing | `packages/model_catalog/` — RESERVED, Phase 2 |
 | Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, Phase 2 |
 | Artifact approval and reuse | `packages/artifact_store/` — RESERVED, Phase 4 |
 | Scope validation | `packages/deep_analysis/scope.py` — RESERVED, Phase 7 |
+
+`packages/model_catalog` ARRIVED IN PHASE 1 CARRYING HALF ITS EVENTUAL RESPONSIBILITY, and the row
+was split rather than marked done. The capability record, the label mapping, the price inputs and
+the cost ceiling exist and are enforced; the four-role router does not, and stays RESERVED. A single
+row saying "implemented" would have claimed both. **No model identifier, region, limit or price
+appears in that package's source** — every one is supplied from the reviewed snapshot at
+`docs/llm/bedrock-capability-snapshot.yaml`, exactly as the qualifying-form set is supplied to
+`filing_discovery`, and an architecture test fails on a provider identifier or region literal in
+shipped source. See `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.
 
 FOUR ROWS WERE REMOVED ON 2026-08-03, not renamed. Footnote oracle generation, footnote grouping,
 table ownership and table structure named `packages/footnote_extractor`,

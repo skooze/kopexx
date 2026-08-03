@@ -11,8 +11,12 @@
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
 >
-> **NO MODEL HAS BEEN INVOKED, AWS IS NOT CONFIGURED, AND NOTHING IS DEPLOYED.** Every threshold
-> below that is not marked IMPLEMENTED is a target, not a measurement.
+> **UPDATED 2026-08-03 BY PHASE 1.** AWS identity is verified and five models have answered a
+> one-word test call. That is reachability, not operation: **nothing is deployed, no SEC filing has
+> been sent to any model, and no provider adapter exists.** Every threshold below that is not marked
+> IMPLEMENTED is a target, not a measurement. The verified capability evidence is
+> `docs/llm/bedrock-capability-snapshot.yaml`; the procedure that produced it is
+> `docs/runbooks/bedrock-capability-discovery.md`.
 
 IMPLEMENTATION STATUS: PLANNED; structured logging IMPLEMENTED (Sprint 1)
 

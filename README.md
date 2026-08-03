@@ -11,7 +11,9 @@ Business, risk factors, legal proceedings, MD&A, controls, the statements, the n
 the exhibits, the certifications. Covering *all* of it — not the handful of sections something
 finds interesting — is the whole idea.
 
-**Under active development. Not usable yet. No model has ever been called.**
+**Under active development. Not usable yet.** Five candidate models have now answered a one-word
+test call, which proves they are reachable and nothing else. No filing has been sent to any of
+them.
 
 > **On the name.** The GitHub repo is `kopexx`. `FinTek` is the internal project name and the
 > Python package namespace, so it turns up in paths and environment variables. Same project.
@@ -29,8 +31,14 @@ silently falls back to something else.
 | **Analysis / chat** | Answers questions about one company over one timeframe |
 
 The candidates for the beta are GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama
-4 Maverick and Qwen3 VL 235B. **None of them is configured or reachable right now**, and their
-real IDs, limits and prices haven't been looked up yet.
+4 Maverick and Qwen3 VL 235B. As of 2026-08-03 all five are mapped to real provider models,
+reachable, and priced — see
+[the capability snapshot](docs/llm/bedrock-capability-snapshot.yaml), which is the only place those
+facts are written down.
+
+Two of the five can actually read an image, and both proved it by reading one rather than by having
+a checkbox on a product page. Their context windows differ by a factor of eight, which matters when
+44 percent of the filings measured are over roughly 200,000 estimated tokens.
 
 ## Why the model does the parsing
 
@@ -79,18 +87,20 @@ The backend proves this against the preserved bytes. It doesn't take the model's
 |---|---|
 | **Phase 0** — representative filing corpus | **COMPLETE** |
 | **Phase 0.5** — repository cleanup and corpus reverification | **COMPLETE** |
-| **Phase 1** — secure AWS access and model-capability verification | **NEXT**, and everything waits on it |
-| **Phase 2** — parser experiments *and* the review UI, built together | not started |
+| **Phase 1** — secure AWS access and model-capability verification | **COMPLETE** 2026-08-03 |
+| **Phase 2** — parser experiments *and* the review UI, built together | **NEXT** |
 | Phases 3–8 — optional model stages, persistence, beta UI, Deep Dive | not started |
 
-**What exists today.** Eight small packages: SEC identity; the SEC client with rate limiting and
+**What exists today.** Nine small packages: SEC identity; the SEC client with rate limiting and
 throttle classification; configuration and User-Agent validation; structured logging with
 redaction; object storage with hashing; filing discovery and master-index reconciliation;
-byte-exact acquisition with provenance; and the model gateway with its content boundary, running
-against an in-process mock. Plus the committed source fixtures and identity contracts.
+byte-exact acquisition with provenance; the model gateway with its content boundary, running
+against an in-process mock; and the model capability catalog, which reads the verified snapshot and
+refuses to substitute anything. Plus the committed source fixtures and identity contracts.
 
 **What does not exist.** Any orchestrator. Any parsed artifact. Any summary. Any UI. Any Deep Dive.
-Any database. Any deployment. Any call to any model.
+Any database. Any deployment. Any provider adapter — the models were reached with the AWS CLI, once,
+by hand.
 
 **What was deleted on 2026-08-03.** The deterministic footnote and table parser, the 24-table
 PostgreSQL schema and its migrations, the DERA mirror and fact loader, the accession document
@@ -102,7 +112,7 @@ classifier, and every script and specification that served them. Not deprecated,
 ```bash
 make install          # virtualenv and dependencies
 cp .env.example .env  # then set SEC_USER_AGENT
-make check            # format, lint, types, tests, migration reversibility
+make check            # format, lint, types, tests
 ```
 
 `make check` is the gate, and CI runs the same targets — the Makefile is the only place they're
@@ -140,20 +150,28 @@ artifacts real models actually return — and once there is something worth keep
 artifacts go to durable storage with a 24-hour Redis cache in front of them, never the other way
 round.
 
-## Why AWS isn't set up
+## AWS
 
-Because nothing needs it yet, and configuring it early would invite exactly the kind of
-"it's-basically-working" claim this project has already had to unwind twice. Phase 1.5 is where
-model availability, IDs, limits and prices get discovered for real, and it hasn't run.
+Kopexx never handles a long-lived AWS key. Credentials come from federation or an assumed role,
+always temporary, resolved by the SDK's own provider chain — see
+[docs/security/aws-identity-and-secrets.md](docs/security/aws-identity-and-secrets.md).
 
-When it does: Kopexx never handles a long-lived AWS key. Credentials come from federation or an
-assumed role, always temporary. See [docs/security/aws-identity-and-secrets.md](docs/security/aws-identity-and-secrets.md).
+Phase 1 used that to find out what the five candidate models actually are: real identifiers, which
+regions they answer in, what they cost, how much context they take, and whether the ones advertised
+as multimodal can really read a picture. Seven test calls, twenty-three hundredths of a cent, no
+filing content. How to redo it:
+[the discovery runbook](docs/runbooks/bedrock-capability-discovery.md). Why the output is a dated
+document rather than a provider adapter:
+[ADR-0018](docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md).
+
+**The test suite still needs no AWS access, and neither does CI.** That is deliberate: a test that
+quietly needs a cloud credential is a test that skips everywhere it isn't there.
 
 ## Layout
 
 ```
 packages/   SEC identity and HTTP, storage, configuration, observability, filing discovery
-            and acquisition, and the model gateway. Eight of them, 40 modules.
+            and acquisition, the model gateway, and the capability catalog. Nine of them.
 prompts/    versioned prompt files
 tests/      unit, architecture, fixtures
 docs/       specs, ADRs, runbooks, sprint records
