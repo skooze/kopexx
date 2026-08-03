@@ -1,7 +1,7 @@
 # System Context
 
 IMPLEMENTATION STATUS: acquisition, preservation and the LLM boundary are IMPLEMENTED; the
-orchestrator, the persistent store, the cache and the API are PLANNED. See `techspecs.md` for
+persistent store and the cache are PLANNED; the orchestrator and the review API are IMPLEMENTED as of Phase 2. See `techspecs.md` for
 per-component status.
 
 > **NO MODEL HAS BEEN INVOKED, AWS IS NOT CONFIGURED, AND NO APPLICATION DATABASE EXISTS.** The
@@ -9,6 +9,16 @@ per-component status.
 > describe were deleted with the deterministic parser they served (ADR-0017). Persistence is
 > designed from measured artifacts in Phase 4, not before them, so this document names the ROLE a
 > store plays and not the product that will play it.
+>
+> **SUPERSEDED 2026-08-03 BY PHASE 2, ADDITIVELY.** The statement above was true when it was
+> written and is kept for that reason (`rules.md` section 21 rule 16). It is no longer true:
+> AWS IS configured, a real Bedrock adapter EXISTS in `packages/llm_gateway/providers/bedrock.py`,
+> and SEC filings HAVE been sent to real models — three preserved filings across five candidates
+> under two prompt versions. See `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`.
+>
+> **WHAT IS STILL TRUE.** No application database exists. No Redis exists. No summary artifact, no
+> image artifact and no chat session exists — Phase 2 ran the PARSING stage only, and the
+> orchestrator raises rather than running another. Nothing is deployed.
 
 ## External systems
 

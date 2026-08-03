@@ -35,11 +35,14 @@ COV_PACKAGES := --cov=packages.sec_identity --cov=packages.configuration \
                 --cov=packages.sec_client --cov=packages.storage \
                 --cov=packages.llm_gateway --cov=packages.observability \
                 --cov=packages.filing_acquisition --cov=packages.filing_discovery \
-                --cov=packages.model_catalog
+                --cov=packages.model_catalog --cov=packages.evaluation_store \
+                --cov=packages.source_transport --cov=packages.coverage_validation \
+                --cov=packages.prompt_registry --cov=packages.orchestrator \
+                --cov=packages.review_api --cov=packages.review_web
 
 .PHONY: help install fmt fmt-check lint typecheck test test-unit \
-        test-architecture test-security test-no-skips coverage test-summary \
-        check clean
+        test-architecture test-integration test-security test-no-skips coverage test-summary \
+        check clean review
 
 help:
 	@echo "install          create the virtualenv and install dependencies"
@@ -49,6 +52,7 @@ help:
 	@echo "typecheck        mypy                        ($(MYPY_PATHS))"
 	@echo "test             full suite"
 	@echo "test-no-skips    full suite, failing if any test skipped"
+	@echo "review           start the parser-review application on 127.0.0.1"
 	@echo "coverage         suite with a coverage report and the 85% gate"
 	@echo ""
 	@echo "CI runs these same targets. Do not duplicate the commands in the workflow."
@@ -86,6 +90,9 @@ test-unit:
 
 test-architecture:
 	$(PYTEST) tests/architecture -ra
+
+test-integration:
+	$(PYTEST) tests/integration -ra
 
 test-security:
 	$(PYTEST) -m security -ra
@@ -125,3 +132,13 @@ check: fmt-check lint typecheck test
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info $(TEST_LOG)
+
+# Start the parser-review application. Loopback only unless REVIEW_BIND_HOST says otherwise, and
+# `packages/configuration.ReviewSettings` refuses a non-loopback bind without an authentication
+# secret from ignored environment state.
+#
+# The default provider is the in-process mock, which needs no credentials and no network. Reaching
+# a real model is an explicit choice: LLM_PROVIDER=bedrock, an AWS_REGION, federated credentials
+# resolved by the SDK's own provider chain, and `pip install -e '.[aws]'`.
+review:
+	$(PYTHON) -c "from packages.review_api import serve; serve()"

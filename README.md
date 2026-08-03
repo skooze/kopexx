@@ -11,9 +11,10 @@ Business, risk factors, legal proceedings, MD&A, controls, the statements, the n
 the exhibits, the certifications. Covering *all* of it — not the handful of sections something
 finds interesting — is the whole idea.
 
-**Under active development. Not usable yet.** Five candidate models have now answered a one-word
-test call, which proves they are reachable and nothing else. No filing has been sent to any of
-them.
+**Under active development. Not usable yet.** Real filings have now been sent to real models, and
+there is a local review UI for reading a parse beside the filing it came from. That is a long way
+from a product: nothing is deployed, there is no database, and no summary or chat capability
+exists.
 
 > **On the name.** The GitHub repo is `kopexx`. `FinTek` is the internal project name and the
 > Python package namespace, so it turns up in paths and environment variables. Same project.
@@ -88,19 +89,24 @@ The backend proves this against the preserved bytes. It doesn't take the model's
 | **Phase 0** — representative filing corpus | **COMPLETE** |
 | **Phase 0.5** — repository cleanup and corpus reverification | **COMPLETE** |
 | **Phase 1** — secure AWS access and model-capability verification | **COMPLETE** 2026-08-03 |
-| **Phase 2** — parser experiments *and* the review UI, built together | **NEXT** |
+| **Phase 2** — parser experiments *and* the review UI, built together | **COMPLETE** 2026-08-03 |
 | Phases 3–8 — optional model stages, persistence, beta UI, Deep Dive | not started |
 
-**What exists today.** Nine small packages: SEC identity; the SEC client with rate limiting and
-throttle classification; configuration and User-Agent validation; structured logging with
-redaction; object storage with hashing; filing discovery and master-index reconciliation;
-byte-exact acquisition with provenance; the model gateway with its content boundary, running
-against an in-process mock; and the model capability catalog, which reads the verified snapshot and
-refuses to substitute anything. Plus the committed source fixtures and identity contracts.
+**What exists today.** Sixteen small packages. The nine from before — SEC identity, the rate-limited
+SEC client, configuration, structured logging, object storage, filing discovery, byte-exact
+acquisition, the model gateway and the capability catalog — plus seven from Phase 2: durable
+evaluation storage, mechanical source-set assembly, output validation against the preserved bytes,
+hash-locked prompt versions, the orchestrator, and the review API and its pages. The model gateway
+now has a real Bedrock adapter, and the capability catalog now has the four-role router it was
+missing.
 
-**What does not exist.** Any orchestrator. Any parsed artifact. Any summary. Any UI. Any Deep Dive.
-Any database. Any deployment. Any provider adapter — the models were reached with the AWS CLI, once,
-by hand.
+**And a UI you can actually open.** `make review` starts it on `127.0.0.1`. Pick a company, pick a
+parsing model, see what it would cost, run it, and read the parse beside the filing — raw, parsed,
+or both at once, with every citation checked against the original bytes.
+
+**What does not exist.** Any database. Any cache. Any summary. Any Deep Dive. Any deployment. Any
+image or chat capability — Phase 2 ran the parsing stage only, and the orchestrator refuses to run
+another. You can mark a parse approved; that records a judgement and nothing else happens.
 
 **What was deleted on 2026-08-03.** The deterministic footnote and table parser, the 24-table
 PostgreSQL schema and its migrations, the DERA mirror and fact loader, the accession document
@@ -113,7 +119,16 @@ classifier, and every script and specification that served them. Not deprecated,
 make install          # virtualenv and dependencies
 cp .env.example .env  # then set SEC_USER_AGENT
 make check            # format, lint, types, tests
+make review           # the parser-review UI on http://127.0.0.1:8765
 ```
+
+`make review` works out of the box with no credentials: the default provider is an in-process mock
+that exercises the whole path offline. It binds to loopback, and it refuses to bind anywhere else
+without a development secret — an unauthenticated review UI on a network is a remote control for
+someone else's bill.
+
+To reach a real model you need `pip install -e '.[aws]'`, `LLM_PROVIDER=bedrock`, an `AWS_REGION`,
+and temporary credentials from your own federated login. There is no key to paste anywhere.
 
 `make check` is the gate, and CI runs the same targets — the Makefile is the only place they're
 defined, so the two can't drift apart.
@@ -171,12 +186,19 @@ quietly needs a cloud credential is a test that skips everywhere it isn't there.
 
 ```
 packages/   SEC identity and HTTP, storage, configuration, observability, filing discovery
-            and acquisition, the model gateway, and the capability catalog. Nine of them.
-prompts/    versioned prompt files
-tests/      unit, architecture, fixtures
+            and acquisition, the model gateway and its Bedrock adapter, the capability catalog
+            and router, evaluation storage, source transport, coverage validation, prompt
+            versions, the orchestrator, and the review API and pages. Sixteen of them.
+prompts/    versioned prompt files, locked by hash
+tests/      unit, integration, architecture, fixtures
 docs/       specs, ADRs, runbooks, sprint records
-var/        gitignored: preserved SEC objects, the 613-filing research corpus, the DERA mirror
+var/        gitignored: preserved SEC objects, the 613-filing research corpus, the DERA mirror,
+            and evaluation-run evidence
 ```
+
+**No JavaScript build step, and no npm.** The review UI is rendered in Python and served by the
+standard library. Its stylesheet and its one small script are Python constants. Adding a framework
+and a bundler would have been several dependencies bought for routing.
 
 Packages get created when their code is written, not before.
 

@@ -18,13 +18,22 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 > `docs/llm/bedrock-capability-snapshot.yaml`, and are not repeated here. Decision:
 > `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.
 >
-> **NO SEC FILING HAS BEEN SENT TO ANY MODEL. NO APPLICATION DATABASE EXISTS. NO PROVIDER ADAPTER
-> EXISTS.**
+> **PHASE 2 COMPLETED 2026-08-03.** The first SEC filings in this project's history have been sent
+> to real models. A parser-only orchestration path, a durable evaluation store, a Bedrock runtime
+> adapter, the four-role model router, a hash-locked prompt registry, generic output validation and
+> a working parser-review UI all exist and run. Seven packages were added; the runtime dependency
+> list did not grow. Decision:
+> `docs/adr/ADR-0019-parser-review-application-over-a-framework.md`.
+>
+> **STILL TRUE, AND THEY ARE NOT SMALL.** No application database exists. No Redis exists. No
+> summary artifact, no image artifact and no chat session exists — Phase 2 ran the PARSING stage
+> only, and invoking another raises. Approval exists as a recorded judgement and activates no
+> reuse. Nothing is deployed.
 
 Sections marked `PLANNED` describe work that does not exist. `roadmap.md` is authoritative for
 sequencing.
 
-LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 1.
+LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 2.
 
 VERIFICATION, measured locally on that date:
 
@@ -41,22 +50,39 @@ gitleaks clean over history and tree  pip-audit clean
 
 # 1. CURRENT STATE
 
-## 1.1 Runtime packages — nine
+## 1.1 Runtime packages — sixteen
 
-None of them interprets meaning.
+None of them interprets meaning. That is the whole architecture, and it did not change when the
+first filing was parsed: the seven packages Phase 2 added transport, orchestrate, preserve, prove
+and display. Not one of them decides what a filing says.
 
 ```
 packages/sec_identity        CIK, accession and URL normalization — the single home       5 modules
 packages/sec_client          HTTP with the shared rate limiter and throttle classification 5
-packages/configuration       startup validation, including the SEC User-Agent gate         4
+packages/configuration       startup validation, the SEC User-Agent gate, review settings  4
 packages/observability       structured logging, field redaction, correlation scope        3
-packages/storage             object storage and content hashing                            3
+packages/storage             object storage, key listing, atomic fsynced writes, hashing   3
 packages/filing_discovery    qualifying-filing discovery against a SUPPLIED form set       4
-packages/filing_acquisition  byte-exact acquisition with provenance                        3
-packages/llm_gateway         the model chokepoint, boundary validator and YAML 1.2 parser 12
-                             running against an in-process mock. NO REAL PROVIDER ADAPTER.
-packages/model_catalog       verified capabilities, label mapping and the cost ceiling      5
-                             READS a supplied snapshot. No AWS import, no ARN, no region.
+packages/filing_acquisition  byte-exact acquisition, provenance, and the NON-CLASSIFYING   5
+                             filed-document lister that reads EDGAR's SGML envelope
+packages/llm_gateway         the model chokepoint, boundary validator, YAML 1.2 parser,   13
+                             and the Bedrock Converse adapter — the ONLY AWS SDK import
+packages/model_catalog       verified capabilities, label mapping, cost ceiling, and the   6
+                             FOUR-ROLE ROUTER. No AWS import, no ARN, no region literal.
+packages/evaluation_store    parent runs, child jobs, exact evidence, events, comments,    5
+                             two independent state machines. NOT the product database.
+packages/source_transport    mechanical source-set assembly, local-first reuse, transport  7
+                             disposition, lossless decoding, intact-source compatibility
+packages/coverage_validation elastic reader, source-reference resolution against the       5
+                             preserved bytes, generic numeric signals. No COMPLETE verdict.
+packages/prompt_registry     versioned, SHA-256 hash-locked prompts. A used version is     3
+                             never edited; the hash is what makes that impossible.
+packages/orchestrator        preflight, the DURABLE cumulative spend journal, parser-only  6
+                             execution, the catalog, and a bounded in-process worker
+packages/review_api          the review HTTP application on the standard library: router,  6
+                             security policy, handlers, threaded server, assembly
+packages/review_web          server-rendered pages, escaping, and the two assets. No       5
+                             framework, no bundler, no npm, no build step.
 ```
 
 ## 1.2 Dependency graph — measured, not asserted
@@ -67,17 +93,32 @@ observability        -> (none)
 storage              -> (none)
 sec_identity         -> (none)
 sec_client           -> configuration
-llm_gateway          -> (none)
+llm_gateway          -> storage        (hashing, for provenance admission; imported locally)
 filing_discovery     -> sec_identity
-filing_acquisition   -> sec_identity, storage
-model_catalog        -> llm_gateway   (the hardened YAML 1.2 parser, not reimplemented)
+filing_acquisition   -> sec_identity, storage, source_transport (locally, to avoid a cycle)
+model_catalog        -> llm_gateway    (the hardened YAML 1.2 parser, not reimplemented)
+evaluation_store     -> llm_gateway, storage
+source_transport     -> filing_acquisition, sec_identity, storage, llm_gateway
+coverage_validation  -> llm_gateway
+prompt_registry      -> llm_gateway, storage
+orchestrator         -> evaluation_store, source_transport, coverage_validation,
+                        prompt_registry, model_catalog, llm_gateway
+review_web           -> (none)
+review_api           -> orchestrator, evaluation_store, coverage_validation, review_web,
+                        configuration, storage, sec_client, model_catalog, prompt_registry,
+                        source_transport, filing_acquisition, llm_gateway
 ```
 
-No cycles. No package imports a database driver, a web framework, or a provider SDK. Two packages —
-`configuration` and `observability` — currently have **no non-test caller**; they are the
-designated single homes for startup validation and structured logging and are wired in Phase 2.
-This is recorded rather than hidden: unwired code is a liability, and both now carry tests that
-prove the behaviour they will be wired for.
+No cycles. **No package imports a database driver, a cache client or a web framework**, and an
+architecture test enforces it. The only provider SDK import is in
+`packages/llm_gateway/providers/bedrock.py`, it is lazy, and boto3 is an OPTIONAL extra — so
+ordinary CI does not install it at all.
+
+`packages/configuration` gained a non-test caller in Phase 2: `packages/review_api/app.py` builds
+every instance from validated settings. `packages/observability` still has none, and that is
+recorded rather than hidden — the review server silences the standard library's access log
+precisely because that log would carry query strings which `observability` exists to redact, and
+wiring it is the change that closes this gap.
 
 ## 1.3 Committed test infrastructure
 
@@ -158,13 +199,19 @@ Why each, once, in `docs/adr/ADR-0017`.
 | Filing acquisition, inline-XBRL era only | `filing_acquisition` | IMPLEMENTED |
 | LLM content boundary, YAML 1.2, budget, audit | `llm_gateway` | IMPLEMENTED against a mock |
 | Verified capability catalog, label mapping, cost ceiling | `model_catalog` | IMPLEMENTED — Phase 1 |
-| Four-role model router | `model_catalog` | PLANNED, Phase 2 |
-| AWS identity and secret policy | governance + `tests/architecture` | IMPLEMENTED as governance; NO AWS CODE EXISTS |
-| Filed-document lister, non-classifying | — | PLANNED, Phase 2 |
-| Real provider adapter | `llm_gateway/providers/` | PLANNED, Phase 2 |
-| Parsed / image / summary / chat artifacts | — | PLANNED, Phases 2 and 3 |
+| Four-role model router | `model_catalog/routing.py` | IMPLEMENTED — Phase 2 |
+| AWS identity and secret policy | governance + `tests/architecture` | IMPLEMENTED; the only AWS code is the Bedrock adapter, and boto3 is an OPTIONAL extra |
+| Filed-document lister, non-classifying | `filing_acquisition/documents.py` | IMPLEMENTED — Phase 2 |
+| Real provider adapter | `llm_gateway/providers/bedrock.py` | IMPLEMENTED — Phase 2 |
+| Source-set assembly, raw-first reuse, compatibility | `source_transport` | IMPLEMENTED — Phase 2 |
+| Coverage validation of model output | `coverage_validation` | IMPLEMENTED — Phase 2 |
+| Versioned, hash-locked prompts | `prompt_registry` | IMPLEMENTED — Phase 2 |
+| Parent runs, child jobs, evaluation evidence | `evaluation_store` | IMPLEMENTED — Phase 2 |
+| Preflight, spend journal, parser-only execution | `orchestrator` | IMPLEMENTED — Phase 2 |
+| Parser-review API and pages | `review_api`, `review_web` | IMPLEMENTED — Phase 2 |
+| Parsed evaluation artifacts | `coverage_validation`, `evaluation_store` | IMPLEMENTED — Phase 2, provisional |
+| Image / summary / chat artifacts | — | PLANNED, Phase 3 |
 | Persistence, approval gate, Redis cache | — | PLANNED, Phase 4 |
-| Parser-review UI | — | PLANNED, Phase 2 |
 
 Reserved package names. **These directories do not exist.** Sprint 1 created eighteen packages
 containing only a docstring, which reserved names twenty sprints ahead of their code and made two
@@ -173,15 +220,17 @@ module, and an architecture test rejects an empty stub.
 
 | Reserved name | Planned path | Phase |
 |---|---|---|
-| Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 2 |
-| Filed-document lister | `packages/filing_acquisition/documents.py` | 2 |
-| Source-set assembly and compatibility | `packages/source_transport` | 2 |
-| Coverage validation of model output | `packages/coverage_validation` | 2 |
-| Orchestrator: parent runs and child jobs | `packages/orchestrator` | 2 |
-| API | `apps/api` | 2 |
-| Web dashboard | `apps/web` | 2 |
 | Artifact persistence and approval | `packages/artifact_store` | 4 |
 | Deep Analysis | `packages/deep_analysis` | 7 |
+
+**Every Phase 2 reservation was taken up, and two of them landed somewhere else.** `apps/api` and
+`apps/web` were reserved for a web surface; the Phase 2 parser-review application was built as
+`packages/review_api` and `packages/review_web` instead, and the reason is tooling reach rather
+than preference. Everything under `packages/` is formatted, linted, type-checked, coverage-measured
+and scanned by the architecture guards, and it ships in the wheel through one `include` pattern.
+A top-level `apps/` tree would have needed every one of those extended to reach it, and the first
+guard nobody remembered to extend is the guard that stops holding. `apps/api` and `apps/web` remain
+reserved for the Phase 6 beta UI, which is a different product surface with different users.
 
 ---
 
@@ -391,7 +440,12 @@ response was a `footnote-summary-v1.0.0` document with a fixed taxonomy of topic
 policies and risk categories, which quietly made the mock the de facto response schema; it is now a
 minimal well-formed YAML mapping that asserts no contract.
 
-**No request or response contract is declared.** No model has been invoked, so none is known.
+**A PROVISIONAL request and response contract now exists, DERIVED from what real models returned.**
+The request is a plain-text instruction plus preserved `OriginalSourceBlock`s admitted by
+provenance; the response is the minimum envelope in `packages/coverage_validation` — artifact,
+document, nodes, unresolved, metadata — read elastically, with unknown model-returned keys
+preserved and no node-type vocabulary required. It is PROVISIONAL and stays so: roadmap.md 2c says
+the final contract is derived from what models return, and three filings is not enough to fix one.
 
 INVARIANTS.
 - Model-visible SYNTHETIC content is unmarked plain text or exactly one unfenced YAML 1.2 document.
@@ -461,7 +515,17 @@ INVARIANTS.
 - **One retry, and only for a transient reason.** Retrying until a model says what you wanted is
   prompt tuning with the measurement removed.
 
-NOT IMPLEMENTED. The four-role router. Phase 2.
+THE FOUR-ROLE ROUTER ARRIVED IN PHASE 2, in `routing.py`, completing the package. `route` resolves
+one label to something invocable and DISCLOSES a cross-region route rather than performing one
+quietly; `route_selection` returns one entry per SELECTED role, so a blank image, summary or
+analysis selector produces no entry and therefore no stage — the absence of the entry IS the
+absence of the stage, and there is no flag anywhere saying so. `selector_entries` returns every
+candidate including the unavailable ones, each carrying a concrete reason, because a candidate that
+vanishes from a dropdown is indistinguishable from one that was never approved.
+
+`verified_regions` became an ORDERED TUPLE rather than a frozenset for this. The router picks the
+first verified region when the preferred one is absent, and a set would make that choice depend on
+hash ordering — a different region on a different interpreter run, and an unreproducible bill.
 
 TESTS. 50 in `tests/unit/test_model_catalog.py`, all hermetic, plus 12 repository guards in
 `tests/architecture/test_phase1_aws_boundary.py`.

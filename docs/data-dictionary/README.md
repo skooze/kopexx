@@ -18,6 +18,15 @@
 >
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+>
+> **FORWARD NOTE, 2026-08-03 (Phase 2) — the line immediately above is superseded in exactly one
+> respect.** Phase 1 reached the approved candidates through a live provider API, and Phase 2
+> IMPLEMENTED the Bedrock adapter, the four-role router, the orchestrator, the coverage validator
+> and the parser-review UI, so "no model has been invoked and AWS is not configured" no longer
+> describes this repository. **Nothing else in that paragraph changes. There is still no
+> application database, no ORM, no migration, no index and no product schema.** Phase 2 writes
+> EVALUATION records into a gitignored local directory instead; they have their own section below,
+> and rules.md invariant 15 is the reason the two are not the same thing.
 
 ---
 
@@ -74,7 +83,610 @@ content away. It is not a taxonomy, and the backend does not decide what a footn
 
 ---
 
+# PHASE 2 EVALUATION-RUN RECORDS — IMPLEMENTED 2026-08-03. Ignored local storage, NOT a product schema.
+
+**READ THIS BEFORE ANY TABLE IN THIS SECTION.** Everything described here is an EVALUATION record
+written into the gitignored directory `var/evaluation-runs/`, so that the first parser experiments
+can be started, watched, reviewed and re-read after a page reload. **It is not the product
+database, and the fact that it exists is not permission to design one.** There is no schema, no
+ORM, no migration, no index, no query language, no Redis and no relational model anywhere in it —
+a run directory, a job directory, some exact bytes and a few small manifests.
+
+rules.md invariant 15 is the reason: **never design persistence ahead of measured model output.**
+Schema follows accepted artifacts and artifacts follow real experiments, so `roadmap.md` Phase 4
+designs the product's persistence FROM measured artifacts that will by then exist. Designing tables
+before seeing model output is exactly what produced the withdrawn migration `0003` recorded further
+down this file. The ARCHITECTURAL VOCABULARY section above remains the authoritative vocabulary;
+what follows is the shape the evaluation harness writes TODAY, and no field below is a forward
+commitment to a column.
+
+**No measurement is reproduced in this document.** These records are where the first measured token
+counts, latencies, stop reasons, resolution rates and dollar amounts land. Reading a figure out of
+them and copying it here would create a second, staler home for it. Every per-model capability fact
+— identifier, region, context limit, output limit, price — lives in exactly one file,
+`docs/llm/bedrock-capability-snapshot.yaml`, and only `packages/model_catalog` reads it. A
+capability recorded twice drifts.
+
+**The store carries no opinion about what a filing contains.** `packages/evaluation_store` holds a
+source set, a validation result and an image-coverage report as OPAQUE mappings produced by the
+packages that own those concepts, and never reads inside them. That is rules.md invariant 14
+applied to storage: a store that understood source sets would eventually start deciding which
+members mattered.
+
+## Where the records live
+
+The root defaults to `./var/evaluation-runs` and is supplied by `packages/configuration`
+(`EVALUATION_ROOT`). Every write goes through `packages/storage`, which writes to a temporary path,
+flushes, fsyncs, renames, and refuses a key that escapes the store root — so a reader never sees a
+half-written manifest.
+
+| Key | Record |
+|---|---|
+| `spend-journal.yaml` | The cumulative spend journal for the whole store, not for one run |
+| `runs/<run_id>/run.yaml` | The parent run manifest |
+| `runs/<run_id>/events/<00000001>.txt` | One immutable object per progress event |
+| `runs/<run_id>/comments/<comment_id>.yaml` | One developer evaluation comment |
+| `runs/<run_id>/jobs/<job_id>/job.yaml` | One child filing job |
+| `runs/<run_id>/jobs/<job_id>/evidence/<name>` | Exact bytes: request, response, prompt, source |
+
+**One object per event, rather than appended lines.** An append to a shared log is not atomic
+across a crash, and a torn last line is indistinguishable from an event that never happened. One
+object per event makes every write atomic and makes `Last-Event-ID` resumption a matter of listing
+keys. Runs carry tens of events, not millions.
+
+### Evidence file names, fixed so a reviewer finds the same names every time
+
+```
+prompt.txt                the exact prompt text, by version, from packages/prompt_registry
+request-instruction.txt   the compiled model-visible instruction
+request-transport.json    the provider request envelope, written only when the adapter returns one
+response-visible.txt      the model's visible answer text, exactly as returned
+response-reasoning.txt    reasoning content, separated from the answer; written only when present
+response-transport.json   the provider response envelope
+source-NN.txt / .bin      the exact bytes of each submitted member, in submission order
+source-set.yaml           the source-set manifest
+validation.yaml           the validation result
+```
+
+Bytes are stored EXACTLY. Nothing decodes, re-encodes, pretty-prints or normalises evidence; its
+whole value is that it is what actually crossed the wire. The two `.json` files are the
+provider-required API transport envelope, which `docs/llm/content-boundary.md` permits for that one
+purpose; nothing model-visible is JSON in either direction.
+
+## Identifiers
+
+| Identifier | Format | Notes |
+|---|---|---|
+| Run id | `run_` + 26 lowercase base32 characters | 16 random bytes, 128 bits |
+| Job id | `job_` + 26 lowercase base32 characters | |
+| Comment id | `cmt_` + 26 lowercase base32 characters | |
+| Event id | 8-digit zero-padded sequence, e.g. `00000007` | Per run; `Last-Event-ID` replays after it |
+| Source-set id | SHA-256 of the ordered `filename:sha256` lines of the SUBMITTED members | |
+
+An identifier carries **no** account id, CIK, ticker, model id, email, username, timestamp or
+counter. A run id is quoted in a bug report and pasted into a chat window, and anything encoded in
+it is disclosed with it. `packages/evaluation_store.identity` validates every identifier before it
+reaches a storage key, so `..` and `/` fail there rather than relying on the object store's
+traversal guard as the only line of defence.
+
+The source-set id is a hash of hashes because "the same accession" is not "the same source set": a
+member fetched later, a member that failed to fetch, or a differently dispositioned member all
+produce a different set from the same accession, and one value has to make that visible.
+
+## Serialisation conventions
+
+| Convention | Rule |
+|---|---|
+| Record format | One unfenced YAML 1.2 document per record, written by `packages/llm_gateway.to_yaml` |
+| Money | Exact decimal TEXT, read back through `Decimal`. A float round-trip through YAML turns `0.00015` into `0.000149999999999999993145` |
+| Identifiers | Always quoted on the way out. YAML 1.2 parses an unquoted `0000320193` as the integer `320193` and destroys a CIK |
+| Timestamps | ISO-8601 UTC strings, so every record is comparable as text |
+| Versioning | A `schema_version` string on each manifest: `evaluation-run-v1`, `evaluation-job-v1`, `source-set-v1`, `validation-v1`, `spend-journal-v1` |
+| Events | Tab-separated, four fields, with backslash, tab and newline escaped — deliberately neither YAML nor JSON |
+
+The event wire format is not YAML because an event is re-read by a server-sent-events handler on
+every reconnect and a format needing a parser with an alias budget to read four fields is the wrong
+tool. It is not JSON because the repository has one browser-facing serialisation and one
+model-facing one, and a third would be a third thing to keep honest.
+
+## Parent run — `run.yaml`, `evaluation-run-v1`
+
+One user request, one visible identifier, N child filing jobs. `packages/evaluation_store.records.RunRecord`.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `evaluation-run-v1` |
+| `run_id` | The opaque parent identifier |
+| `created_at` | ISO-8601 UTC |
+| `author` | Who asked for the run |
+| `cik` | The issuer, quoted |
+| `entity_label` | The issuer name as displayed. A temporal alias, never identity |
+| `selections.parsing` | The user's parsing-model LABEL. Always present |
+| `selections.image` | The image-model label, or null |
+| `selections.summary` | The summary-model label, or null |
+| `selections.analysis` | The analysis/chat-model label, or null |
+| `timeframe.from` / `.to` | The requested filing window, either may be null |
+| `preferred_region` | The region the user preferred, supplied by configuration; routing may DISCLOSE a different one per role |
+| `cost_ceiling_usd` | Decimal text. The authorized ceiling for this run |
+| `job_ids` | The child filing jobs this run created |
+| `closed_at` | Set when the run is closed, else null |
+| `note` | Free text from the author |
+
+**A blank role is a value, not an absent key.** `selections` always carries all four roles, with
+null for a role the user left blank. Writing the parsing model into an empty summary slot is the
+silent substitution rules.md section 21 rule 8 forbids, and it would be invisible afterwards if the
+record could not represent "the user chose nothing". A parser-only run is complete and valid.
+`selected_roles` is DERIVED from which labels are non-null, never stored.
+
+**Phase 2 executes the parsing stage only.** All four roles are routed, and invoking the image,
+summary or analysis stage raises `StageNotAuthorizedError`. No summary model, no analysis/chat
+model and no separate image model has been invoked. That is a status, not a design: those stages
+are PLANNED for the optional-model phases in `roadmap.md`.
+
+## Child filing job — `job.yaml`, `evaluation-job-v1`
+
+One filing, one parsing model, one independent unit of billable work. A multi-year request never
+becomes one invocation. `packages/evaluation_store.records.JobRecord`.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `evaluation-job-v1` |
+| `job_id` / `parent_run_id` | Identity, and the run it belongs to |
+| `created_at` / `updated_at` | `updated_at` is rewritten on every save |
+| `filing.cik` | Quoted CIK. Filing identity is `(CIK, accession)`, never the accession alone |
+| `filing.accession` | Dashed accession |
+| `filing.form_as_filed` | The filer's own form string, verbatim and never normalised |
+| `filing.filing_date` | As filed |
+| `filing.report_period` | The period the filing reports on, or null |
+| `filing.issuer_label` | Display name at the time of the run |
+| `filing.transport_era` | Which of the measured transport eras this filing belongs to |
+| `model_routing` | The routing sub-record below |
+| `prompt` | The prompt-identity sub-record below |
+| `settings` | The parser-settings sub-record below |
+| `execution_state` | One of the twelve execution states |
+| `review_state` | One of the six review states |
+| `source_set_id` | The hash-of-hashes identity of exactly these submitted bytes |
+| `source_set` | The source-set manifest, stored OPAQUELY. Owned by `packages/source_transport` |
+| `validation` | The validation result, stored OPAQUELY. Owned by `packages/coverage_validation` |
+| `image_coverage` | The image-coverage report, stored OPAQUELY |
+| `incompatibility` | Why this filing and this model cannot be paired, or null |
+| `attempts` | Every billable attempt, in order, successes and failures alike |
+| `review_history` | Appended review transitions, never rewritten |
+| `reserved_cost_usd` | Decimal text. The worst-case bound charged BEFORE the call |
+| `actual_cost_usd` | Decimal text. The measured cost, once usage came back |
+| `estimated_input_tokens` | The pre-spend character-ratio ESTIMATE, not a tokenizer count |
+| `failure` | Why the job failed, or null |
+
+### `model_routing`
+
+Exactly which model was invoked, where, and whether that was the preferred region.
+
+| Field | Meaning |
+|---|---|
+| `label` | The user-facing model label |
+| `role` | `parsing`, `image`, `summary` or `analysis` |
+| `model_id` | The provider model identifier, resolved from the reviewed capability snapshot |
+| `invocation_id` | What is actually invoked — the model id, or its inference profile |
+| `region` | The region this invocation ran in |
+| `preferred_region` | The region the run asked for |
+| `in_preferred_region` | Whether the two agree |
+| `inference_profile_id` | Set when the model requires an inference profile, else null |
+| `cross_region_reason` | A sentence explaining a cross-region route, else null |
+| `multimodal` | Whether this model has a verified image path |
+
+**A cross-region route is DISCLOSED, never silent.** The product is explicitly allowed to run
+different models in different regions; it is not allowed to do so quietly. `in_preferred_region`
+and `cross_region_reason` carry that fact into the run plan, the child job, the request evidence,
+the response evidence, the cost record and the artifact lineage. Every value these fields can hold
+is DERIVED from `docs/llm/bedrock-capability-snapshot.yaml`; none is written here, and none is
+written in `packages/model_catalog/routing.py` either.
+
+### `prompt`
+
+| Field | Meaning |
+|---|---|
+| `prompt_id` | The registered prompt |
+| `version` | The exact version invoked |
+| `sha256` | The hash of the prompt bytes |
+
+The hash rather than the text: the text is also written beside the request evidence, and a second
+copy is the one that drifts. `packages/prompt_registry` re-hashes the file on load and refuses it
+when the bytes have moved from what its manifest recorded, so editing an in-use prompt version
+fails at load, in the test suite and in CI — rather than quietly changing what stored invocations
+claim to have asked.
+
+### `settings`
+
+| Field | Meaning |
+|---|---|
+| `max_output_tokens` | The output budget requested for this parse |
+| `temperature` | The sampling temperature requested |
+
+These are the request settings that change what comes back, and therefore change reuse identity.
+
+### `incompatibility`
+
+| Field | Meaning |
+|---|---|
+| `reason` | A short machine-readable reason, e.g. `unknown_member_role`, `source_set_exceeds_context` |
+| `detail` | The full sentence a user reads, with the arithmetic in it |
+| `source_set_bytes` | Bytes in the submitted set, or null |
+| `estimated_input_tokens` | The pre-spend estimate, or null |
+| `model_context_tokens` | The verified context limit this was measured against, or null |
+
+"Incompatible" on its own sends a user to a support channel. Every field exists so the UI can say
+which limit was exceeded and by how much, and so the USER — never the backend — picks a different
+model. `INTACT_SOURCE_ONLY` is the authorized mode: nothing is truncated, sliced, projected, split
+into parts or swapped to another model, so incompatibility is a RESULT.
+
+## Execution and review — two independent state machines
+
+They are never collapsed. An execution state describes machinery; a review state describes a human
+judgement. Deriving one from the other is how an unreviewed artifact acquires the authority of an
+approved one. A job reaching `READY_FOR_REVIEW` says only that a person can now look at it.
+
+```
+execution   CREATED  SOURCE_READY  PREFLIGHT  QUEUED  RUNNING  RESPONSE_RECEIVED  VALIDATING
+            READY_FOR_REVIEW  FAILED  INCOMPATIBLE  INTERRUPTED  CANCELLED
+
+review      EVALUATION  UNDER_REVIEW  APPROVED  REJECTED  SUPERSEDED  INVALIDATED
+```
+
+Transitions are enumerated in one table in `packages/evaluation_store/states.py` rather than
+checked ad hoc, because a table can be read, tested exhaustively and extended in one place. Four
+consequences are worth stating here, each of which the table makes unrepresentable rather than
+merely tested for:
+
+| Rule | Why |
+|---|---|
+| `RUNNING` may not go to `CANCELLED` | A provider call already issued is billable whatever the browser does next. It becomes `INTERRUPTED` or it completes |
+| `VALIDATING` never goes to `FAILED` for a validation VERDICT | A parse that fails coverage or returns unparseable YAML still reaches `READY_FOR_REVIEW` carrying that verdict; the response was bought and a person has to see it. `FAILED` here means validation itself broke |
+| `APPROVED` is never edited back to unapproved | It is `SUPERSEDED` by a newer artifact or `INVALIDATED`, both of which leave the original readable — rules.md invariant 7 |
+| Every mid-flight state becomes `INTERRUPTED` on restart | Nothing is re-invoked. A rerun spends money, and money is never spent by a process that merely came back up |
+
+`EVALUATION` is the state every artifact starts in and stays in until someone acts. **Nothing in
+this project treats an `EVALUATION` artifact as a reusable result.** `APPROVED` starts to mean
+something operational at `roadmap.md` Phase 4; that gate is PLANNED and is not switched on.
+
+## Source set and member disposition — `source-set.yaml`, `source-set-v1`
+
+Every filed member of one accession, dispositioned, with the subset actually submitted.
+`packages/source_transport.records.SourceSet`. Every record here is TRANSPORT: bytes, a hash, a
+size, an encoding, a declared type the filer typed, and a disposition with the evidence behind it.
+None of it says what a member MEANS.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `source-set-v1` |
+| `cik`, `accession`, `form_as_filed`, `filing_date`, `report_period`, `issuer_label`, `transport_era` | Filing identity and era, carried verbatim |
+| `source_set_id` | SHA-256 over the ordered `filename:sha256` lines of the submitted members |
+| `members_separately_addressable` | Whether EDGAR publishes a per-document URL for this accession's members. Decided by EDGAR, not by this system |
+| `declared_document_count` | What the envelope's own `PUBLIC DOCUMENT COUNT` header claimed, or null |
+| `listed_document_count` | How many `<DOCUMENT>` blocks were actually found |
+| `counts_by_disposition` | A census of dispositions across all members |
+| `submitted_member_count` | Members sent as their own content block |
+| `submitted_bytes` | Bytes counted toward the request |
+| `total_bytes` | Bytes across all members, submitted or not |
+| `reused_members` / `fetched_members` | Local-first reuse versus a fetch from SEC |
+| `members` | Every filed member, below |
+
+`declared_document_count` and `listed_document_count` are REPORTED, never reconciled. A dated
+Phase 2 measurement found an envelope whose header said one number while the envelope contained
+another, with non-contiguous sequence numbers; picking a winner in code would hide the disagreement
+that a reviewer needs to see.
+
+### One member
+
+| Field | Meaning |
+|---|---|
+| `sequence` | The filer's declared document sequence, or null when the era published none |
+| `declared_type` | The filer's own string, verbatim and never normalised, mapped or interpreted |
+| `description` | EDGAR's declared description, read verbatim |
+| `filename` | Empty when the era published none, which means the member has no individual EDGAR URL |
+| `disposition` | One of the seven below |
+| `disposition_evidence` | The exact byte signature, extension or declared field that produced the disposition — shown so a person sees the evidence rather than a category |
+| `sha256` | Of the preserved bytes |
+| `byte_count` | Of the preserved bytes |
+| `source_url` | Where it came from |
+| `separately_addressable` | Whether EDGAR publishes a URL for this member |
+| `reused` | Whether it was already preserved locally and verified, rather than fetched |
+| `encoding` | The encoding it losslessly decoded from, or null |
+| `image_format` | `png`, `jpeg`, `gif` — from the BYTE SIGNATURE, or null |
+| `submitted` | DERIVED: sent as its own content block, and its bytes counted |
+| `covered` | DERIVED: its content reaches the model at all, however it travels |
+| `evidence_name` | Added by the orchestrator when it writes the manifest onto a job: which `source-NN` evidence file holds these exact bytes |
+
+Member content is deliberately NOT serialised into the manifest. The bytes live in evidence under
+their own hash; a manifest that inlined a multi-megabyte filing would be a second copy that can
+drift from the first.
+
+### The seven dispositions
+
+| Disposition | Submitted | Covered | Meaning |
+|---|---|---|---|
+| `PARSER_INPUT_TEXT` | yes | yes | Human-readable filed text; goes to the parsing model intact |
+| `PARSER_INPUT_IMAGE` | yes | yes | A filed raster image; goes to a MULTIMODAL parser intact, reported unanalysed otherwise. Never described, summarised or transcribed by backend code |
+| `INSIDE_COMPLETE_SUBMISSION` | no | **yes** | The member has no individual EDGAR URL and reaches the model inside the complete submission, which is submitted intact. Its content is covered; its bytes are not counted twice |
+| `MACHINE_ONLY` | no | no | An archive, spreadsheet, stylesheet, script, schema, or XBRL linkbase or instance — nothing a language model reads as prose |
+| `SEC_GENERATED_RENDERING` | no | no | SEC's own renderer output, declared as such by EDGAR's `IDEA:` description marker |
+| `DUPLICATE_COMPLETE_SUBMISSION` | no | no | The flat complete submission when its members are individually addressable and are being sent as themselves; sending both submits identical content twice |
+| `UNKNOWN_REQUIRES_REVIEW` | no | no | Nothing matched. **Fails closed** into the run plan |
+
+**Submitted and covered are kept apart deliberately.** Coverage is measured against the covered
+set; request size is measured against the submitted set. Collapsing them makes a pre-2001 filing
+either double-count its own bytes or report its own exhibits as uncovered.
+
+**`uncovered_members` is the honest answer to "what was left out".** It is DERIVED, shown in the
+run plan and in the parsed view, and a run never reports complete coverage while it is non-empty.
+
+**An unknown role is not guessed in either direction.** A dropped member is lost content; a
+submitted one may be an unusable binary charged as input tokens. The deleted accession classifier
+(ADR-0017) chose in exactly this position, ruled that a courtesy PDF duplicated the primary
+document, and suppressed a filed source range on that judgement.
+
+### The acquisition record behind a member
+
+`PreservedObject` is the result of finding or fetching one artifact. It is an in-memory record used
+during assembly and is NOT serialised into the manifest; its durable half is the member row above.
+
+| Field | Meaning |
+|---|---|
+| `filename`, `sha256`, `byte_count` | Identity of the exact bytes |
+| `source_url` | Where it was fetched from; empty for a local hit |
+| `locator` | Where the preserved copy lives |
+| `acquired_at` | When, or empty for a local hit |
+| `acquisition_method` | How it was obtained, e.g. `object_store` |
+| `reused` | Whether it came from local preservation rather than SEC |
+
+A reused object is verified before it is trusted: byte count and SHA-256 must both match the
+record, or it is re-acquired rather than believed.
+
+### `image_coverage`
+
+| Field | Meaning |
+|---|---|
+| `image_member_count` | Image-bearing members in the source set |
+| `analysed` | True only when images exist AND the parsing model is multimodal |
+| `reason` | The sentence explaining which of those two it was |
+| `members[]` | `filename`, `sha256`, `byte_count`, `image_format`, `submitted_to_parser` |
+
+A text-only parser produces `analysed: false` with the affected documents NAMED. A run that quietly
+omitted images while reporting a complete parse would have made a false completeness claim.
+
+## Invocation attempt
+
+One billable attempt against one model, whatever its outcome, appended to `attempts`.
+
+| Field | Meaning |
+|---|---|
+| `attempt` | 1-based attempt number |
+| `started_at` / `finished_at` | ISO-8601 UTC |
+| `latency_ms` | Wall-clock milliseconds |
+| `stop_reason` | The provider's stop reason, verbatim |
+| `input_tokens` / `output_tokens` | The provider's MEASURED usage, not an estimate |
+| `visible_characters` | Length of the visible answer text |
+| `reasoning_characters` | Length of the separated reasoning content |
+| `provider_request_id` | The provider's request identifier, or null |
+| `error` | The failure, or null |
+| `retryable` | Whether the failure was transient, or null |
+
+**A FAILED attempt is recorded exactly as carefully as a successful one.** It was billable, it
+consumed the retry budget, and a benchmark that quietly dropped failures would report a success
+rate it never measured.
+
+**Reasoning length is separate from visible length on purpose.** One candidate emits reasoning
+content before its answer through the Converse path, and an output budget sized for the answer
+alone returns a well-formed response with no text in it. Recording only the visible length would
+make an exhausted budget look like an empty answer.
+
+**`estimated_input_tokens` beside measured `input_tokens` is a measurement, not redundancy.** The
+pre-spend guard is a character ratio and is an upper bound, not a count (risk R-24, OPEN). Keeping
+both is how the size of that gap stops being a guess. **The first such comparisons live in these
+records; no figure from them is reproduced in this document.**
+
+## Validation result — `validation.yaml`, `validation-v1`
+
+The backend's independent proof against the PRESERVED BYTES. Interpretation is the model's; proof
+is the backend's. `packages/coverage_validation.validator`.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `validation-v1` |
+| `status` | `REVIEW_REQUIRED`, `PARTIAL`, `UNPARSEABLE` or `EMPTY` |
+| `status_note` | A carried sentence stating that COMPLETE is not a value this validator can issue |
+| `findings` | The ordered sentences a reviewer should see first |
+| `response_characters` / `source_characters` | Sizes of the response and of the concatenated submitted text |
+| `source_to_response_ratio` | DERIVED, rounded to two places |
+| `yaml_parsed` | Whether the response read as one YAML document |
+| `boundary_ok` / `boundary_violations` | Whether the response honoured the LLM content boundary, and which rules it broke |
+| `missing_envelope_keys` | Which PROVISIONAL envelope keys the response omitted |
+| `node_count` / `table_count` | What the parse contains, counted generically |
+| `reference_count` | Source references the model supplied |
+| `references_resolved` / `references_ambiguous` / `references_unresolved` | How they landed against the preserved bytes |
+| `resolution_breakdown` | A census keyed by resolution outcome |
+| `artifacts_submitted` / `artifacts_referenced` | How many submitted artifacts carry a resolved reference |
+| `artifacts_unreferenced` | The ones that carry none, by name |
+| `declared_unresolved` | How many items the MODEL itself declared unresolved |
+| `image_dependent_nodes` | Nodes the model marked as depending on an image |
+| `model_selected_types` | A CENSUS of the `type` strings the model chose. Never a vocabulary |
+| `numeric` | The numeric signals below |
+| `references` | One row per reference, below |
+
+**`ValidationStatus` has no `COMPLETE` member, deliberately.** The complete-content invariant asks
+whether every human-readable source RANGE is represented. What this module can measure today is
+whether every submitted ARTIFACT is cited, how many references resolve, and what the model itself
+declared unresolved. Those are coverage SIGNALS, and rounding a set of signals up to a completeness
+claim is precisely the false complete the invariant forbids. A status value that exists is a status
+value something eventually sets, so it does not exist. Note that this differs from the `COMPLETE |
+PARTIAL | REVIEW_REQUIRED` triple in the vocabulary table above: the vocabulary describes the
+eventual product concept; this enum describes what is IMPLEMENTED and provable today.
+
+**A failure here is a result, not an exception.** A response that will not parse still produces a
+validation record, still reaches the review UI, and still shows its exact bytes. It was bought and
+it cannot be regenerated for free.
+
+**Validation never grades a parse against a second parse.** rules.md section 21 rule 15 withdrew
+the deterministic Apple oracle for exactly that reason: grading a model against a deterministic
+interpretation makes the deterministic interpretation authoritative again through the back door.
+Everything compares the response to the SOURCE.
+
+### One reference outcome
+
+| Field | Meaning |
+|---|---|
+| `node_id` | The node whose claim this reference supports |
+| `filename` | The artifact the quote was located in — not necessarily the one the model named |
+| `quote` | Truncated to 200 characters FOR THE MANIFEST ONLY; the exact response beside it is authoritative |
+| `resolution` | One of the seven below |
+| `occurrences` | How many times the quote occurs |
+| `offset` | Where it was found, or null |
+
+```
+EXACT                  character for character in the preserved bytes
+WHITESPACE_NORMALISED  found once runs of whitespace collapse on both sides
+TEXT_ONLY              found in the same bytes with markup tags removed
+AMBIGUOUS              occurs too many times to locate anything in particular
+UNRESOLVED             not found by any of the three searches
+NO_SUCH_ARTIFACT       there were no artifacts to search
+EMPTY_QUOTE            the model supplied no quote
+```
+
+The first three count as resolved. **Quotes, not offsets:** a model handed an artifact as text
+cannot count bytes in it, and a fabricated offset resolves to the wrong place while looking exactly
+like a real one. A quote either occurs in the preserved bytes or it does not.
+
+**`AMBIGUOUS` is its own outcome, not a resolution.** A quote occurring everywhere locates nothing;
+counting it as resolved would inflate the citation rate with references that point everywhere at
+once.
+
+The three searches are a SEARCH STRATEGY over preserved bytes, not a projection of the input.
+Nothing about what is sent to a model changes; visible-content projection remains an unapproved
+research option.
+
+### `numeric` — signals, never verdicts
+
+| Field | Meaning |
+|---|---|
+| `numbers_checked` | Numeric literals in the reported text, above a four-digit noise floor |
+| `numbers_verbatim_in_source` | How many occur in the source, compared bare so `1,234` matches `1234` |
+| `verbatim_rate` | DERIVED, rounded to four places |
+| `formatted_numbers_checked` / `formatted_numbers_preserved` | Currency and percentage formatting carried through |
+| `tables_checked` | Tables with rows |
+| `tables_with_a_coherent_column` | Tables where one value equals the sum of the others in some column |
+| `note` | A carried sentence stating that these are arithmetic observations only |
+
+A coherent column is an ARITHMETIC OBSERVATION. This does not conclude that the row is a total,
+does not look at row labels, and does not report an incoherent table as wrong — plenty of
+legitimate tables have no total row. The count is a comparison signal between models on the same
+filing, nothing more. Anything richer runs into rules.md invariant 14.
+
+## Comment — `comments/<comment_id>.yaml`
+
+One developer evaluation comment, bound to the artifact VERSION it targeted.
+
+| Field | Meaning |
+|---|---|
+| `comment_id` | `cmt_` identifier |
+| `parent_run_id` | The run it belongs to |
+| `child_job_id` | The filing job, or null for a run-level comment |
+| `target_type` | What kind of thing is being commented on |
+| `target_id` | Which one |
+| `target_version` | Which VERSION of it |
+| `author` | Who wrote it |
+| `created_at` | ISO-8601 UTC |
+| `text` | The comment |
+| `status` | Defaults to `OPEN` |
+| `tags` | Free-form labels |
+
+`target_version` matters: a comment written against attempt 1 does not silently become a comment
+about attempt 2.
+
+**Comments are DATA.** They are rendered as text and are never placed into any model-visible
+content. A filing, and anything a reviewer writes beside it, is untrusted input to a model.
+
+## Review transition — inside `job.yaml`
+
+| Field | Meaning |
+|---|---|
+| `at` | ISO-8601 UTC |
+| `author` | Who decided |
+| `from_state` / `to_state` | The move, with the illegal ones already refused |
+| `note` | Why, or null |
+
+Appended, never rewritten. rules.md invariant 7 forbids overwriting an accepted decision, and a
+review trail that can be edited is not a trail.
+
+## Run event — `events/<sequence>.txt`
+
+| Field | Meaning |
+|---|---|
+| `sequence` | Monotonic within the run; the filename carries it zero-padded to eight digits |
+| `at` | ISO-8601 UTC |
+| `kind` | e.g. `execution.running`, `review.approved`, `comment.added`, `invocation.recovered` |
+| `job_id` | The child job, or empty for a run-level event |
+| `message` | A short human sentence |
+
+**No provider data and no filing text.** Filing text may be very large and may carry an instruction
+a prompt injection placed inside a filing; provider payloads may carry request identifiers a
+browser has no business seeing. Both go to the evaluation store and are REFERENCED from an event,
+never streamed through one.
+
+## Spend-journal entry — `spend-journal.yaml`, `spend-journal-v1`
+
+Cumulative authorized spend, durable across restarts. `packages/orchestrator.spend_journal`.
+
+| Document field | Meaning |
+|---|---|
+| `schema_version` | `spend-journal-v1` |
+| `ceiling_usd` | Decimal text. The authorized CUMULATIVE ceiling |
+| `spent_usd` | Decimal text. DERIVED as the sum of `amount_usd - released_usd`, rewritten on save |
+| `entries` | Every reservation and settlement, in order |
+
+| Entry field | Meaning |
+|---|---|
+| `at` | ISO-8601 UTC |
+| `kind` | `RESERVATION` or `SETTLEMENT` |
+| `run_id` / `job_id` | What the money was spent on |
+| `model_label` | Which model, by LABEL |
+| `amount_usd` | Decimal text. The worst-case bound on a reservation; the measured cost on a settlement |
+| `released_usd` | Decimal text. Zero on a reservation; the reservation being replaced on a settlement |
+| `note` | The token counts behind the amount, stated as bound or as measured |
+
+**Why the in-memory ledger is not enough.** `packages/model_catalog.SpendLedger` bounds the worst
+case of one invocation and reserves before the call, which is right and lives entirely in memory. A
+ceiling that starts again at zero when the server restarts is not a ceiling; it is a per-process
+suggestion. The authorized Phase 2 ceiling is CUMULATIVE, so the total has to outlive the process
+that spent it. The journal is append-only and the total is recomputed from it at construction.
+
+**Reserve before, settle after, and charge failures.** A reservation is charged immediately. A
+billable request that fails still cost money, and a ledger that only charged successes would let a
+run of rejections walk straight past the ceiling. A settlement records both the reservation it
+replaces and the measured amount, so the arithmetic is auditable rather than merely stated.
+
+**Refusal is refusal.** When the bound would push cumulative spend past the ceiling the invocation
+is refused with the numbers in the message. Nothing is shrunk, dropped or downgraded to fit.
+
+## What these records deliberately do not carry
+
+No content-unit type. No section kind. No universal hierarchy. No filing taxonomy. No enum of
+filing sections anywhere in `packages/coverage_validation` — `model_selected_types` is a census of
+strings the model chose, and the elastic reader preserves every key it does not recognise in
+`extra` rather than dropping it. The whole point of the first experiments is to find out what
+models actually emit, and a reader that silently discarded the surprising half would guarantee the
+surprise was never seen.
+
+No table, column, index, constraint, foreign key or migration. No Redis. **No final persistence:**
+it is PLANNED for `roadmap.md` Phase 4 and is DEFERRED until measured artifacts exist to design it
+from.
+
+---
+
 # HISTORICAL — describes the withdrawn application schema, which was DELETED on 2026-08-03. No table below exists.
+
+> **FORWARD NOTE, 2026-08-03 (Phase 2).** Phase 2 revived none of what follows. It built no
+> database, no ORM, no migration, no index and no table; the evaluation records described in the
+> section above are YAML manifests in a gitignored local directory and are explicitly not a schema.
+> The record below stands unchanged as the reasoning behind a withdrawn design.
 
 Everything from here to the end of the file is a **record of a design that was withdrawn**. It is
 kept, not deleted, so the reasoning survives and is not re-derived — the mistake ADR-0016 and

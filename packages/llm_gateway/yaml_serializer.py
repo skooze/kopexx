@@ -38,6 +38,21 @@ IDENTIFIER_KEYS: Final[frozenset[str]] = frozenset(
         "run_id",
         "job_id",
         "session_id",
+        # Added by Phase 2, each because a REAL payload carries it and each because the value can
+        # be all digits. A SHA-256 is hexadecimal and is all-digit roughly once in ten trillion
+        # documents, which is exactly the frequency at which an unquoted identifier defect is
+        # impossible to reproduce and impossible to explain.
+        "sha256",
+        "comment_id",
+        "parent_run_id",
+        "child_job_id",
+        "source_set_id",
+        "prompt_id",
+        "target_id",
+        "target_version",
+        "invocation_id",
+        "form_as_filed",
+        "sequence_number",
         "id",
         "number",
         "fiscal_period",

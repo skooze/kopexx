@@ -7,8 +7,15 @@ by whoever happened to run a parser by hand — the Commit 2 report recorded tha
 executes and nothing validates drifts silently, and this one is load-bearing: the UX
 specification, the data dictionary and the roadmap are all written to agree with it.
 
-WHAT THIS DELIBERATELY DOES NOT DO. It does not implement, mock, or serve the API, and it asserts
-nothing about what any operation should return. The response shapes here are provisional and are
+UPDATED IN PHASE 2, BECAUSE PART OF IT IS NOW REAL. The parser-review application is implemented
+and served by `packages/review_api`. This file therefore does one thing it could not do before: it
+compares the document against the application's OWN ROUTE TABLE in BOTH directions. An operation
+marked IMPLEMENTED that no route serves fails the build, and a route the application serves that
+the document does not describe fails it too. A one-directional check would let the specification
+quietly fall behind the code, which is the failure this whole file exists to prevent.
+
+WHAT THIS STILL DELIBERATELY DOES NOT DO. It does not mock or serve the API, and it asserts nothing
+about what any operation should RETURN. The beta response shapes remain provisional and are
 redesigned once real model artifacts exist.
 
 THE JSON HERE IS CORRECT AND IS NOT A BOUNDARY VIOLATION. This document describes browser-facing
@@ -29,9 +36,13 @@ SPEC = REPO_ROOT / "docs" / "api" / "openapi.yaml"
 
 pytestmark = pytest.mark.architecture
 
-# Only these statuses may appear. `IMPLEMENTED` is deliberately absent: nothing is, and adding it
-# here is the edit that would have to be justified, rather than a value that slips in unnoticed.
-ALLOWED_STATUSES = frozenset({"PLANNED"})
+# Only these two statuses may appear.
+#
+# `IMPLEMENTED` WAS ADDED IN PHASE 2, AND ADDING IT WAS THE EDIT THAT HAD TO BE JUSTIFIED — which
+# is exactly why the set was written this way. It is justified by
+# `test_every_implemented_operation_is_actually_served`, which makes the value checkable rather
+# than a claim: an operation may call itself implemented only while a real route answers it.
+ALLOWED_STATUSES = frozenset({"PLANNED", "IMPLEMENTED"})
 
 HTTP_METHODS = frozenset({"get", "put", "post", "delete", "options", "head", "patch", "trace"})
 
@@ -173,14 +184,69 @@ def test_every_operation_declares_an_honest_implementation_status(spec: dict[str
     )
 
 
-def test_the_document_states_plainly_that_nothing_is_implemented(spec: dict[str, Any]) -> None:
-    """A status extension is machine-readable. A human reads the description first."""
+def test_the_document_states_plainly_what_is_and_is_not_implemented(spec: dict[str, Any]) -> None:
+    """A status extension is machine-readable. A human reads the description first.
+
+    The document used to say NOTHING was implemented, and that was true. Part of it now is, so the
+    assertion changed from "must say nothing is built" to "must say plainly which half is which".
+    The version still may not look released: a partially implemented contract carrying 1.0.0 would
+    imply a stability nothing here has.
+    """
     info = spec.get("info", {})
     text = f"{info.get('summary', '')} {info.get('description', '')}".upper()
-    assert "NOT IMPLEMENTED" in text, "info must state that no endpoint has been built"
-    assert str(info.get("version", "")).startswith("0.0.0"), (
-        f"an unimplemented contract must not carry a released-looking version: {info.get('version')}"
+    assert "NOT IMPLEMENTED" in text, "info must still name the half that has not been built"
+    assert "IMPLEMENTED" in text, "info must name the half that has"
+    version = str(info.get("version", ""))
+    assert version.startswith("0."), (
+        f"a partly implemented contract must not carry a released-looking version: {version}"
     )
+
+
+def test_every_implemented_operation_is_actually_served(spec: dict[str, Any]) -> None:
+    """The specification and the application must not be able to drift apart.
+
+    Checked in BOTH directions on purpose. A one-directional check catches a specification that
+    over-claims and misses one that has fallen behind — and a contract missing an endpoint the
+    application really serves is the more dangerous of the two, because nothing else in the
+    repository would ever notice.
+
+    The application is constructed with no service, no worker and no policy. Registration only
+    binds methods to paths; nothing is invoked, so this needs no store, no catalog, no snapshot and
+    no network.
+    """
+    from packages.review_api.handlers import ReviewApp
+
+    served = set(ReviewApp(service=None, worker=None, policy=None).router.implemented())
+    declared = {
+        (method.upper(), path)
+        for path, method, operation in _operations(spec)
+        if operation.get("x-implementation-status") == "IMPLEMENTED"
+    }
+    assert served, "the application registered no routes; this guard would enforce nothing"
+    missing_from_spec = sorted(served - declared)
+    missing_from_app = sorted(declared - served)
+    assert not missing_from_spec, (
+        "the application serves routes the contract does not describe as IMPLEMENTED: "
+        f"{missing_from_spec}"
+    )
+    assert not missing_from_app, (
+        f"the contract claims routes the application does not serve: {missing_from_app}"
+    )
+
+
+def test_planned_operations_are_not_served_by_the_application(spec: dict[str, Any]) -> None:
+    """A PLANNED operation that quietly acquired a route is an unlabelled implementation."""
+    from packages.review_api.handlers import ReviewApp
+
+    served = set(ReviewApp(service=None, worker=None, policy=None).router.implemented())
+    planned = {
+        (method.upper(), path)
+        for path, method, operation in _operations(spec)
+        if operation.get("x-implementation-status") == "PLANNED"
+    }
+    assert planned, "no PLANNED operations remain; this guard would enforce nothing"
+    overlap = sorted(served & planned)
+    assert not overlap, f"these operations are served but still marked PLANNED: {overlap}"
 
 
 def test_no_operation_exposes_a_provider_credential_or_endpoint(spec: dict[str, Any]) -> None:

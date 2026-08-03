@@ -94,12 +94,62 @@ class LlmSettings:
 
 
 @dataclass(frozen=True)
+class ReviewSettings:
+    """The parser-review application: where it binds, what it may spend, where evidence goes.
+
+    LOOPBACK IS THE DEFAULT AND BINDING BEYOND IT IS A DELIBERATE ACT. `docs/architecture` and
+    roadmap.md Phase 6 both require the same minimum before anything leaves the loopback interface:
+    a development authentication secret from ignored environment state, server-side sessions, CSRF
+    protection on state-changing requests, same-origin requests, no permissive CORS, and no
+    provider credential in the browser. `__post_init__` refuses to construct a LAN-bound
+    configuration without the secret, so the unsafe combination cannot be reached by forgetting
+    something.
+
+    THE COST CEILING IS CUMULATIVE AND HAS NO DEFAULT ABOVE ZERO BY ACCIDENT. It is stated here in
+    one place, passed to the durable spend journal, and shown in the UI before any run.
+    """
+
+    bind_host: str = "127.0.0.1"
+    bind_port: int = 8765
+    dev_auth_secret: str | None = None
+    evaluation_root: str = "./var/evaluation-runs"
+    prompt_directory: str = "./prompts/parser"
+    capability_snapshot: str = "./docs/llm/bedrock-capability-snapshot.yaml"
+    corpus_manifest: str = "./var/research-corpus/meta/filings.json"
+    author_label: str = "local-developer"
+    cost_ceiling_usd: str = "5.00"
+    max_concurrent_invocations: int = 1
+    allow_sec_fetch: bool = True
+
+    @property
+    def loopback_only(self) -> bool:
+        return self.bind_host in {"127.0.0.1", "::1", "localhost"}
+
+    def __post_init__(self) -> None:
+        if not self.loopback_only and not self.dev_auth_secret:
+            raise ValueError(
+                f"bind_host {self.bind_host!r} leaves the loopback interface and no development "
+                "authentication secret is configured. An unauthenticated review UI on a LAN "
+                "exposes preserved filings, run evidence and a control that spends money. Set "
+                "REVIEW_DEV_SECRET in ignored environment state, or bind to 127.0.0.1."
+            )
+        if self.dev_auth_secret is not None and len(self.dev_auth_secret) < 16:
+            raise ValueError(
+                "the development authentication secret must be at least 16 characters; a short "
+                "one is guessable in the time a LAN scan takes"
+            )
+        if self.max_concurrent_invocations < 1:
+            raise ValueError("max_concurrent_invocations must be at least 1")
+
+
+@dataclass(frozen=True)
 class Settings:
     """Top-level application settings."""
 
     sec: SecAccessSettings
     storage: StorageSettings = field(default_factory=StorageSettings)
     llm: LlmSettings = field(default_factory=LlmSettings)
+    review: ReviewSettings = field(default_factory=ReviewSettings)
     environment: str = "local"
 
     @classmethod
@@ -126,6 +176,25 @@ class Settings:
                 # No fallback. An absent AWS_REGION stays absent and is rejected by
                 # LlmSettings.__post_init__ for any provider that actually needs one.
                 region=source.get("AWS_REGION") or None,
+            ),
+            review=ReviewSettings(
+                bind_host=source.get("REVIEW_BIND_HOST", "127.0.0.1"),
+                bind_port=int(source.get("REVIEW_BIND_PORT", "8765")),
+                # No default and no placeholder. An empty placeholder documents an unsafe design
+                # as the expected one; absent means loopback-only, which is the safe state.
+                dev_auth_secret=source.get("REVIEW_DEV_SECRET") or None,
+                evaluation_root=source.get("EVALUATION_ROOT", "./var/evaluation-runs"),
+                prompt_directory=source.get("PROMPT_DIRECTORY", "./prompts/parser"),
+                capability_snapshot=source.get(
+                    "CAPABILITY_SNAPSHOT", "./docs/llm/bedrock-capability-snapshot.yaml"
+                ),
+                corpus_manifest=source.get(
+                    "CORPUS_MANIFEST", "./var/research-corpus/meta/filings.json"
+                ),
+                author_label=source.get("REVIEW_AUTHOR", "local-developer"),
+                cost_ceiling_usd=source.get("COST_CEILING_USD", "5.00"),
+                max_concurrent_invocations=int(source.get("MAX_CONCURRENT_INVOCATIONS", "1")),
+                allow_sec_fetch=source.get("ALLOW_SEC_FETCH", "true").lower() != "false",
             ),
             environment=source.get("ENVIRONMENT", "local"),
         )

@@ -34,6 +34,16 @@
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
+>
+> **SUPERSEDED 2026-08-03 BY PHASE 2, ADDITIVELY.** The statement above was true when it was
+> written and is kept for that reason (`rules.md` section 21 rule 16). It is no longer true:
+> AWS IS configured, a real Bedrock adapter EXISTS in `packages/llm_gateway/providers/bedrock.py`,
+> and SEC filings HAVE been sent to real models — three preserved filings across five candidates
+> under two prompt versions. See `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`.
+>
+> **WHAT IS STILL TRUE.** No application database exists. No Redis exists. No summary artifact, no
+> image artifact and no chat session exists — Phase 2 ran the PARSING stage only, and the
+> orchestrator raises rather than running another. Nothing is deployed.
 
 ---
 
@@ -88,9 +98,58 @@ reconciled afterwards.
 An incompatible filing/model pairing costs nothing, because it is refused before invocation.
 
 
-IMPLEMENTATION STATUS: PLANNED — first measured in Phase 2, which is an explicit go/no-go on unit
-economics
+IMPLEMENTATION STATUS: cost authorization, the pre-spend bound and the durable cumulative ceiling
+are IMPLEMENTED. The corpus-scale extrapolation below remains PLANNED — Phase 2 measured three
+filings, and three filings is not a denominator.
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
+
+---
+
+# WHAT PHASE 2 ACTUALLY MEASURED — added 2026-08-03
+
+**THE PRICE INPUTS WERE ALREADY REAL. THE TOKEN COUNTS NOW ARE TOO.** Phase 1 verified official
+published prices; Phase 2 sent filings to models and recorded what the provider reported. The
+per-filing figures, the per-model comparison and the measured spend are in
+`../sprints/PHASE-0002-parser-experiments-and-review-ui.md` and `model-benchmark.md`, and they are
+not repeated here — a number recorded twice drifts, and this document's job is the formula.
+
+**WHAT IS NOW ENFORCED IN CODE, NOT MERELY SPECIFIED.**
+
+```
+the bound            packages/model_catalog.PriceInputs.cost, in Decimal, from the reviewed
+                     snapshot. The worst case is computed from the largest input and output the
+                     request can consume, never from an average.
+the reservation      packages/orchestrator.SpendJournal.authorize charges the worst case BEFORE
+                     the call and refuses when it would breach the cumulative ceiling.
+the settlement       .settle replaces the reservation with the provider-reported usage.
+durability           the journal is written to the evaluation store and re-derived at start-up. A
+                     ceiling that resets when the process does is a per-process suggestion, and
+                     this one does not.
+failures are charged a billable request that failed still cost money. Charging only successes
+                     would let a run of rejections walk past the ceiling.
+no SDK retry         the provider client is configured for ONE total attempt. botocore retries by
+                     default, and a retry inside the SDK is a second charge the journal never sees.
+```
+
+**THE ESTIMATE-VERSUS-MEASUREMENT GAP IS NOW DATA (R-24).** The pre-spend guard uses a character
+ratio, which is an upper bound and not a count. Every invocation records the estimate beside the
+provider-reported input tokens, so the size of that gap is measured per filing rather than
+asserted. The comparison is in the benchmark document.
+
+**STILL NOT MEASURED, AND NAMED SO NOBODY EXTRAPOLATES ANYWAY.**
+
+```
+image input tokens   Bedrock bills image input as input tokens and publishes no conversion. The
+                     pre-spend bound charges a deliberately generous UNVERIFIED constant.
+repeat-run variance  no filing was parsed twice by the same model. A rerun is billable and none
+                     was authorized.
+a filing that does   the shared benchmark could only contain filings that fit every candidate, so
+   NOT fit           the cost of the 44 percent of primary documents above ~200k estimated tokens
+                     remains unmeasured. That is R-21, and it is untouched.
+corpus scale         three filings is not a denominator. Nothing here multiplies up to a corpus.
+```
+
+---
 
 ## Why the previous estimate was withdrawn — twice. HISTORICAL.
 

@@ -20,19 +20,174 @@
 > RUN.** The verified identifiers, regions, modalities, limits and prices are in
 > `bedrock-capability-snapshot.yaml` and are not repeated here.
 >
-> **NO SEC FILING HAS BEEN SENT TO ANY MODEL.** Authoritative:
-> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
-> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
+> **UPDATED 2026-08-03 BY PHASE 2. THE TWO NOTES ABOVE ARE SUPERSEDED, AND EXACTLY ONE OF THEM WAS
+> ABOUT SOMETHING THAT CHANGED.** SEC filings HAVE now been sent to models, a shared cross-model
+> benchmark HAS been run, and results ARE claimed — for three filings, under two prompt versions,
+> against five candidates. The prohibition on grading a parsing model against a deterministic parse
+> is UNCHANGED and was honoured: every check in this benchmark compares a response to the PRESERVED
+> SOURCE BYTES, and no second parse exists to compare it to.
+>
+> Authoritative: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
+> `docs/adr/ADR-0019-parser-review-application-over-a-framework.md` and `roadmap.md`.
 
 ---
 
-# CURRENT DIRECTION — AUTHORITATIVE. Everything below this section is historical.
+# PHASE 2 — THE FIRST SHARED CROSS-MODEL BENCHMARK (2026-08-03)
 
-**NO BENCHMARK HAS BEEN RUN. NO MODEL HAS BEEN INVOKED. NO RESULT IS CLAIMED.**
+**THREE FILINGS IS NOT A CORPUS, AND NOTHING HERE GENERALISES.** The Phase 2 benchmark was
+deliberately small: a shared set that every candidate could receive INTACT, so the comparison is
+between models rather than between what each model happened to be given. `rules.md` section 21
+rule 14 forbids generalising a corpus conclusion from one issuer; the same logic forbids
+generalising a model conclusion from three filings, and this document does not.
 
-This document describes what will be measured in Phase 2. It reports nothing, because nothing has
-been measured. Any number below this line that looks like a result is a worked example or a
-placeholder.
+## What was measured, and what could not be
+
+```
+MEASURED     request accepted; response received; exact response bytes; valid YAML; visible answer
+             separated from reasoning content; output truncation; node count; table count;
+             model-selected type vocabulary; source-reference count; references RESOLVED against
+             the preserved bytes, and how; ambiguous and unresolved references; artifacts cited;
+             declared unresolved content; image coverage; generic numeric signals; latency;
+             provider-reported input and output tokens; measured cost.
+
+NOT MEASURED repeat-run variability — no filing was parsed twice by the same model, because a
+             rerun is billable and none was authorized. That is R-23 and it is untouched.
+
+             Behaviour on a filing that does NOT fit — by construction the shared set could not
+             contain one. That is R-21 and it is untouched.
+
+             Parse ACCURACY. Nothing here says a parse is correct. What it says is that a citation
+             resolves in the source or does not, and that a reported number occurs in the source or
+             does not. Correctness is a human judgement made in the review UI.
+```
+
+## The selection constraint, stated plainly
+
+The binding constraint was the **smallest verified output limit**, not the smallest context. Every
+candidate's context comfortably held every benchmark filing. Three of the five have an 8,000-token
+output cap, and a complete structured parse of even a small filing can exceed it — which turned out
+to be the single most discriminating fact the benchmark found.
+
+## Results
+
+### Prompt version 1
+
+**B1 — Walmart 10-K 1995, pre-1996 SGML, complete submission**  
+`0000104169-95-000004`
+
+| model | region | in | out | cap | stop | ms | USD | verdict | nodes | tables | refs resolved | types | numbers in source |
+|---|---|---:|---:|---:|---|---:|---:|---|---:|---:|---|---:|---|
+| GPT OSS 120B | us-east-1 | 23,091 | 4,250 | 15,913 | `end_turn` | 71,500 | 0.00601365 | PARTIAL | 27 | 1 | 20/25 | 7 | 19/19 |
+| NVIDIA Nemotron 3 Super 120B | us-east-1 | 27,919 | 5,857 | 15,913 | `end_turn` | 50,009 | 0.00799490 | UNPARSEABLE (html_markup) | 0 | 0 | — | 0 | — |
+| Qwen3 235B A22B | us-west-2 | 26,617 | 8,000 | 8,000 | `max_tokens` | 91,673 | 0.01289574 | UNPARSEABLE (xml_tag) | 0 | 0 | — | 0 | — |
+| Llama 4 Maverick | us-east-1 | 22,983 | 688 | 8,000 | `end_turn` | 4,746 | 0.00618328 | UNPARSEABLE (markdown_fence, inline_backtick, yaml_preamble, yaml_postamble) | 0 | 0 | — | 0 | — |
+| Qwen3 VL 235B | us-east-1 | 26,616 | 8,000 | 8,000 | `max_tokens` | 137,251 | 0.03538648 | UNPARSEABLE (xml_tag, markdown_fence, inline_backtick, yaml_preamble) | 0 | 0 | — | 0 | — |
+
+**B2 — Macy's 10-Q/A 2025, inline XBRL, image-bearing**  
+`0000794367-25-000156`
+
+| model | region | in | out | cap | stop | ms | USD | verdict | nodes | tables | refs resolved | types | numbers in source |
+|---|---|---:|---:|---:|---|---:|---:|---|---:|---:|---|---:|---|
+| GPT OSS 120B | us-east-1 | 19,385 | 9,676 | 10,661 | `end_turn` | 40,798 | 0.00871335 | PARTIAL | 34 | 0 | 40/42 | 20 | 19/19 |
+| NVIDIA Nemotron 3 Super 120B | us-east-1 | 22,368 | 6,469 | 10,661 | `end_turn` | 111,125 | 0.00756005 | UNPARSEABLE (xbrl_tag, html_markup) | 0 | 0 | — | 0 | — |
+| Qwen3 235B A22B | us-west-2 | 21,446 | 5,711 | 8,000 | `end_turn` | 82,179 | 0.00974380 | REVIEW_REQUIRED | 31 | 4 | 31/31 | 26 | 15/15 |
+| Llama 4 Maverick | us-east-1 | 20,009 | 1,103 | 8,000 | `end_turn` | 5,202 | 0.00587207 | UNPARSEABLE (markdown_fence, inline_backtick, yaml_preamble, yaml_postamble) | 0 | 0 | — | 0 | — |
+| Qwen3 VL 235B | us-east-1 | 21,576 | 1,722 | 8,000 | `end_turn` | 43,192 | 0.01601580 | UNPARSEABLE (markdown_fence, inline_backtick, yaml_preamble, yaml_postamble) | 0 | 0 | — | 0 | — |
+
+**B3 — 3M 10-K405 1996, Item-405 form, complete submission**  
+`0000066740-96-000005`
+
+| model | region | in | out | cap | stop | ms | USD | verdict | nodes | tables | refs resolved | types | numbers in source |
+|---|---|---:|---:|---:|---|---:|---:|---|---:|---:|---|---:|---|
+| GPT OSS 120B | us-east-1 | 35,607 | 5,375 | 16,000 | `end_turn` | 14,835 | 0.00856605 | PARTIAL | 31 | 4 | 29/31 | 4 | 30/31 |
+| NVIDIA Nemotron 3 Super 120B | us-east-1 | 41,014 | 7,547 | 24,044 | `end_turn` | 80,093 | 0.01105765 | UNPARSEABLE (xml_tag) | 0 | 0 | — | 0 | — |
+| Qwen3 235B A22B | us-west-2 | 39,615 | 8,000 | 8,000 | `max_tokens` | 144,304 | 0.01575530 | UNPARSEABLE | 0 | 0 | — | 0 | — |
+| Llama 4 Maverick | us-east-1 | 35,495 | 1,047 | 8,000 | `end_turn` | 6,468 | 0.00953439 | UNPARSEABLE (markdown_fence, inline_backtick, yaml_preamble, yaml_postamble) | 0 | 0 | — | 0 | — |
+| Qwen3 VL 235B | us-east-1 | 39,614 | 8,000 | 8,000 | `max_tokens` | 144,740 | 0.04227542 | UNPARSEABLE (xml_tag, markdown_fence, inline_backtick, yaml_preamble) | 0 | 0 | — | 0 | — |
+
+
+### Prompt version 2
+
+**B1 — Walmart 10-K 1995, pre-1996 SGML, complete submission**  
+`0000104169-95-000004`
+
+| model | region | in | out | cap | stop | ms | USD | verdict | nodes | tables | refs resolved | types | numbers in source |
+|---|---|---:|---:|---:|---|---:|---:|---|---:|---:|---|---:|---|
+| GPT OSS 120B | us-east-1 | 23,323 | 4,650 | 16,000 | `end_turn` | 28,141 | 0.00628845 | PARTIAL | 24 | 4 | 24/24 | 5 | 10/10 |
+| NVIDIA Nemotron 3 Super 120B | us-east-1 | 28,154 | 6,512 | 16,086 | `end_turn` | 76,496 | 0.00845590 | UNPARSEABLE (html_markup) | 0 | 0 | — | 0 | — |
+| Qwen3 235B A22B | us-west-2 | 26,849 | 8,000 | 8,000 | `max_tokens` | 170,556 | 0.01294678 | UNPARSEABLE (html_markup) | 0 | 0 | — | 0 | — |
+| Llama 4 Maverick | us-east-1 | 23,216 | 645 | 8,000 | `end_turn` | 4,023 | 0.00619749 | PARTIAL | 5 | 0 | 4/5 | 5 | 5/5 |
+| Qwen3 VL 235B | us-east-1 | 26,848 | 5,294 | 8,000 | `end_turn` | 85,995 | 0.02831148 | REVIEW_REQUIRED | 26 | 2 | 26/26 | 23 | 4/4 |
+
+**B2 — Macy's 10-Q/A 2025, inline XBRL, image-bearing**  
+`0000794367-25-000156`
+
+| model | region | in | out | cap | stop | ms | USD | verdict | nodes | tables | refs resolved | types | numbers in source |
+|---|---|---:|---:|---:|---|---:|---:|---|---:|---:|---|---:|---|
+| GPT OSS 120B | us-east-1 | 19,617 | 2,469 | 10,834 | `end_turn` | 15,948 | 0.00442395 | PARTIAL | 9 | 1 | 8/9 | 7 | 4/4 |
+| NVIDIA Nemotron 3 Super 120B | us-east-1 | 22,603 | 10,834 | 10,834 | `max_tokens` | 122,937 | 0.01043255 | UNPARSEABLE (xbrl_tag, html_markup) | 0 | 0 | — | 0 | — |
+| Qwen3 235B A22B | us-west-2 | 21,678 | 2,441 | 8,000 | `end_turn` | 31,871 | 0.00691724 | PARTIAL | 9 | 0 | 17/17 | 5 | 6/6 |
+| Llama 4 Maverick | us-east-1 | 20,242 | 1,376 | 8,000 | `end_turn` | 6,798 | 0.00619280 | PARTIAL | 6 | 0 | 1/6 | 4 | 5/5 |
+| Qwen3 VL 235B | us-east-1 | 21,808 | 1,590 | 8,000 | `end_turn` | 25,209 | 0.01578764 | REVIEW_REQUIRED | 7 | 0 | 7/7 | 5 | 2/2 |
+
+**B3 — 3M 10-K405 1996, Item-405 form, complete submission**  
+`0000066740-96-000005`
+
+| model | region | in | out | cap | stop | ms | USD | verdict | nodes | tables | refs resolved | types | numbers in source |
+|---|---|---:|---:|---:|---|---:|---:|---|---:|---:|---|---:|---|
+| GPT OSS 120B | us-east-1 | 35,839 | 4,033 | 16,000 | `end_turn` | 13,534 | 0.00779565 | PARTIAL | 25 | 0 | 21/23 | 4 | 11/11 |
+| NVIDIA Nemotron 3 Super 120B | us-east-1 | 41,249 | 24,217 | 24,217 | `max_tokens` | 311,241 | 0.02192840 | UNPARSEABLE (yaml_preamble) | 0 | 0 | — | 0 | — |
+| Qwen3 235B A22B | us-west-2 | 39,847 | 8,000 | 8,000 | `max_tokens` | 79,015 | 0.01580634 | PARTIAL | 73 | 0 | 69/72 | 68 | 24/24 |
+| Llama 4 Maverick | us-east-1 | 35,728 | 1,119 | 8,000 | `end_turn` | 7,068 | 0.00966015 | PARTIAL | 7 | 0 | 7/7 | 7 | 13/13 |
+| Qwen3 VL 235B | us-east-1 | 39,846 | 8,000 | 8,000 | `max_tokens` | 151,531 | 0.04239838 | UNPARSEABLE | 0 | 0 | — | 0 | — |
+
+
+### Estimate versus provider count (R-24)
+
+| model | filing | estimated input | measured input | estimate / measured |
+|---|---|---:|---:|---:|
+| GPT OSS 120B | B3 | 40,361 | 35,839 | 1.13 |
+| GPT OSS 120B | B1 | 26,809 | 23,323 | 1.15 |
+| GPT OSS 120B | B2 | 18,056 | 19,617 | 0.92 |
+| Llama 4 Maverick | B3 | 40,361 | 35,728 | 1.13 |
+| Llama 4 Maverick | B1 | 26,809 | 23,216 | 1.15 |
+| Llama 4 Maverick | B2 | 22,003 | 20,242 | 1.09 |
+| NVIDIA Nemotron 3 Super 120B | B3 | 40,361 | 41,249 | 0.98 |
+| NVIDIA Nemotron 3 Super 120B | B1 | 26,809 | 28,154 | 0.95 |
+| NVIDIA Nemotron 3 Super 120B | B2 | 18,056 | 22,603 | 0.80 |
+| Qwen3 235B A22B | B3 | 40,361 | 39,847 | 1.01 |
+| Qwen3 235B A22B | B1 | 26,809 | 26,849 | 1.00 |
+| Qwen3 235B A22B | B2 | 18,056 | 21,678 | 0.83 |
+| Qwen3 VL 235B | B3 | 40,361 | 39,846 | 1.01 |
+| Qwen3 VL 235B | B1 | 26,809 | 26,848 | 1.00 |
+| Qwen3 VL 235B | B2 | 22,003 | 21,808 | 1.01 |
+
+### Totals
+
+- child jobs: **30**
+- measured Bedrock spend: **USD 0.40711113**
+- prompt v1: 15 invocations, **4 produced a readable parse**, USD 0.20356793
+- prompt v2: 15 invocations, **10 produced a readable parse**, USD 0.20354320
+
+## Prompt versions
+
+Two versions were used, and the second exists for an objective format defect rather than to
+improve any model's score. `rules.md` and the Phase 2 brief permit a new version when the YAML is
+invalid; they prohibit tuning until each model looks successful. Both versions and every result
+they produced are preserved. The manifest is `../../prompts/parser/versions.yaml`.
+
+## Where the evidence lives
+
+Every run is open in the parser-review UI by its parent run identifier. For each child job the
+evaluation store holds the exact prompt bytes, the exact instruction, the exact submitted source
+artifacts, the provider transport envelopes in both directions, the exact visible response, the
+reasoning content when the model produced any, the validation record, and the cost. None of it is
+tracked by git; it is host state under the ignored `var/evaluation-runs/`.
+
+---
+
+# WHAT PHASE 2 SET OUT TO MEASURE — retained as the specification the run was made against
 
 ## The candidates
 

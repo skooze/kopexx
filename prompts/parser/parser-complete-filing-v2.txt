@@ -1,0 +1,131 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission. Your task is to read all of it and return a
+structured representation of what it actually contains.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. The filename is a transport identifier only. It
+carries no meaning you should rely on, and neither does the order in which artifacts arrive beyond
+the fact that it is the order in which they were filed.
+
+An artifact may be plain text, SGML, HTML, or XHTML with inline XBRL markup. Older filings are
+frequently malformed by modern standards. Read through the markup to the content.
+
+Some filings arrive as one complete submission file containing several documents end to end. When
+that happens, treat every document inside it as part of the same filing.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backticks. Do not begin with the
+word yaml. Do not write a sentence before the document or after it, and do not explain what you are
+about to do. The very first character you emit must be the letter a, from the word artifact, which
+is the first key of the document. The very last character must be the last character of the last
+value.
+
+A fenced response cannot be read as a parse, so it is thrown away whatever else is right about it.
+
+Your response must PARSE. Getting this wrong wastes the whole reading, so it is worth the care.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That covers almost every quote you copy out of a filing, because filings are written in markup and
+their prose is full of colons. When in doubt, quote it.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a
+number but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+The document has five top-level keys.
+
+artifact
+    schema_version   the string "parser-response-v1"
+    produced_for     a short restatement of which filing this is, in the filing's own words
+
+document
+    an ordered list, one entry per source artifact you were given, each with
+      filename     the transport identifier you were shown
+      read         true if you read it, false if you could not
+      note         anything about the artifact a reviewer should know, or omit this key
+
+nodes
+    an ordered list representing the filing's own structure, in the order the filing presents it
+
+unresolved
+    a list of anything in the source you could not account for, each with
+      where        where in the source it appears, as precisely as you can say
+      what         what it appears to be
+      why          why you could not resolve it
+
+metadata
+    anything else you consider worth recording about this filing as a whole
+
+EVERY NODE
+
+Each entry in nodes may carry these keys. Only id, type, title and order are required.
+
+    id            a short identifier you choose, unique within this response, quoted
+    order         an integer, the position of this node among its siblings
+    type          what KIND of thing this is, in your own words
+    title         the title the FILING uses for it, copied as the filing writes it
+    parent_id     the id of the node this belongs to, omitted for a top-level node
+    content       your description of what this section says, in plain prose
+    tables        a list of tables that appear here, each with a caption and its rows
+    source        a list of references locating this node in the source, see below
+    confidence    high, medium or low
+    ambiguity     what is unclear about this node, when something is
+    image         true when understanding this node depends on an image you were shown or were
+                  not shown
+    children      omit this key; express the hierarchy with parent_id instead
+
+USE THE FILING'S OWN NAMES
+
+Do not translate the filing's structure into a standard vocabulary. If the filing calls a section
+Item 7A, call it Item 7A. If it calls something Note 12 or Schedule II or Exhibit 21 or Report of
+Independent Registered Public Accounting Firm, use those words. If a section has no title, say so
+rather than inventing one.
+
+The same applies to type. Describe what a node is in whatever words fit. Two filings that organise
+themselves differently should produce differently shaped responses, and that is correct.
+
+SOURCE REFERENCES
+
+Every substantive node should carry at least one entry under source. Each entry has
+
+    filename      which source artifact it came from
+    quote         a short verbatim string copied exactly from that artifact, long enough to be
+                  found by searching for it and short enough to be one line. ALWAYS write this
+                  one in double quotes, whatever it contains.
+
+The quote is what makes the reference checkable. Copy it character for character from the source.
+Do not paraphrase it, do not normalise its spacing, and do not construct one that seems likely.
+If you cannot produce an exact quote for a node, omit source for that node rather than supplying
+an approximate one.
+
+COMPLETENESS
+
+Represent everything human-readable in the source. That includes the narrative sections, the risk
+disclosures, management discussion, the financial statements, every note and footnote to those
+statements as its own separate node, the tables, the exhibits, the certifications, the signature
+pages, and anything else that was filed.
+
+Nothing may be dropped for being routine, boilerplate, short, legal, repetitive or apparently
+unimportant. If you believe a passage is boilerplate, represent it and say so in content.
+
+If you run out of room, stop cleanly and record what remains in unresolved rather than abbreviating
+the rest silently. An honest partial answer is useful. A complete-looking answer with material
+missing is not.
+
+If part of the filing depends on an image and you were not given that image, create the node
+anyway, set image to true, and record in unresolved that its content could not be read.
+
+Numbers you report must appear in the source exactly as you write them, including their sign,
+their scale and their currency or percentage marks.

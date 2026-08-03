@@ -109,9 +109,12 @@ verified identifiers, regions, modalities, limits and prices live in exactly one
 `docs/llm/bedrock-capability-snapshot.yaml` — and `packages/model_catalog` is the only code that
 reads them. Do not copy a model fact anywhere else; a capability recorded twice drifts.
 
-**Reachable is not benchmarked.** Seven one-word invocations proved transport and authorization.
-Nothing is known about parse quality, real token counts or cost per filing, and the first measured
-figures are Phase 2.
+**Reachable is not benchmarked, and benchmarked is not accurate.** Phase 1's seven one-word
+invocations proved transport. Phase 2 measured real token counts, real cost and real format
+behaviour over three filings — and measured NOTHING about whether a parse is correct. Validation
+proves a citation resolves in the preserved bytes and a reported number occurs there; correctness
+is a human judgement made in the review UI. Repeat-run variability was not measured either: no
+filing was parsed twice by the same model, because a rerun is billable and none was authorized.
 
 **One issuer is a fixture, never a specification.** The architecture is derived from a measured
 corpus of 112 issuers and 613 filings across six transport eras — dated Phase 1 evidence, not a
@@ -224,16 +227,29 @@ The project is tracked in PHASES, not sprints. `roadmap.md` is authoritative.
 Phase 0    Representative filing corpus                  COMPLETE
 Phase 0.5  Repository cleanup and corpus reverification  COMPLETE
 Phase 1    Secure AWS and model-access verification      COMPLETE 2026-08-03
-Phase 2    Parser experiments AND the review UI, TOGETHER   NEXT — needs explicit authorization
+Phase 2    Parser experiments AND the review UI, TOGETHER   COMPLETE 2026-08-03
+Phase 2.5  BREADTH across all 22 substantive form strings   BLOCKED on a user decision about
+                                                            which parser and prompt version advances
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
            beta UI, Deep Dive, breadth                   NOT STARTED
 ```
 
-**NO SEC FILING HAS BEEN SENT TO ANY MODEL. NOTHING IS DEPLOYED. NO SUMMARY EXISTS. NO APPLICATION
-DATABASE EXISTS. NO PROVIDER ADAPTER EXISTS** — Phase 1 reached Bedrock with the AWS CLI, once, by
-hand, and `packages/model_catalog` holds no AWS import at all. Do not treat any cost figure as
-known: official price INPUTS are verified, the token counts they multiply are not, every parameter
-in `docs/llm/cost-model.md` is still a placeholder, and the first real measurement is Phase 2.
+**FILINGS HAVE NOW BEEN PARSED BY REAL MODELS.** A parser-only orchestration path, a durable
+evaluation store, a Bedrock runtime adapter, the four-role router, hash-locked prompt versions,
+generic output validation and a working parser-review UI all exist and run. `make review` starts
+the UI on `127.0.0.1`. Measured results, per-filing cost and the comparison are in
+`docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`; the decision record is ADR-0019.
+
+**STILL TRUE AFTER PHASE 2, AND NOT SMALL. NOTHING IS DEPLOYED. NO APPLICATION DATABASE EXISTS. NO
+REDIS EXISTS. NO SUMMARY, IMAGE OR CHAT ARTIFACT EXISTS** — Phase 2 ran the PARSING stage only and
+the orchestrator raises `StageNotAuthorizedError` rather than running another. An APPROVED artifact
+records a judgement and activates no reuse: no search consults the evaluation store and no cache is
+populated. Breadth across the 22 form strings has NOT been attempted.
+
+**Cost figures are now measured for three filings and only three.** Three filings is not a
+denominator; nothing in `docs/llm/cost-model.md` extrapolates to a corpus, and R-21 — whether any
+candidate accepts a materially sized modern filing intact — is untouched, because by construction
+the shared benchmark could only contain filings that fit.
 
 **ONLY THE PARSING MODEL IS REQUIRED.** A parser-only run is a complete, valid run and is the first
 functional workflow built. The image, summary and analysis/chat selectors may be left blank, and
@@ -244,6 +260,21 @@ substituting another, adding a stage, or skipping a selected one.
 artifact cannot be evaluated without seeing it beside the filing it came from.
 
 Read `roadmap.md`, ADR-0016 and ADR-0017 before proposing anything that widens or narrows scope.
+
+### What Phase 2 added, so you do not rebuild it
+
+```
+packages/evaluation_store   packages/source_transport   packages/coverage_validation
+packages/prompt_registry    packages/orchestrator       packages/review_api
+packages/review_web         packages/filing_acquisition/documents.py
+packages/model_catalog/routing.py    packages/llm_gateway/providers/bedrock.py
+prompts/parser/             tests/integration/          make review
+```
+
+**The review UI uses the standard library and adds no dependency.** No web framework, no ASGI
+server, no bundler, no npm, no build step. `boto3` is an OPTIONAL extra, which is what makes
+"ordinary CI is AWS-free" mean the SDK is not installed at all. Do not add any of them without
+reading ADR-0019 first.
 
 ### What no longer exists, so you do not go looking for it
 

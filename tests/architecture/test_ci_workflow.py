@@ -183,7 +183,21 @@ def test_no_job_configures_a_database_url(workflow: dict) -> None:
 
 
 def test_no_step_runs_a_deleted_database_or_migration_target(workflow: dict) -> None:
-    """The Make targets these steps invoked no longer exist; a reference would fail obscurely."""
+    """The Make targets these steps invoked no longer exist; a reference would fail obscurely.
+
+    CORRECTED IN PHASE 2, AND THE CORRECTION NARROWS NOTHING THAT MATTERS. `test-integration` was
+    on this list, and it was on it for a reason that has stopped being true. Every test in the old
+    `tests/integration/` needed a live PostgreSQL, so the TARGET and the DATABASE were the same
+    fact and forbidding the target forbade the database. They are now separable: the Phase 2
+    integration test exercises the whole parser-only path against the in-process mock provider and
+    has no database, no network, no credential and no listening socket.
+
+    Removing the target name from this list would have weakened the guard if nothing replaced it.
+    `test_the_workflow_declares_no_database_service` and
+    `test_no_environment_variable_carries_a_database_url` already assert the thing that actually
+    matters — that ordinary CI has no database — and they assert it about the workflow rather than
+    about a string in a command. Every genuinely deleted target stays forbidden.
+    """
     deleted_targets = (
         "db-create-test",
         "db-create-integration",
@@ -192,7 +206,6 @@ def test_no_step_runs_a_deleted_database_or_migration_target(workflow: dict) -> 
         "db-upgrade-integration",
         "db-verify-isolation",
         "migration-check",
-        "test-integration",
     )
     for job_name, step in _steps(workflow):
         command = str(step.get("run", ""))
@@ -201,6 +214,33 @@ def test_no_step_runs_a_deleted_database_or_migration_target(workflow: dict) -> 
                 f"{job_name} invokes `make {target}`, which was deleted with the application "
                 "database and its migrations"
             )
+
+
+def test_the_integration_target_exists_in_the_makefile_that_ci_invokes(workflow: dict) -> None:
+    """CI may only invoke targets the Makefile actually defines.
+
+    The Makefile is the single definition of the validation suite and CI invokes those targets, so
+    a step naming a target that does not exist fails with `No rule to make target` rather than with
+    anything a reader could act on. This is the general version of the guard above.
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    defined = {
+        line.split(":", 1)[0].strip()
+        for line in makefile.splitlines()
+        if line
+        and not line.startswith(("\t", " ", "#"))
+        and ":" in line
+        and "=" not in line.split(":", 1)[0]
+    }
+    invoked = set()
+    for _job_name, step in _steps(workflow):
+        for line in str(step.get("run", "")).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("make "):
+                invoked.add(stripped.split(None, 1)[1].split()[0])
+    assert invoked, "no `make` target is invoked by CI; this guard would enforce nothing"
+    missing = sorted(invoked - defined)
+    assert not missing, f"CI invokes Make targets the Makefile does not define: {missing}"
 
 
 def test_the_quality_job_proves_the_deleted_packages_cannot_be_imported(workflow: dict) -> None:

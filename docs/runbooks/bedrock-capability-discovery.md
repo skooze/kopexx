@@ -24,6 +24,58 @@ would produce a number before there is anything to compare it against.
 
 ---
 
+## Forward note, added 2026-08-03 — Phase 2 built an adapter, and this procedure is unchanged
+
+> **Nothing below this note has been edited.** Steps 1 through 6 remain the whole procedure.
+
+STATUS: IMPLEMENTED. When this runbook was written there was no provider adapter at all — Phase 1
+reached Bedrock with the AWS CLI, by hand, and `packages/model_catalog` held no AWS import. Phase 2
+built `packages/llm_gateway/providers/bedrock.py`, the Bedrock Converse adapter and the only module
+in the repository that imports an AWS SDK. It is reached only through `packages/llm_gateway`, it is
+handed an invocation identifier and a region and uses exactly those — no fallback model, no fallback
+region, no substitution — and the region is derived by `packages/model_catalog/routing.py` from this
+same snapshot, so a cross-region route is disclosed before the call rather than discovered in a bill.
+The adapter is constructed with a region and nothing else; temporary credentials stay with the SDK's
+default provider chain and never reach this code.
+
+**The snapshot is still regenerated wholesale by the manual discovery below.** The adapter invokes
+models; it does not maintain the capability record. It calls `Converse` and nothing else — it never
+calls `list-foundation-models`, `get-foundation-model-availability`, `get-inference-profile` or the
+Price List API, and it cannot read a context limit or a price from anywhere. Identity, availability,
+modality, limits and price are re-established by Steps 1 through 6, by hand, exactly as written. What
+has changed is that the INVOCATION half of a re-verification no longer needs bespoke code: a
+candidate can now be exercised through the same shipped path the product uses, so what a re-check
+proves is what a real run would do.
+
+`boto3` is an OPTIONAL EXTRA, and that is the point:
+
+```bash
+pip install -e '.[aws]'
+```
+
+Ordinary CI installs `.[dev]`, so "ordinary CI is AWS-free" means the provider SDK is not present at
+all rather than merely unused. The adapter imports it lazily inside the client factory and, when it
+is absent, raises a named error carrying that exact command — so a host that was never meant to reach
+a model fails with an instruction instead of an `ImportError` somebody works around.
+
+The Phase 2 benchmark driver is `var/local-tools/phase2_benchmark.py`, under the same gitignored
+directory and for the same reason as `phase1_smoke.py`: it is an instrument that can spend money, and
+`tests/architecture/test_phase1_aws_boundary.py` fails the build if such an instrument or the
+evidence it produces ever becomes tracked. It implements nothing — source-set assembly, routing,
+preflight, the cost ceiling, the gateway, the adapter, validation and the evaluation store are all
+shipped packages; the driver chooses the set, orders the runs and prints what happened. Logic living
+there would be untested and unshipped. It refuses to run without an explicit opt-in flag,
+`--i-authorize-billable-invocations`; `--dry-run` prints the full preflight and spends nothing. Its
+results land in the gitignored `var/evaluation-runs/`, and the cumulative ceiling it charges against
+is `packages/orchestrator.SpendJournal`, which is durable and does not reset when the process does.
+
+**No measured figure from those runs is recorded here, and none may be copied here.** This document
+is the discovery procedure; parse quality, token counts and cost per filing belong to the Phase 2
+record, and every model identifier, region, limit and price belongs to
+[the reviewed capability snapshot](../llm/bedrock-capability-snapshot.yaml) and to nowhere else.
+
+---
+
 ## Preconditions
 
 ```

@@ -24,6 +24,16 @@ class UnsupportedEraError(FilingAcquisitionError):
         )
 
 
+class SubmissionFormatError(FilingAcquisitionError):
+    """Bytes handed to the filed-document lister are not an EDGAR complete submission.
+
+    Raised rather than returning an empty document list. SEC answers a bare folder URL with HTTP
+    200 and a directory listing, and a throttle refusal is an HTML page with a 403 — both are
+    bytes, both would list zero documents, and "zero documents" is a legitimate-looking answer.
+    Failing loudly is the only way the caller can tell the three apart.
+    """
+
+
 class MissingPrimaryDocumentError(FilingAcquisitionError):
     """An inline-XBRL filing reported no primary document name."""
 

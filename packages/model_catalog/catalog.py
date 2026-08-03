@@ -245,9 +245,7 @@ def _candidate(
         mapping=_enum(Mapping, mapping["mapping"], "mapping", where),
         availability=_enum(Availability, mapping["availability"], "availability", where),
         access_status=str(mapping.get("access_status") or ""),
-        verified_regions=frozenset(
-            _as_str_tuple(mapping["verified_regions"], "verified_regions", where)
-        ),
+        verified_regions=_as_str_tuple(mapping["verified_regions"], "verified_regions", where),
         inference_profile_required=_as_bool(
             mapping["inference_profile_required"], "inference_profile_required", where
         ),

@@ -1,0 +1,76 @@
+# Parser prompt versions — the record that makes a prompt version IMMUTABLE.
+#
+# WHY A MANIFEST RATHER THAN A DIRECTORY LISTING. A prompt version that has been used is evidence:
+# it produced a response somebody paid for and may act on. Editing the file in place would silently
+# change what every past invocation claims to have been asked. The SHA-256 recorded here is what
+# makes that impossible to do by accident — `packages/prompt_registry` refuses to load a version
+# whose bytes have moved, and an architecture test fails the build for the same reason.
+#
+# A PROMPT CHANGE IS A NEW VERSION. Add a file, add an entry, leave the old one exactly as it is.
+# Superseding is recorded with a forward note; nothing is rewritten.
+#
+# THE FILES ARE .txt AND NEVER .md. rules.md section 10, enforced by
+# tests/architecture/test_architecture.py: model-visible prompt files must not be Markdown, and a
+# prompt must never instruct a model to emit JSON, XML or Markdown.
+
+schema_version: "prompt-versions-v1"
+
+prompts:
+
+  - prompt_id: parser-complete-filing
+    version: "1"
+    file: parser-complete-filing-v1.txt
+    sha256: "3c7e8c3a0d909647856c1ee0ee140e347d4d3fbe35a6414bb81c7e094f703f7b"
+    created: "2026-08-03"
+    status: SUPERSEDED
+    role: parsing
+    supersedes: null
+    superseded_by: "parser-complete-filing@2"
+    note: >-
+      The first provisional parser prompt. It asks for the complete filing in the filing's OWN
+      vocabulary and deliberately imposes no section taxonomy: `type` and `title` are whatever the
+      filing and the model produce, and rules.md section 21 rule 2 forbids a universal ontology
+      without explicit user approval. The minimum envelope — artifact, document, nodes, unresolved,
+      metadata — is provisional and is redesigned FROM what real models return, not before.
+
+      Source references are verbatim QUOTES rather than byte offsets. A model cannot count bytes in
+      an artifact it was handed as text, and a fabricated offset resolves to the wrong place while
+      looking exactly like a real one. A quote either occurs in the preserved bytes or it does not,
+      and the backend is what checks.
+
+  - prompt_id: parser-complete-filing
+    version: "2"
+    file: parser-complete-filing-v2.txt
+    sha256: "5e84ba57304c97fc36d661a1b74ed3e9ed0ab40d264fa74eec6f11487e25bc93"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing
+    supersedes: "parser-complete-filing@1"
+    superseded_by: null
+    note: >-
+      CREATED FOR TWO OBJECTIVE FORMAT DEFECTS, WHICH IS THE ONLY REASON A NEW VERSION IS PERMITTED
+      DURING A SHARED BENCHMARK. Both were observed in the version-1 pass, across five candidates
+      and three filings, and neither is about the quality of any parse.
+
+      FIRST, UNQUOTED SCALARS. One candidate returned a well-formed structure whose source quotes
+      were unquoted YAML scalars containing the filing's own colons and SGML tags, so the document
+      did not parse at all: "mapping values are not allowed here", on 3 of 3 filings. The parse was
+      good; the serialisation was invalid, and an invalid document cannot be reviewed.
+
+      SECOND, CODE FENCES. TWO candidates wrapped their YAML in a Markdown code fence on 3 of 3
+      filings each, although version 1 already said "no code fence" in plain words. Six of the
+      fifteen version-1 responses failed for this one reason. That is a MAJORITY behaviour across
+      the candidate set rather than one model's quirk, which is what makes correcting it a format
+      fix rather than tuning for a model.
+
+      THIS FILE WAS AMENDED BEFORE IT WAS EVER USED, and that is the only circumstance in which a
+      version file is touched after its hash is recorded. Version 2 had produced no response, cost
+      nothing and appeared in no run record — it was a draft, not evidence. The immutability rule
+      protects versions that produced responses somebody paid for, and version 1 is one of those:
+      it is untouched, and every result it produced is preserved.
+
+      THE SEMANTIC REQUEST IS UNCHANGED, DELIBERATELY. Version 2 adds a YAML quoting rule and
+      nothing else — no new section vocabulary, no taxonomy, no per-model instruction, and no
+      change to what completeness means. Tuning a prompt until each model looks successful is
+      prompt tuning with the measurement removed; correcting a document that will not parse is
+      not. Version 1 and every result it produced are preserved.

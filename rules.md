@@ -11,6 +11,12 @@ AMENDED 2026-08-03 by Phase 1 (ADR-0018), which added two single-home rows in se
 verified capability catalog and its cost ceiling, and split the four-role routing row so the half
 that exists is not confused with the half that does not. Nothing was relaxed.
 
+AMENDED 2026-08-03 by Phase 2 (ADR-0019), which added ten single-home rows in section 5 for the
+packages that acquire, transport, validate, orchestrate, store and display a parse, and completed
+the four-role routing row that Phase 1 had left RESERVED. Nothing was relaxed: every added row
+names a package that exists and carries code, and the rows for `packages/artifact_store` and
+`packages/deep_analysis` stay RESERVED because those packages still do not exist.
+
 AMENDED 2026-08-03 by the cleanup commit (ADR-0017), which DELETED the deterministic semantic
 parser, the application persistence layer, its migrations, and the DERA mirror and fact loader.
 Every amendment made that day is a STRENGTHENING or a correction of a statement that had become
@@ -484,19 +490,26 @@ Before writing a new function:
 | Cost calculation | `packages/llm_gateway/cost_calculator.py` |
 | Verified model capabilities, prices and label mapping | `packages/model_catalog/` |
 | Cost-ceiling enforcement before a billable call | `packages/model_catalog/spend.py` |
-| Filed-document listing, non-classifying | `packages/filing_acquisition/documents.py` — RESERVED, Phase 2 |
-| Transport decoding, offsets and format detection | `packages/source_transport/` — RESERVED, Phase 2 |
-| Coverage validation of model output | `packages/coverage_validation/` — RESERVED, Phase 2 |
-| Four-role model routing | `packages/model_catalog/` — RESERVED, Phase 2 |
-| Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, Phase 2 |
+| Filed-document listing, non-classifying | `packages/filing_acquisition/documents.py` |
+| Transport decoding, dispositions and source-set assembly | `packages/source_transport/` |
+| Coverage validation of model output | `packages/coverage_validation/` |
+| Four-role model routing | `packages/model_catalog/routing.py` |
+| Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only |
+| Parent runs, child jobs, evaluation evidence, comments, review state | `packages/evaluation_store/` |
+| Versioned, hash-locked prompts | `packages/prompt_registry/` |
+| Parent-run orchestration and the cumulative spend journal | `packages/orchestrator/` |
+| The parser-review HTTP surface | `packages/review_api/` |
+| HTML rendering and escaping of untrusted content | `packages/review_web/` |
 | Artifact approval and reuse | `packages/artifact_store/` — RESERVED, Phase 4 |
 | Scope validation | `packages/deep_analysis/scope.py` — RESERVED, Phase 7 |
 
 `packages/model_catalog` ARRIVED IN PHASE 1 CARRYING HALF ITS EVENTUAL RESPONSIBILITY, and the row
-was split rather than marked done. The capability record, the label mapping, the price inputs and
-the cost ceiling exist and are enforced; the four-role router does not, and stays RESERVED. A single
-row saying "implemented" would have claimed both. **No model identifier, region, limit or price
-appears in that package's source** — every one is supplied from the reviewed snapshot at
+was split rather than marked done. **Phase 2 completed it**: the four-role router in
+`routing.py` now exists, so the second row is no longer RESERVED. Splitting the row rather than
+marking the package done is what made that completion a visible event instead of an assumption.
+
+**No model identifier, region, limit or price appears in that package's source** — every one is
+supplied from the reviewed snapshot at
 `docs/llm/bedrock-capability-snapshot.yaml`, exactly as the qualifying-form set is supplied to
 `filing_discovery`, and an architecture test fails on a provider identifier or region literal in
 shipped source. See `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`.

@@ -9,6 +9,19 @@ IMPLEMENTATION STATUS: PLANNED — Phase 6, with a review-UI subset in Phase 2
 > were removed here (ADR-0017). Adding a code for a resource that does not exist is how an API
 > acquires a shape its data never had.
 
+> **PARTLY SUPERSEDED 2026-08-03 BY PHASE 2, ADDITIVELY.** Models HAVE now been invoked and real
+> filings HAVE been parsed, so the clause "no model has been invoked" no longer holds. **The
+> conclusion it supported still does.** The artifact contract remains PROVISIONAL — it is derived
+> from what models return, and three filings across five candidates is not enough to fix one — so
+> the codes for parsed, image, summary and analysis artifacts stay deliberately absent. Adding a
+> code for a shape the data has not settled into is the same defect the paragraph above describes.
+>
+> The Phase 2 parser-review application returns errors from a small implemented subset:
+> `not_found`, `bad_request`, `method_not_allowed`, `authentication_required`, `invalid_secret`,
+> `csrf_failed`, `refused` and `unparseable`. Those are real and are served today; the taxonomy below remains the
+> Phase 6 design. See `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`.
+
+
 ## Envelope
 
 ```

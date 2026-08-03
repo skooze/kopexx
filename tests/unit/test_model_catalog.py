@@ -522,7 +522,7 @@ def test_capability_record_construction_is_validated_directly() -> None:
             mapping=Mapping.UNIQUE,
             availability=Availability.AVAILABLE,
             access_status="",
-            verified_regions=frozenset({"region-one"}),
+            verified_regions=("region-one",),
             inference_profile_required=False,
             inference_profile_id=None,
             text_input=True,

@@ -20,16 +20,479 @@
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
 >
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.**
+>
+> **FORWARD NOTE, 2026-08-03 — Phase 2 landed a PARSER-REVIEW UI.** The three notes above are kept
+> exactly as written, because each was true when it was written: at that point no frontend code
+> existed anywhere in the tree. That is no longer true. `packages/review_web` and
+> `packages/review_api` are IMPLEMENTED and serve a working parser-review surface, and
+> `packages/llm_gateway/providers/bedrock.py` is an IMPLEMENTED Bedrock Converse adapter. The
+> sentence "Every screen this document describes remains NOT IMPLEMENTED" is superseded only to
+> that extent.
+>
+> **The parser-review UI is NOT the beta UI.** It is a developer evaluation surface, specified in
+> the new section immediately below. The beta-UI section that follows it remains PLANNED and NOT
+> IMPLEMENTED, and nothing in the new section may be read as delivering any part of it. Treating an
+> evaluation tool as a shipped product surface is precisely the reporting failure
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` was written after. Everything under
+> `HISTORICAL — describes the withdrawn design` is untouched by this update.
+>
+> **No parse-quality, token-count or cost-per-filing measurement appears in this document.** Those
+> measurements are PENDING. Model identifiers, regions, context limits, output limits and prices
+> are recorded in exactly one place, `docs/llm/bedrock-capability-snapshot.yaml`, and are not
+> copied here — a capability recorded twice drifts.
+>
+> **SUPERSEDED 2026-08-03 BY PHASE 2, ADDITIVELY.** The statement above was true when it was
+> written and is kept for that reason (`rules.md` section 21 rule 16). It is no longer true:
+> AWS IS configured, a real Bedrock adapter EXISTS in `packages/llm_gateway/providers/bedrock.py`,
+> and SEC filings HAVE been sent to real models — three preserved filings across five candidates
+> under two prompt versions. See `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`.
+>
+> **WHAT IS STILL TRUE.** No application database exists. No Redis exists. No summary artifact, no
+> image artifact and no chat session exists — Phase 2 ran the PARSING stage only, and the
+> orchestrator raises rather than running another. Nothing is deployed.
 
 
-IMPLEMENTATION STATUS: PLANNED
+IMPLEMENTATION STATUS: parser-review UI IMPLEMENTED (Phase 2); beta UI PLANNED
 PRODUCT DEFINITION: `docs/architecture/product-definition.md`
 API: `docs/api/openapi.yaml`
 ARCHITECTURE: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
-`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`
+`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
+`docs/adr/ADR-0019-parser-review-application-over-a-framework.md`
 
 There is no separate content-model document and no universal filing taxonomy. A parsed node
 carries whatever label the filing and the parsing model produced.
+
+---
+
+# THE PHASE 2 PARSER-REVIEW UI — IMPLEMENTED
+
+IMPLEMENTED. `packages/review_web` renders the pages, `packages/review_api` serves them, and both
+run today. This section describes what the code does, verified by reading it — not what it should
+eventually do.
+
+**What this surface is for.** roadmap.md 2b: a parsed artifact cannot be evaluated without seeing
+it beside the filing it came from, and reading a YAML document in a terminal is not evaluation.
+Every other Phase 2 package exists so that this one page can show something true.
+
+**What this surface is NOT.** It is not the beta UI, not a product surface, and not for an
+investor. It is single-user, loopback-first, developer-facing, and it exposes machinery — exact
+response bytes, reasoning content, spend reservations, execution states — that no investor should
+ever be shown. The section "What the parser-review UI deliberately does not do" below is part of
+the specification, not an apology.
+
+## Construction, and why it is what it is
+
+```
+SERVER-RENDERED       every page is HTML built on the server; the browser holds no state
+STANDARD LIBRARY      http.server only. No web framework, no ASGI server, no bundler, no npm,
+                      no new runtime dependency
+ONE SCRIPT            copies the run identifier to the clipboard, and nothing else
+```
+
+Everything that matters works with scripting disabled: raw and parsed views, side-by-side,
+source-reference navigation, comments and review actions are ordinary links and form posts. That
+is not nostalgia. A server-rendered surface has no client-side state that can disagree with what
+was stored, and no path by which a preserved SEC filing reaches a JavaScript context at all.
+Rationale of record: `docs/adr/ADR-0019-parser-review-application-over-a-framework.md`.
+
+**A filing is never rendered as markup.** Every value reaching a page goes through one escape
+function in `packages/review_web/html.py`, and raw source is shown as escaped text inside a
+preformatted block. There is no sanitizer to get wrong and no sandboxed iframe to configure,
+because nothing from a filing is ever parsed as HTML by the browser.
+
+## The shell: a persistent collapsible left panel
+
+```
++---------------------+--------------------------------------------------+
+|  SEARCH PANEL   [<] |  WORKSPACE                                       |
+|  persistent,        |  index / preflight / run / child job             |
+|  vertical, left     |                                                  |
+|  Entity or ticker   |                                                  |
+|  Timeframe          |                                                  |
+|  Exact filing       |                                                  |
+|  Parsing model  *   |                                                  |
+|  Image model        |                                                  |
+|  Summary model      |                                                  |
+|  Analysis model     |                                                  |
+|  [Preflight and run]|                                                  |
++---------------------+--------------------------------------------------+
+|  run 7f3c… [copy]   |   anchored to the VIEWPORT, not to the panel     |
++---------------------+--------------------------------------------------+
+   * required
+```
+
+The panel is an `<aside>` that is always present. A `collapse` control in its top-right corner
+links to `?panel=closed`; when collapsed the panel is hidden and a `menu` control in the workspace
+links back to `?panel=open`. The workspace fills the space either way. The panel is rebuilt on
+every request from the query string, so a reload restores the same entity, timeframe and model
+selections rather than defaults.
+
+**Known gap, stated rather than hidden.** The collapse control carries only `panel=closed`, so it
+replaces the query string that held the entity and model selections. Collapse therefore does not
+yet preserve panel state, and the beta acceptance criterion "Collapse preserves state" is NOT met
+and stays open below. What IS verified by test is narrower and is the part that matters most for
+bug reports: the parent run identifier survives a collapsed panel.
+
+## The four model selectors
+
+Four independent selectors — parsing, image, summary, analysis — built from
+`ParserReviewService.selectors()`. Each is populated separately from the reviewed capability
+snapshot. None defaults from another and none is inferred.
+
+```
+Parsing         REQUIRED. No blank option is offered at all.
+Image           OPTIONAL. Carries the blank option "None — skip this stage".
+Summary         OPTIONAL. Carries the blank option "None — skip this stage".
+Analysis        OPTIONAL. Carries the blank option "None — skip this stage".
+```
+
+The blank option is a VISIBLE choice with a label, not a hidden default, and nothing is
+preselected. A hidden empty first option and a deliberate "skip this stage" are the same HTML and
+completely different products: only one of them lets a user state that they meant it.
+
+Each optional selector renders a note reading that the stage is not executed in Phase 2 and that
+the selector exists so the progressive workflow is real. The selectors are routed by
+`packages/model_catalog/routing.py` and the three optional stages raise `StageNotAuthorizedError`
+if anything tries to execute them, so a blank optional role and a filled one produce the same
+result today — no stage.
+
+### What every selector row displays
+
+| Field | Source |
+|---|---|
+| Label, provider | the reviewed capability snapshot |
+| Capability badge | `Multimodal` or `Text only`, on every row |
+| Region | the region DERIVED from the snapshot for this role |
+| Context limit, output limit | the snapshot's verified values |
+| Price per 1k input and output, currency | the snapshot's reviewed price inputs |
+| `via inference profile` | present when the route goes through an inference profile |
+| `UNAVAILABLE: <reason>` | present on every disabled row, with the concrete reason inline |
+
+None of those values is written into this document. They live in
+`docs/llm/bedrock-capability-snapshot.yaml`, and `packages/model_catalog` is the only code that
+reads them.
+
+**No candidate is filtered out of a selector.** A candidate that cannot fill the role comes back
+disabled with its reason on the row, because a candidate that silently vanishes is
+indistinguishable from one that was never approved. A version the snapshot does not carry renders
+as the literal `unverified`, never as blank.
+
+**The multimodal badge and the disabled image selector.** When the selected parsing model is
+multimodal, the image selector is rendered **visible but disabled**, with the one-line explanation
+that the parsing model handles filed images itself and no separate image model is invoked. It is
+never hidden: hiding it would make the four-role model look like three.
+
+**Per-filing compatibility is NOT on the selector row.** The beta specification puts a fits / does
+not fit verdict on each dropdown entry; the implemented UI computes compatibility per filing on the
+preflight page instead, because compatibility is a property of a source set and a model together,
+not of a model alone. The selector-row verdict remains PLANNED.
+
+## Entity, timeframe and exact filing
+
+**Entity.** A search box and a submit button. The submitted query is matched against the preserved
+corpus catalog — current name, former names, and exact ticker, with an exact ticker ranked above a
+name match — and the matches render as a list of links, each resolving to a CIK. There is no
+relevance score, because a relevance score nobody specified is a product decision hidden in a sort
+key. **It is not a typeahead and it reaches nothing beyond the locally preserved corpus.**
+
+**Timeframe.** Two date inputs whose `min` and `max` are the entity's earliest and latest preserved
+filing dates, above a line stating how many qualifying filings exist, the range they span, and
+which forms are present. The bound is displayed, not merely enforced. These are FILING DATES, not
+fiscal years; the fiscal-year control the beta specification requires is PLANNED.
+
+**Exact filing (developer mode).** An optional selector listing each preserved filing with its
+form as filed, filing date, accession and estimated token count, so a single filing can be run
+rather than a whole timeframe.
+
+**Cumulative spend.** The panel states authorized spend so far against the ceiling, read from the
+durable spend journal.
+
+## The Run button and its exact enablement conditions
+
+One button, labelled `Preflight and run`. It posts to `/preflight`; it does not start a billable
+invocation.
+
+**Enablement.** The button is rendered `disabled` unless ALL of the following hold:
+
+```
+an entity is resolved to a CIK
+a parsing model label is selected
+that label matches a row in the parsing selector
+that row is available — not disabled by the snapshot for this role and region
+```
+
+The three optional roles never affect enablement. When the button is disabled the panel states the
+unmet condition in words: select an entity and an available parsing model, and the image, summary
+and analysis selectors may stay blank.
+
+**Compatibility is NOT an enablement condition here**, and that is deliberate. Whether a filing's
+complete source set fits the model is measured per filing during preflight, on the next page, where
+the numbers can be shown. Gating the button on it would refuse a run without ever telling the user
+by how much it did not fit.
+
+**Presentation.** Semi-transparent light blue, the single strongest accent on the page; disabled it
+falls back to a flat grey with `cursor: not-allowed`.
+
+## The cost preflight page
+
+Posting the panel renders `Cost preflight` — everything a user should see BEFORE authorizing a
+billable run, with nothing billable having happened yet.
+
+```
+ROUTING      the routed parsing model, its role, the DERIVED region and the preferred region,
+             its modality, and the invocation identifier. A cross-region route renders as a
+             DISCLOSED warning, never silently. An inference-profile route states that the
+             profile may span more than one region.
+PROMPT       the prompt identifier, its version, and the leading bytes of its SHA-256 lock
+PER FILING   form, accession, transport era, submitted members and bytes, how many members were
+             REUSED from local storage versus FETCHED from SEC, estimated input tokens, the
+             requested output cap, the worst-case cost, and a fits / reason verdict
+TOTALS       worst case for this run, cumulative spend so far, and the ceiling
+```
+
+Each incompatible filing renders its full explanation as a warning beneath the table. The cost line
+states what it is: a WORST-CASE bound from a character-ratio token estimate and the reviewed price
+inputs — **not a prediction** — reserved before the call and settled against measured usage after
+it. R-24 in `roadmap.md` is the open risk this wording exists to keep visible.
+
+**The confirm control disappears when it must.** `Run now` is rendered only when the worst case
+stays within the cumulative ceiling AND at least one filing is compatible. Otherwise the page
+renders a refusal stating that nothing is shrunk, dropped or downgraded to fit — the
+`INTACT_SOURCE_ONLY` rule, enforced where the user can see it.
+
+## The parent run identifier
+
+**Anchored to the viewport, not to the panel.** It is a fixed element in the lower-left, rendered
+on every page that has a parent run — the run page and every child job page. It shows the
+identifier as a link to the run, plus a `copy` button that writes the value to the clipboard and
+briefly reports `copied`.
+
+It survives a collapsed panel, which is asserted by test. It is the string a person quotes in a bug
+report and an operator uses to find the run, so it matches the identifier in the event log and in
+the stored evidence exactly.
+
+The index and preflight pages have no run yet and render no identifier, rather than an empty
+placeholder.
+
+## Raw, Parsed, and side by side
+
+Three controls on every child job page — `Raw`, `Parsed`, `Side by side` — as links, with
+side-by-side the default. When a job submitted more than one preserved artifact, a second row of
+links switches between them by filename.
+
+| View | What it renders |
+|---|---|
+| Raw | the preserved bytes, escaped, exactly as SEC published them |
+| Parsed | the model's structure in the model's own vocabulary |
+| Side by side | both panes at once, each scrolling independently |
+
+**The raw pane states its own window.** A filing can be megabytes, so the pane renders a bounded
+window of characters around the point of interest and prints which characters it is showing out of
+the total, plus the fact that the artifact is complete on disk. A silently truncated view of a
+source of truth is the same defect as a silently truncated request.
+
+**The parsed pane applies no taxonomy.** It renders whatever `type` and `title` the model produced,
+states the node count and that no backend taxonomy is applied, and displays an unfamiliar label
+rather than dropping it. A renderer that quietly omitted an unrecognised node would hide exactly
+the finding the first experiments exist to produce.
+
+**When the response will not parse there is no parsed view at all.** The pane says so and shows the
+exact bytes the model returned instead, and the run is kept: it was billable and cannot be
+regenerated for free.
+
+### Source-reference links, and references that are not links
+
+A resolved reference renders as a resolution badge plus the quoted text, linked to the raw view of
+the artifact it was found in, carrying an **offset** and a **length** and anchoring at the
+highlight. The raw pane opens its window around that offset and marks the range.
+
+An **unresolved reference is marked and is deliberately NOT a link**. It renders its resolution
+badge, its quote, and the words `not located in the preserved bytes`. A link would render it as
+cited, and the whole point is that it is not.
+
+The resolution vocabulary carried on each reference is `EXACT`, `WHITESPACE_NORMALISED`,
+`TEXT_ONLY`, `AMBIGUOUS`, `UNRESOLVED`, `NO_SUCH_ARTIFACT`, `EMPTY_QUOTE`. Resolution is performed
+by `packages/coverage_validation` against the PRESERVED BYTES, never against a re-fetched document
+and never on the model's assurance.
+
+## The exact model response and the reasoning content
+
+Four things are shown on a child job page and never conflated:
+
+```
+RAW              the preserved bytes, escaped
+PARSED           the model's structure — DERIVED
+EXACT RESPONSE   the bytes the model returned, preserved before anything read them
+VALIDATION       what the backend proved against the preserved bytes
+```
+
+The exact response is always rendered, labelled as authoritative wherever it and the parsed view
+could disagree. When the provider returned reasoning content, the adapter separated it from the
+visible answer and it renders in its own card with its character count reported — so reasoning is
+never mistaken for the parse.
+
+## The three warnings the parsed view must display
+
+All three are IMPLEMENTED and all three appear at the point of use, in the same view as the content
+they qualify. A warning placed only on an operations dashboard protects nobody.
+
+| Warning | As built |
+|---|---|
+| `UNRESOLVED SOURCE REFERENCE` | Per reference: a resolution badge, the quote, and no link. Per job: the validation card states how many of the references resolved, how many were ambiguous and how many were unresolved |
+| `IMAGE CONTENT NOT ANALYZED` | A job-level warning naming how many image-bearing members were filed, stating that they were NOT analysed and that the run makes no image-coverage claim, with the reason. A node that declares an image dependency also carries its own warning |
+| `UNRESOLVED CONTENT` | The parsed pane renders a `Declared unresolved by the model` block listing what, where and why. `ValidationStatus` has NO `COMPLETE` member, so no view can round a parse up to complete |
+
+**What is honest about the third warning, and what is still missing.** What renders today is the
+model's own declaration of what it could not resolve, plus generic backend signals. A proven
+range-by-range map of every human-readable source range against the accepted artifact is NOT built,
+and no view claims one. That proof is PLANNED and is the COMPLETE-CONTENT-INVARIANT obligation in
+`rules.md` section 3.
+
+## The validation card
+
+Rendered from `packages/coverage_validation` and never from the model's self-report:
+
+```
+STATUS         REVIEW_REQUIRED / PARTIAL / UNPARSEABLE / EMPTY, with its explanatory note.
+               COMPLETE IS DELIBERATELY ABSENT — nothing measured here can establish it, and a
+               status value that exists is a status value something eventually sets.
+STRUCTURE      node count, table count
+REFERENCES     resolved, ambiguous and unresolved counts against the reference total
+ARTIFACTS      how many of the submitted artifacts were cited at all
+RATIO          source characters to response characters
+NUMERIC        how many reported numbers occur verbatim in the source, and how many tables have
+               an arithmetically coherent column
+TYPES          the labels the MODEL selected, with counts — reported, never validated
+FINDINGS       each rendered as its own warning
+```
+
+## Review states and developer comments
+
+**Two independent state machines**, both surfaced. Execution state and review state render as
+separate badges on the child job page and as separate columns on the run page, because an execution
+that finished says nothing about whether a human accepted it.
+
+An unapproved artifact carries the marker `EVALUATION — not approved for reuse`, together with the
+statement that approval records a judgement and activates nothing: no search consults the artifact
+and no cache is populated. Reuse and caching do not exist yet, so the UI says so instead of
+implying them.
+
+The review control offers **only the transitions permitted from the current state**, computed by
+`packages/evaluation_store`, with an optional note. An invalid transition is not rendered as a
+disabled option a user has to guess about — it is not offered.
+
+**Granular comments are IMPLEMENTED.** A comment carries a target type and a target identifier and
+is attached to one of `child_job`, `parsed_node`, `table`, `source_reference`, `raw_response`,
+`validation_warning` or `parent_run`. Each records its author, timestamp, run and job, and the
+attempt version of the target it was written against, so a comment cannot silently migrate onto a
+re-run's output. Comments render as escaped text and are never interpreted as instructions to any
+model.
+
+The configured reviewer identity is a LABEL supplied from ignored environment state, never a
+personal name or address in tracked code.
+
+## Progress, events and the run page
+
+The run page lists every child filing job as its own row — job identifier, form, accession,
+execution state, review state, validation status and settled spend — so a run over eleven filings
+shows eleven rows and never one aggregate. It states in words that blank image, summary and
+analysis selectors ran NO stage and that the parsing model was not borrowed to fill them.
+
+Progress is a server-sent-event stream, resumable through `Last-Event-ID`, and the page also
+renders the stored append-only event log as a table. **No provider data and no filing text crosses
+the stream** — an event carries a kind, a child job identifier and a short message, and bodies stay
+in the evaluation store. The stream terminates once every child job reaches a terminal state rather
+than holding a connection for ever.
+
+Cancellation cancels only jobs that have not yet been invoked. A RUNNING job is deliberately not
+cancelled: the provider call is billable from the moment it is issued, and marking it cancelled
+would hide a charge the ledger still has to settle.
+
+## Visual design, as built
+
+Light mode. Light and dark grey surfaces, a dark grey left panel and dark grey table headers, and
+soft translucent blue, green, amber and red accents defined as one small set of custom properties.
+
+**No fully saturated large colour blocks.** Every accent is a translucent fill, a thin rule or a
+small badge over grey. The Run button is the strongest accent on the page and is still
+semi-transparent. Status is never carried by colour alone: every badge and every warning prints its
+own text.
+
+The stylesheet and the one script are Python module constants served from their own routes, not
+files on disk. That keeps `packages/` free of non-Python files, puts both assets under the linter
+and the coverage measurement, and removes an entire class of defect — there is no static-file route
+and therefore no path to traverse. They are not inlined into the page, because inline style and
+script would force `unsafe-inline` into the content security policy, and that policy is the reason
+a preserved filing can be displayed at all without a sanitizer.
+
+## Security posture, as built
+
+```
+LOOPBACK BY DEFAULT   binding beyond loopback REQUIRES a development secret, and the settings
+                      refuse to construct the unsafe combination
+SESSION               server-side, keyed by an opaque random cookie value carrying no claim a
+                      client could forge or replay across a restart
+CSRF                  every state-changing request carries a token bound to the session
+SAME ORIGIN           no CORS headers are emitted at all; the absence is the policy
+CSP                   default-src 'none', with one stylesheet and one script from this origin
+CREDENTIALS           nothing AWS-shaped is ever placed in a response, and there is no
+                      browser-to-Bedrock path to open by accident
+```
+
+Whenever HTTPS is not configured the page prints a local-development-mode note stating that it
+makes no production security claim, rather than implying a posture it does not have. This is not
+multi-user identity management and does not pretend to be; that stays deferred to Phase 6.
+
+## What the parser-review UI deliberately does NOT do
+
+Every item here is a beta-UI requirement that the implemented surface does not satisfy. None is a
+defect in the parser-review UI; all remain PLANNED and are specified in the beta-UI section below.
+
+```
+NO ENTITY TYPEAHEAD BEYOND THE LOCAL CORPUS   search is a submitted form over the preserved
+                                              research corpus. No live typeahead, no SEC-wide
+                                              catalog, no historical-ticker or alias index.
+NO SYNCHRONIZED SCROLLING                     side-by-side renders two independent panes.
+                                              Following a source reference is a page load
+                                              anchored at the highlight, not a linked scroll.
+NO SUMMARY VIEW                               no summary artifact exists. No summary model was
+                                              invoked, and the summary stage raises rather than
+                                              running.
+NO DEEP DIVE                                  no analysis/chat surface, no session, no scope
+                                              badge, no budget meter, no transcript.
+NO FISCAL-YEAR TIMEFRAME                      filing-date bounds only; no fiscal-year resolution,
+                                              no derived-quarter labelling.
+NO CHARTS, NO ISSUER OVERVIEW, NO TIMELINE    none of the investor-facing surfaces exist.
+NO PER-ROW COMPATIBILITY VERDICT              compatibility is shown per filing at preflight, not
+                                              on each selector row.
+NO REUSE OR CACHING                           approval records a judgement and activates nothing.
+NO PERSISTENCE BEYOND THE EVALUATION STORE    runs live in the gitignored var/evaluation-runs/.
+                                              There is no product database, no schema, no ORM,
+                                              no migration, no index and no Redis.
+```
+
+## Acceptance criteria, current state
+
+| Criterion | State |
+|---|---|
+| Parsing is the only required role | IMPLEMENTED — a run starts with all three optional selectors blank |
+| Blank means skip, visibly | IMPLEMENTED — `None — skip this stage` is a labelled option on all three optional roles |
+| No inferred model | IMPLEMENTED — a blank role runs no stage; the parsing model is never borrowed |
+| Disabled entries state a reason | IMPLEMENTED — every unavailable row carries its concrete reason inline |
+| Multimodal badge on every row | IMPLEMENTED |
+| Image selector disabled, not hidden | IMPLEMENTED — with the one-line explanation |
+| Button gating | IMPLEMENTED — entity plus an available parsing model; the unmet condition is stated |
+| Run ID survives collapse | IMPLEMENTED — asserted by test |
+| Collapse preserves selections | NOT MET — the collapse control drops the query string that carries them |
+| Broken reference is visible | IMPLEMENTED — marked, and deliberately not a link |
+| Unanalyzed images are declared | IMPLEMENTED — with the member count and the reason |
+| Unresolved content is listed | PARTIAL — the model's declaration renders; a proven range map is PLANNED |
+| Nothing is ever labelled complete | IMPLEMENTED — `ValidationStatus` has no `COMPLETE` member |
+| Evaluation is not reuse | IMPLEMENTED — and no reuse path exists to violate it |
+| Cost is bounded before spend | IMPLEMENTED — worst case, ceiling and refusal at preflight |
+| Side by side stays synchronized | NOT IMPLEMENTED — independent panes |
+| Reading invokes no model | IMPLEMENTED — every view is served from stored evidence |
+| First measured parse figures | PENDING — no parse-quality, token or cost measurement is recorded |
 
 ---
 
@@ -37,6 +500,13 @@ carries whatever label the filing and the parsing model produced.
 
 NOT IMPLEMENTED. No frontend code exists and none is generated by this document. This section is
 specification text only.
+
+> **FORWARD NOTE, 2026-08-03.** The paragraph above is kept as written and its verdict on the beta
+> UI still stands: PLANNED, and not one screen of it is built. Its second clause is now narrower
+> than it was — frontend code does exist in the repository, but it is the Phase 2 parser-review UI
+> specified above, which is a developer evaluation surface and no part of the beta UI. Where a
+> requirement below is already satisfied by that surface, the parser-review section says so
+> explicitly; everything else here remains PLANNED.
 
 ## Layout
 
@@ -285,6 +755,13 @@ LAN deployment for the beta. Single user. No public exposure.
 ## Acceptance criteria for the beta UI
 
 All PLANNED. None is implemented and none has been run.
+
+> **FORWARD NOTE, 2026-08-03.** That sentence is kept and is still correct **for the beta UI** —
+> none of these criteria has been graded against a beta screen, because none exists. Several of the
+> underlying behaviours are nonetheless already IMPLEMENTED in the Phase 2 parser-review UI, and
+> the current state of each is recorded once, in the table at the end of
+> `THE PHASE 2 PARSER-REVIEW UI — IMPLEMENTED` above. A criterion satisfied there is not thereby
+> satisfied here.
 
 | Criterion | Assertion |
 |---|---|

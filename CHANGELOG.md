@@ -7,6 +7,142 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 `Data migrations` and `Operational changes`.
 
 
+## Phase 2 — intact-filing parser experiments and the parser-review UI (2026-08-03)
+
+**AN SEC FILING WAS PARSED BY A REAL MODEL FOR THE FIRST TIME IN THIS PROJECT'S HISTORY.** Phase 1
+proved five models were reachable and nothing else. Phase 2 sent them filings, preserved exactly
+what crossed the wire in both directions, proved every citation against the preserved bytes, and
+built the surface a person needs to look at the result beside the filing it came from. The measured
+figures, the benchmark selection evidence and the comparison are in
+`docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`.
+
+**WHAT IS STILL NOT TRUE, AND IT MATTERS.** No application database exists. No Redis exists. No
+summary artifact, no image artifact and no chat session exists — the orchestrator ran the PARSING
+stage only and raises rather than running another. An APPROVED artifact records a judgement and
+activates no reuse: no search consults the evaluation store and no cache is populated. Nothing is
+deployed. Breadth across the 22 substantive form strings has not been attempted.
+
+### Added
+
+- **`packages/evaluation_store`** — parent runs, child filing jobs, exact request and response
+  evidence, an append-only event log, developer comments, and TWO INDEPENDENT state machines.
+  Execution state describes machinery; review state describes a human judgement; neither is ever
+  inferred from the other. Every write goes through `packages/storage`, whose `put_bytes` now
+  flushes and fsyncs before the atomic rename. **It is not the product database and holds no
+  schema** — a source set, a validation result and an image-coverage report all arrive as opaque
+  mappings written by the packages that own those concepts.
+- **`packages/source_transport`** — mechanical source-set assembly. Local inventory first, byte
+  count and SHA-256 re-verified rather than trusted from bookkeeping, only missing members fetched.
+  Transport disposition from byte signatures, filename extensions, XML root namespaces and EDGAR's
+  own declared renderer marker. **An unrecognised member fails closed into the run plan** rather
+  than being dropped or submitted on a guess.
+- **`packages/filing_acquisition/documents.py`** — the NON-CLASSIFYING filed-document lister
+  reserved by `rules.md` section 5, replacing the classifier ADR-0017 deleted. It reports what the
+  filer declared — sequence, type string, filename, description, byte range — and assigns no role,
+  class, importance or meaning to any of it.
+- **`packages/coverage_validation`** — an elastic reader that preserves unknown model-returned
+  fields and requires no node-type vocabulary; source-reference resolution against the preserved
+  bytes; generic numeric signals. `ValidationStatus` has **no `COMPLETE` member**, deliberately.
+- **`packages/prompt_registry`** — versioned prompts locked by SHA-256. Editing a version that has
+  been used fails at load, in the suite and in CI.
+- **`packages/model_catalog/routing.py`** — the four-role router, completing the package that
+  arrived in Phase 1 carrying half its responsibility. Region is DERIVED from the reviewed snapshot
+  and a cross-region route is always disclosed.
+- **`packages/llm_gateway/providers/bedrock.py`** — the Bedrock Converse adapter, the only place an
+  AWS SDK is imported anywhere in the repository. It separates reasoning content from visible
+  answer text, normalises provider failures with an honest retryable flag, and performs no retry of
+  its own.
+- **`packages/orchestrator`** — preflight, a DURABLE cumulative spend journal that survives a
+  restart, parser-only execution, the local filing catalog, and a bounded in-process worker
+  defaulting to one billable invocation at a time.
+- **`packages/review_api` and `packages/review_web`** — the parser-review application. Raw, Parsed
+  and Side-by-side views; the four model selectors with a visible blank option on the three
+  optional ones; a viewport-anchored copyable parent run identifier; cost preflight before any
+  billable call; review states and developer comments.
+- **`prompts/parser/parser-complete-filing-v1.txt`** and its version manifest — the first
+  provisional parser prompt. It asks for the complete filing in the filing's OWN vocabulary and
+  imposes no section taxonomy.
+- **`docs/adr/ADR-0019`** — the six decisions Phase 2 forced, recorded once.
+- **`tests/architecture/test_phase2_boundaries.py`** and the OpenAPI route-contract check, which
+  compares the specification against the application's real route table in BOTH directions.
+- **`tests/integration/`** returned, and the `integration` marker with it. Every test in the old
+  directory needed a live PostgreSQL; the new one exercises the whole parser-only path against the
+  in-process mock provider with no database, no network, no credential and no listening socket.
+
+### Changed
+
+- **`packages/llm_gateway/providers/base.py`** gained `OriginalSourceBlock`. `model-abstraction.md`
+  had recorded that the interface had no representation for a preserved SEC artifact sent intact,
+  that it would need one before the first real parsing run, and that its shape would be designed
+  against a real adapter rather than guessed. It was.
+- **`LlmGateway.invoke`** admits original source by PROVENANCE — the bytes must hash to the SHA-256
+  the source store recorded — rather than by syntax, which would reject an inline-XBRL filing for
+  containing HTML. It also gained `strict_response=False`, under which a response that fails the
+  boundary check is recorded with its exact bytes instead of raising: that response was bought, and
+  whether the prompt or the model is at fault is what a reviewer is there to decide.
+- **`InvocationRecord.cost_usd` is a `Decimal`**, and the price arithmetic has exactly one home.
+- **`ModelCapability.verified_regions` is an ordered tuple, not a frozenset.** The router picks the
+  first verified region when the preferred one is absent, and a set would make that choice depend
+  on hash ordering — a different region on a different interpreter run, and an unreproducible bill.
+- **`packages/storage.ObjectStore` gained `list_keys`**, and the filesystem backend now fsyncs.
+- **`docs/api/openapi.yaml`** describes both halves honestly: 27 IMPLEMENTED operations compared
+  against the real route table, and 14 that remain PLANNED.
+- **`boto3` is an OPTIONAL extra.** "Ordinary CI is AWS-free" now means the SDK is not installed.
+
+### Fixed
+
+- **The content boundary could not tell a YAML scalar QUOTING markup from a markup RESPONSE.** A
+  parser response is required to quote filings verbatim, and filings are SGML, HTML or inline
+  XBRL — so under the old rule no response quoting a pre-2001 filing could ever pass, which is the
+  entire corpus era this product exists to cover. Observed on the first real benchmark. A document
+  that PARSES as one YAML 1.2 mapping is now accepted as one unfenced YAML document, and only
+  SERIALIZATION violations still apply to it. JSON is a YAML subset, so the JSON detectors stay, as
+  do the fence, native-tool and structural checks; mutation tests prove a JSON response, a fenced
+  response and a genuinely markup response are all still refused.
+- **The AWS SDK retried underneath the cost ceiling.** botocore retries by default and a Converse
+  call is billable from the moment it is issued, so an SDK-level retry was a second charge that
+  `RetryBudget` never counted and the spend journal never recorded — the ceiling was being enforced
+  against a number smaller than the bill. The client is now constructed for one total attempt. The
+  same change raised the read timeout from the SDK's 60-second default: the first real parse of a
+  preserved filing took 158 seconds, and a candidate with a larger output limit timed out at the
+  default on the same filing.
+- **An inline-XBRL primary document was dispositioned MACHINE_ONLY and silently dropped from the
+  source set.** Inline XBRL is XHTML: the document opens with an XML declaration and carries XBRL
+  and XLink namespaces on its `html` root, which matched the machine-artifact rule before the
+  HTML-root check. Measured on accession `0000794367-25-000156`, the single most important member
+  of a modern filing — the 10-Q/A itself — was excluded while three certification exhibits and an
+  image were submitted, coverage counts reconciled against what WAS submitted, and nothing anywhere
+  said the filing had not been sent. Found by reading a disposition table, not by an assertion. The
+  HTML-root check now runs first and a regression test locks it.
+- **Eleven further defects found by the test authors**, each reported rather than silently fixed
+  around: every modern filing reported its own complete submission as uncovered content; source
+  reference offsets were emitted in three coordinate systems while the UI treated them as one; a
+  zero offset was dropped from a URL because `0 == False`; `href` values were HTML-escaped twice
+  and never percent-encoded; a JSON run request containing an `=` in any value was parsed as a
+  form; `CompositeInventory` did not fall through on `ValueError`, so an absolute local path
+  crashed preflight; a hash-invalid held member was never re-acquired although three docstrings
+  promised it was; the adapter crashed with `AttributeError` on `metrics: null`, losing an
+  already-billed response; an undeclared image format defaulted to PNG and a text block with no
+  decoded text was sent as an empty body; `image_coverage_report` contradicted itself for a filing
+  with no images; and a null parsing selection loaded as the literal string `"None"`.
+
+### Operational changes
+
+- `make review` starts the parser-review application on `127.0.0.1`. Binding beyond loopback
+  requires a development authentication secret from ignored environment state, and
+  `ReviewSettings` refuses to construct without one — the unsafe combination is not reachable by
+  forgetting a flag.
+- `make test-integration` exists again, and CI runs it.
+- Evaluation evidence lives in the gitignored `var/evaluation-runs/`, alongside a durable spend
+  journal that carries the cumulative cost ceiling across restarts.
+- On restart, every mid-flight child job becomes `INTERRUPTED` and **nothing is re-invoked**. A
+  rerun is billable, and a process that came back up is not a user who asked to spend money again.
+
+### Data migrations
+
+None. There is still no database.
+
+
 ## Phase 1 — secure AWS access and model-capability verification (2026-08-03)
 
 **A MODEL RESPONDED FOR THE FIRST TIME IN THIS PROJECT'S HISTORY.** Seven minimal invocations, total

@@ -1,10 +1,11 @@
 # roadmap.md — Kopexx Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 1, 2026-08-03)
-LAST UPDATED: 2026-08-03, after Phase 1 completed against published baseline `d093e73`.
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2, 2026-08-03)
+LAST UPDATED: 2026-08-03, after Phase 2 completed against published baseline `6976cc5`.
 ARCHITECTURE DECISIONS: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
-`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and
-`docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md`
+`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
+`docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md` and
+`docs/adr/ADR-0019-parser-review-application-over-a-framework.md`
 SEQUENCING PRINCIPLE: evidence before architecture; architecture before schema; a working parser
 review loop before anything that depends on parsed data.
 
@@ -41,7 +42,9 @@ retries through a different model, or turns a parser-only run into a full pipeli
 PHASE 0    Corpus evidence                            COMPLETE
 PHASE 0.5  Repository cleanup and corpus reverify     COMPLETE
 PHASE 1    Secure AWS and model-access verification   COMPLETE  2026-08-03
-PHASE 2    Parser experiments + review UI, together   NEXT — needs explicit authorization
+PHASE 2    Parser experiments + review UI, together   COMPLETE  2026-08-03
+PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
+                                                      BLOCKED on a user parser-selection decision
 PHASE 3    Optional model stages: image, summary, chat
 PHASE 4    Persistence, approval gate and reuse
 PHASE 5    Background population
@@ -50,15 +53,20 @@ PHASE 7    Deep Dive
 PHASE 8    Breadth and optimization
 ```
 
-**AWS IS CONFIGURED AND FIVE MODELS HAVE ANSWERED.** Seven minimal invocations on 2026-08-03, total
-spend USD 0.00023 under an authorized USD 1.00 ceiling, proving reachability and nothing else. The
-verified identifiers, regions, modalities, limits and prices are in
-`docs/llm/bedrock-capability-snapshot.yaml` and are not repeated anywhere else.
+**FILINGS HAVE NOW BEEN PARSED BY REAL MODELS.** A parser-only orchestration path, a durable
+evaluation store, a Bedrock runtime adapter, the four-role router, hash-locked prompt versions,
+generic output validation and a working parser-review UI all exist and run. The shared cross-model
+benchmark and its measured figures are recorded in `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`
+and `docs/llm/model-benchmark.md`; per-filing cost is recorded in `docs/llm/cost-model.md`. The
+verified identifiers, regions, modalities, limits and prices remain in exactly one file,
+`docs/llm/bedrock-capability-snapshot.yaml`.
 
-**NOTHING IS DEPLOYED. NO SUMMARY EXISTS. NO APPLICATION DATABASE EXISTS. NO SEC FILING HAS BEEN
-SENT TO ANY MODEL.** Every cost figure in `docs/llm/cost-model.md` remains a placeholder — official
-price INPUTS are now known, but the token counts they multiply are not, and the first measured cost
-per filing is Phase 2.
+**STILL TRUE AFTER PHASE 2, AND NOT SMALL.** Nothing is deployed. No application database exists.
+No Redis exists. No summary artifact, no image artifact and no chat session exists — Phase 2 ran
+the PARSING stage only, and the orchestrator raises rather than running another. An approved
+artifact records a judgement and activates no reuse: no search consults the evaluation store and no
+cache is populated. Breadth across the 22 substantive form strings has NOT been attempted and is
+blocked on a user decision about which parser and prompt version should advance.
 
 | Area | Status |
 |---|---|
@@ -77,12 +85,17 @@ per filing is Phase 2.
 | Deterministic semantic parser, canonical footnotes, table ownership | **DELETED** (ADR-0017) |
 | DERA mirror and fact loader | **DELETED** (ADR-0017); the mirrored data is untouched |
 | Application PostgreSQL schema, ORM, Alembic migrations | **DELETED** (ADR-0017) |
-| Filed-document lister, non-classifying | NOT STARTED — Phase 2 |
+| Filed-document lister, non-classifying | IMPLEMENTED — Phase 2, `filing_acquisition/documents.py` |
 | Secure AWS access, Bedrock capability discovery | COMPLETE — Phase 1, 2026-08-03 |
-| Four-role model router | NOT STARTED — Phase 2, completes `packages/model_catalog` |
-| Real provider adapter | NOT STARTED — Phase 2 |
-| Parser-review UI | NOT STARTED — Phase 2, built WITH the parser experiments |
-| Parsed / image / summary / chat artifacts | NOT STARTED — Phases 2, 3 |
+| Four-role model router | IMPLEMENTED — Phase 2, completes `packages/model_catalog` |
+| Real provider adapter | IMPLEMENTED — Phase 2, `llm_gateway/providers/bedrock.py` |
+| Source-set assembly, raw-first reuse, intact-source compatibility | IMPLEMENTED — Phase 2 |
+| Coverage validation of model output | IMPLEMENTED — Phase 2, `packages/coverage_validation` |
+| Versioned, hash-locked prompts | IMPLEMENTED — Phase 2, `packages/prompt_registry` |
+| Parent runs, child jobs, evaluation storage, comments, review states | IMPLEMENTED — Phase 2 |
+| Parser-review UI | IMPLEMENTED — Phase 2, built WITH the parser experiments |
+| Parsed evaluation artifacts | IMPLEMENTED — Phase 2, provisional and derived from real output |
+| Image / summary / chat artifacts | NOT STARTED — Phase 3 |
 | Persistence, approval gate, Redis cache | NOT STARTED — Phase 4 |
 | Background population | NOT STARTED — Phase 5, needs separate authorization |
 | Functional beta UI | NOT STARTED — Phase 6 |

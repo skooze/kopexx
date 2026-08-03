@@ -134,3 +134,10 @@ S3 storage for preserved source and artifact versions, and NAT egress. **Model i
 and is unmeasured** — no model has been invoked, so every figure in `docs/llm/cost-model.md` is a
 placeholder. Backfill is a one-time burst and requires separate authorization; steady state is
 dominated by model calls.
+
+> **SUPERSEDED 2026-08-03 BY PHASE 2, ADDITIVELY.** The statement above was true when written and is
+> kept for that reason (`rules.md` section 21 rule 16). A Bedrock adapter now exists and real
+> filings have been parsed; see `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`. The
+> figures in this document that depend on a model having been invoked are measured for THREE
+> filings only, which is not a denominator, and nothing here extrapolates to a corpus.
+

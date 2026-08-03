@@ -78,10 +78,17 @@ jobs:
       - name: Unit tests
         run: make test-unit
 
+      # Exercises the whole parser-only path across every package against the in-process mock
+      # provider. It needs no database, no network, no credential and no listening socket — which
+      # is why the zero-skip gate below still has no legitimate excuse.
+      - name: Integration tests
+        run: make test-integration
+
       # Enforces the structural invariants in rules.md, including the LLM content boundary:
       # no provider SDK outside the provider adapter, no Markdown prompt files, no prompt
-      # instructing a model to emit a prohibited format, no empty package stubs, and the OpenAPI
-      # contract's own parse and reference resolution.
+      # instructing a model to emit a prohibited format, no empty package stubs, the OpenAPI
+      # contract's own parse and reference resolution, and — added in Phase 2 — that every route
+      # the application actually serves is described in that contract and vice versa.
       - name: Architecture tests
         run: make test-architecture
 

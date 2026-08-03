@@ -42,6 +42,14 @@ from .errors import (
     SnapshotFormatError,
     UnknownModelLabelError,
 )
+from .routing import (
+    RoleSelection,
+    RoutingDecision,
+    SelectorEntry,
+    route,
+    route_selection,
+    selector_entries,
+)
 from .spend import RetryBudget, SpendLedger
 
 __all__ = [
@@ -58,11 +66,17 @@ __all__ = [
     "PriceInputs",
     "ResolvedModel",
     "RetryBudget",
+    "RoleSelection",
+    "RoutingDecision",
     "RetryBudgetExceededError",
+    "SelectorEntry",
     "SmokeInstruction",
     "SmokeTransport",
     "SnapshotFormatError",
     "SpendLedger",
     "UnknownModelLabelError",
     "load_snapshot",
+    "route",
+    "route_selection",
+    "selector_entries",
 ]

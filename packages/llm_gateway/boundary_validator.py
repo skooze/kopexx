@@ -181,12 +181,58 @@ def validate_plain_text(text: str) -> BoundaryReport:
     )
 
 
+#: Violations that describe the SERIALIZATION rather than a value inside it.
+#:
+#: These are the ones that still apply to a document that parses as YAML. A response that starts
+#: `{"` is JSON whatever else is true of it; a fenced document is fenced; a native tool schema is a
+#: native tool schema. None of them can be a quoted scalar the way markup can.
+_SERIALIZATION_VIOLATIONS: frozenset[Violation] = frozenset(
+    {
+        Violation.JSON_OBJECT,
+        Violation.JSON_ARRAY,
+        Violation.JSON_LINES,
+        Violation.JSON_SCHEMA,
+        Violation.NATIVE_TOOL_SCHEMA,
+        Violation.MARKDOWN_FENCE,
+    }
+)
+
+
+def _parses_as_one_yaml_mapping(text: str) -> bool:
+    """Whether the text really is one YAML 1.2 document with a mapping at its root.
+
+    Imported here rather than at module scope so the validator stays usable as a pure textual
+    check by anything that does not want the parser's resource limits.
+    """
+    from .yaml_parser import parse_yaml  # noqa: PLC0415 - see above
+
+    try:
+        return isinstance(parse_yaml(text), dict)
+    except Exception:  # noqa: BLE001 - any parse failure means "not one YAML mapping"
+        return False
+
+
 def validate_yaml_text(text: str) -> BoundaryReport:
     """Validate that the content is exactly one unfenced YAML 1.2 document.
 
     A YAML payload must not be wrapped in a Markdown fence, must not carry explanatory prose
     before or after the document, and must not contain multiple documents. A leading ``---``
     document-start marker is permitted; a second one is not.
+
+    MARKUP INSIDE A QUOTED SCALAR IS NOT A MARKUP RESPONSE, AND CONFLATING THE TWO BROKE THE
+    PRODUCT. The textual detectors cannot tell `<TYPE>EX-27` appearing as the serialization from
+    the same characters appearing inside a YAML string — and a parser response is REQUIRED to carry
+    verbatim quotes from filings that are SGML, HTML or inline XBRL. Under the old rule, no
+    response quoting a pre-2001 filing could ever pass, which is the entire corpus era this product
+    exists to cover. Measured on the first real benchmark: a model returned a well-formed YAML
+    document whose source quotes contained the filing's own tags, and it was rejected for
+    `html_markup`.
+
+    So when the text PARSES as exactly one YAML 1.2 document with a mapping at its root, that is
+    the proof it is one unfenced YAML document, and only the SERIALIZATION violations still apply.
+    This is not a relaxation: JSON is a YAML subset, so the JSON detectors stay, and so do the
+    fence, native-tool and structural checks. What is dropped is only the claim that a filing may
+    not be quoted accurately.
     """
     if not text or not text.strip():
         return BoundaryReport(
@@ -196,6 +242,8 @@ def validate_yaml_text(text: str) -> BoundaryReport:
             detail="yaml payload is empty",
         )
     found = _shared_violations(text)
+    if _parses_as_one_yaml_mapping(text):
+        found = [v for v in found if v in _SERIALIZATION_VIOLATIONS]
 
     stripped = text.strip()
     lines = stripped.splitlines()

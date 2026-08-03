@@ -1,9 +1,19 @@
-# ARCHITECTURAL BETA CONTRACT. NOTHING HERE IS IMPLEMENTED.
+# TWO CONTRACTS IN ONE FILE, AND THEY ARE NOT THE SAME KIND OF THING.
 #
-# NO SERVER EXISTS. No endpoint below has been built, deployed, or called, and this file
-# deliberately declares no `servers:` block — naming one would imply otherwise. This document
-# records the SHAPE the beta API is intended to take so the specifications, the UX and the data
-# dictionary can agree with one another. It is redesigned as it is implemented in Phases 3 and 6.
+# PHASE 2 — THE PARSER-REVIEW APPLICATION — IS IMPLEMENTED AND RUNNING LOCALLY. Every operation
+# marked `x-implementation-status: IMPLEMENTED` is served today by `packages/review_api`, and
+# `tests/architecture/test_openapi_contract.py` compares this document against the application's
+# own route table in BOTH directions: an operation marked IMPLEMENTED that no route serves fails
+# the build, and a route the application serves that this document does not describe fails it too.
+#
+# THE BETA API IS STILL PLANNED. Every operation marked `x-implementation-status: PLANNED` records
+# the SHAPE the beta is intended to take so the specifications, the UX and the data dictionary can
+# agree with one another. It is redesigned as it is implemented in Phases 4 and 6.
+#
+# NO SERVER IS DECLARED, AND THAT IS DELIBERATE EVEN NOW. The review application binds to the
+# loopback interface on a port the operator chooses; naming a URL here would turn a single-user
+# development tool into a documented endpoint, and tooling would render a "try it" button for a
+# host nobody else can reach.
 #
 # Authoritative direction: docs/adr/ADR-0016-corpus-first-model-first-architecture.md and
 # roadmap.md. The product is an orchestrator-driven, model-first SEC filing product: the backend
@@ -23,13 +33,22 @@
 openapi: 3.1.0
 
 info:
-  title: Kopexx API — architectural beta contract
-  version: 0.0.0-unimplemented
-  summary: Conceptual endpoints for the orchestrator-driven, model-first SEC filing beta.
+  title: Kopexx API — the parser-review application, and the architectural beta contract
+  version: 0.1.0-phase2
+  summary: The implemented parser-review surface, plus conceptual endpoints for the beta.
   description: |
-    NOT IMPLEMENTED. No server exists and no endpoint has been built.
+    PARTLY IMPLEMENTED. Read the status on each operation and believe it rather than this summary.
 
-    Every operation carries `x-implementation-status: PLANNED` and the phase that will build it.
+    IMPLEMENTED — the Phase 2 parser-review application, served locally by `packages/review_api`
+    over the standard library, bound to the loopback interface unless deliberately configured
+    otherwise. These operations exist, are exercised by the test suite, and are compared against
+    the application's real route table by an architecture test.
+
+    PLANNED and NOT IMPLEMENTED — the beta API. No server serves any of it, no endpoint has been
+    built, and every one of them carries the phase that will build it.
+
+    Every operation carries `x-implementation-status`, and the only permitted values are
+    `IMPLEMENTED` and `PLANNED`.
 
     Four independent model roles are selected by the user for every job: parsing, image, summary,
     and analysis/chat. No role inherits another's model, and there is no automatic substitution.
@@ -43,6 +62,12 @@ info:
     identifier: LicenseRef-Proprietary
 
 tags:
+  - name: review
+    description: |
+      The IMPLEMENTED Phase 2 parser-review application. Parent runs, child filing jobs, exact
+      request and response evidence, validation, review states and developer comments. The browser
+      never receives a credential, a provider endpoint or a filesystem path, and there is no
+      browser-to-provider route.
   - name: entities
     description: |
       The locally maintained catalog of entities with qualifying 10-K/10-Q-family filings. Backed
@@ -60,6 +85,612 @@ tags:
     description: Deep Dive sessions bound to an immutable scope.
 
 paths:
+  # ------------------------------------------------------------------------------------------
+  # IMPLEMENTED — the Phase 2 parser-review application.
+  #
+  # Served by packages/review_api. HTML operations render the review UI; the /api operations
+  # return browser-facing JSON, which is outside the LLM content boundary because a browser is
+  # not a model (ADR-0013).
+  # ------------------------------------------------------------------------------------------
+
+  /health:
+    get:
+      tags: [review]
+      operationId: reviewHealth
+      summary: Liveness, bind mode, cost ceiling and cumulative spend.
+      description: |
+        Deliberately carries no account-specific material: no account identifier, no ARN, no
+        profile name, no credential path. It reports the bind mode so an operator can tell a
+        loopback instance from one on a network interface without guessing.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: The instance is serving.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewHealth" }
+
+  /:
+    get:
+      tags: [review]
+      operationId: reviewIndex
+      summary: The review workspace, with the persistent left search panel.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /sign-in:
+    get:
+      tags: [review]
+      operationId: reviewSignInPage
+      summary: The development sign-in form, used only when bound beyond loopback.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+    post:
+      tags: [review]
+      operationId: reviewSignIn
+      summary: Exchange the development secret for a server-side session.
+      description: |
+        The secret comes from ignored environment state and is never stored in this repository.
+        The cookie carries an opaque session identifier and nothing else — no role, no claim, and
+        nothing a client could forge.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "303":
+          description: Signed in.
+        "401":
+          description: Refused.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /static/app.css:
+    get:
+      tags: [review]
+      operationId: reviewStylesheet
+      summary: The stylesheet, served from its own route so the content policy can forbid inline style.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: CSS.
+          content:
+            text/css:
+              schema: { type: string }
+
+  /static/app.js:
+    get:
+      tags: [review]
+      operationId: reviewScript
+      summary: The single script. It copies the run identifier and does nothing else.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: JavaScript.
+          content:
+            text/javascript:
+              schema: { type: string }
+
+  /api/models:
+    get:
+      tags: [review]
+      operationId: reviewListModels
+      summary: The four model selectors, each row carrying everything the UX specification requires.
+      description: |
+        Read from the reviewed capability snapshot, which is the only place identifiers, regions,
+        modalities, limits and prices are written down. Unavailable candidates are RETURNED with a
+        concrete reason rather than filtered away: a candidate that silently vanishes from a
+        selector is indistinguishable from one that was never approved.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: Selector metadata for all four roles.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelSelectors" }
+
+  /api/entities:
+    get:
+      tags: [review]
+      operationId: reviewSearchEntities
+      summary: Typeahead over the local catalog of entities with qualifying filings.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Matches, ticker matches first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogEntity" }
+
+  /api/entities/{cik}:
+    get:
+      tags: [review]
+      operationId: reviewGetEntity
+      summary: One entity, with the filing-history bounds a timeframe control needs.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+      responses:
+        "200":
+          description: The entity.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogEntity" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/entities/{cik}/filings:
+    get:
+      tags: [review]
+      operationId: reviewListEntityFilings
+      summary: Preserved qualifying filings for one entity, newest first.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Filings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogFiling" }
+
+  /preflight:
+    post:
+      tags: [review]
+      operationId: reviewPreflightPage
+      summary: The cost-preflight page, shown before anything billable happens.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "400":
+          description: Refused, with the reason rendered.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /api/preflight:
+    post:
+      tags: [review]
+      operationId: reviewPreviewRunCost
+      summary: Compatibility and a worst-case cost bound for every filing in a request.
+      description: |
+        Assembles each source set, checks it against the selected model under INTACT_SOURCE_ONLY,
+        and bounds the cost. Nothing is invoked and nothing is charged. A filing whose complete
+        source set does not fit is reported INCOMPATIBLE here with the measured bytes, the
+        estimated tokens and the model's verified limit — it is not truncated, split or moved to a
+        different model.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunRequest" }
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunPlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /runs:
+    post:
+      tags: [review]
+      operationId: reviewCreateRun
+      summary: Create one parent run and one child job per filing.
+      description: |
+        A multi-year request is never concatenated into one invocation. Only the parsing stage runs
+        in this phase; selecting a summary or analysis model is refused rather than executed.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunRequest" }
+      responses:
+        "202":
+          description: Accepted; child jobs are queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id, job_ids]
+                properties:
+                  run_id: { type: string }
+                  job_ids:
+                    type: array
+                    items: { type: string }
+        "303":
+          description: A browser is redirected to the run page.
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/runs:
+    get:
+      tags: [review]
+      operationId: reviewListRuns
+      summary: Every stored evaluation run, newest first.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      responses:
+        "200":
+          description: Run summaries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/RunSummary" }
+
+  /runs/{run_id}:
+    get:
+      tags: [review]
+      operationId: reviewRunPage
+      summary: One parent run and its child filing jobs.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}:
+    get:
+      tags: [review]
+      operationId: reviewGetRun
+      summary: The parent run manifest and every child job.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run, summary, jobs]
+                properties:
+                  run: { type: object, additionalProperties: true }
+                  summary: { $ref: "#/components/schemas/RunSummary" }
+                  jobs:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChildJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/events:
+    get:
+      tags: [review]
+      operationId: reviewStreamRunEvents
+      summary: Server-sent progress events, resumable through Last-Event-ID.
+      description: |
+        Carries a kind, a child job identifier and a short message. No filing text and no provider
+        payload crosses this stream: bodies live in the evaluation store and are referenced. The
+        stream closes once every child job has reached a terminal state.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: An event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/cancel:
+    post:
+      tags: [review]
+      operationId: reviewCancelRun
+      summary: Cancel every child job that has not yet been invoked.
+      description: |
+        A RUNNING job is not cancelled. The provider call is billable from the moment it is issued,
+        and marking it cancelled would hide a charge the ledger still has to settle.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: The jobs that were cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cancelled]
+                properties:
+                  cancelled:
+                    type: array
+                    items: { type: string }
+        "303":
+          description: A browser is redirected back to the run page.
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/comments:
+    get:
+      tags: [review]
+      operationId: reviewListComments
+      summary: Every developer comment on one run, oldest first.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Comments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/ReviewComment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/jobs/{job_id}:
+    get:
+      tags: [review]
+      operationId: reviewJobPage
+      summary: "The review surface: raw, parsed, and side by side."
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+        - name: view
+          in: query
+          schema: { type: string, enum: [raw, parsed, side-by-side], default: side-by-side }
+        - name: artifact
+          in: query
+          schema: { type: string }
+        - name: offset
+          in: query
+          description: A character offset in the preserved artifact, highlighted in the raw view.
+          schema: { type: integer, minimum: 0 }
+        - name: length
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}:
+    get:
+      tags: [review]
+      operationId: reviewGetChildJob
+      summary: One child filing job, with its routing, costs, attempts and review history.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChildJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/source:
+    get:
+      tags: [review]
+      operationId: reviewGetJobSourceArtifact
+      summary: The exact preserved bytes of one submitted source artifact.
+      description: |
+        The bytes that were actually sent to the model, preserved with the run. Served as text and
+        rendered escaped; nothing from a filing is ever parsed as markup by the browser.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+        - name: artifact
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: The preserved artifact.
+          content:
+            text/plain:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/response:
+    get:
+      tags: [review]
+      operationId: reviewGetExactModelResponse
+      summary: The exact bytes the model returned, before anything read them.
+      description: |
+        Authoritative whenever it and the parsed view could disagree. Preserved before validation
+        runs, so a response that will not parse is still reviewable.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The exact response.
+          content:
+            text/plain:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/parsed:
+    get:
+      tags: [review]
+      operationId: reviewGetParsedEvaluationArtifact
+      summary: The parsed evaluation artifact, read elastically.
+      description: |
+        DELIBERATELY LOOSELY TYPED AND PROVISIONAL. A node carries whatever `type` and `title` the
+        filing and the model produced. There is no enum of section kinds, no required hierarchy,
+        and no obligation for any filing to use a particular vocabulary. Unknown keys are preserved
+        rather than dropped.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The parsed artifact, as the model shaped it.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The response is not readable as one YAML document; the exact bytes remain.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/runs/{run_id}/jobs/{job_id}/validation:
+    get:
+      tags: [review]
+      operationId: reviewGetValidation
+      summary: What the backend proved against the preserved bytes.
+      description: |
+        Coverage signals, resolved and unresolved source references, and generic numeric checks.
+        `COMPLETE` is not a status this validator can issue.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The validation record.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationRecord" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/jobs/{job_id}/review:
+    post:
+      tags: [review]
+      operationId: reviewSetReviewState
+      summary: Move an artifact's review state, appending to its history.
+      description: |
+        Review state is independent of execution state and is never inferred from it. Approval
+        records a judgement and activates nothing: no search consults the artifact, no cache is
+        populated, and reuse remains disabled until roadmap.md Phase 4 authorizes it.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The new review state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [review_state]
+                properties:
+                  review_state: { $ref: "#/components/schemas/ReviewStateValue" }
+        "303":
+          description: A browser is redirected back to the job page.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/jobs/{job_id}/comments:
+    post:
+      tags: [review]
+      operationId: reviewAddComment
+      summary: Record one developer evaluation comment, bound to the artifact version.
+      description: |
+        Comments are DATA. They are displayed as text and are never placed into model-visible
+        content.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "201":
+          description: The stored comment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewComment" }
+        "303":
+          description: A browser is redirected back to the job page.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ------------------------------------------------------------------------------------------
+  # PLANNED — the beta API. None of the following is implemented.
+  # ------------------------------------------------------------------------------------------
   /entities/search:
     get:
       tags: [entities]
@@ -433,6 +1064,17 @@ paths:
 
 components:
   parameters:
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      description: An opaque parent run identifier. Carries no account, issuer or model information.
+      schema: { type: string, pattern: "^run_[a-z2-7]{26}$" }
+    ChildJobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^job_[a-z2-7]{26}$" }
     Cik:
       name: cik
       in: path
@@ -485,6 +1127,263 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    ReviewHealth:
+      type: object
+      required: [status, bind_mode, cost_ceiling_usd, cumulative_spend_usd]
+      description: |
+        Deliberately carries nothing account-specific. No account identifier, no ARN, no profile
+        name, no credential path, no provider endpoint.
+      properties:
+        status: { type: string }
+        bind_mode: { type: string, enum: [loopback, network interface] }
+        authentication_required: { type: boolean }
+        https: { type: boolean }
+        preferred_region: { type: string }
+        catalog_entities: { type: [integer, "null"] }
+        catalog_filings: { type: [integer, "null"] }
+        cost_ceiling_usd: { type: string, description: An exact decimal carried as text. }
+        cumulative_spend_usd: { type: string }
+        max_concurrent_invocations: { type: integer, minimum: 1 }
+        stages_executed_in_this_phase:
+          type: array
+          items: { type: string }
+
+    ModelSelectorEntry:
+      type: object
+      required: [label, provider, region, badge, available]
+      description: |
+        One dropdown row. An unverified field renders as unverified, never as blank and never as a
+        guess. A disabled row always carries a concrete reason.
+      properties:
+        label: { type: string }
+        provider: { type: string }
+        version: { type: string }
+        region: { type: string }
+        in_preferred_region: { type: boolean }
+        inference_profile_id: { type: [string, "null"] }
+        uses_inference_profile: { type: boolean }
+        text_input: { type: boolean }
+        image_input: { type: boolean }
+        multimodal: { type: boolean }
+        badge: { type: string, enum: [Multimodal, Text only] }
+        context_tokens: { type: integer }
+        max_output_tokens: { type: integer }
+        available: { type: boolean }
+        disabled_reason: { type: [string, "null"] }
+        price_input_per_1k: { type: string }
+        price_output_per_1k: { type: string }
+        currency: { type: string }
+
+    ModelSelectors:
+      type: object
+      required: [preferred_region, roles]
+      description: |
+        One entry per role. Only `parsing` is required; the other three carry an explicit blank
+        option, which is a VISIBLE choice rather than a hidden default.
+      properties:
+        preferred_region: { type: string }
+        roles:
+          type: object
+          additionalProperties:
+            type: object
+            required: [required, entries, executed_in_this_phase]
+            properties:
+              required: { type: boolean }
+              executed_in_this_phase: { type: boolean }
+              blank_option:
+                type: [object, "null"]
+                properties:
+                  label: { type: string }
+                  display: { type: string }
+              entries:
+                type: array
+                items: { $ref: "#/components/schemas/ModelSelectorEntry" }
+
+    CatalogEntity:
+      type: object
+      required: [cik, name, earliest_filing_date, latest_filing_date, filing_count]
+      description: |
+        NO FABRICATED IDENTITY. Tickers and former names come from what EDGAR returned; an issuer
+        with none has none here, and no plausible reconstruction is substituted.
+      properties:
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        name: { type: string }
+        tickers:
+          type: array
+          items: { type: string }
+        former_names:
+          type: array
+          items: { type: string }
+        sic_description: { type: string }
+        earliest_filing_date: { type: string, format: date }
+        latest_filing_date: { type: string, format: date }
+        filing_count: { type: integer, minimum: 1 }
+        forms_present:
+          type: array
+          items: { type: string }
+
+    CatalogFiling:
+      type: object
+      required: [cik, accession, form_as_filed, filing_date]
+      properties:
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        accession: { type: string }
+        form_as_filed:
+          type: string
+          description: The EXACT filed string, preserved verbatim and never normalized.
+        filing_date: { type: string, format: date }
+        report_period: { type: [string, "null"], format: date }
+        issuer_label: { type: string }
+        transport_era: { type: string }
+        is_amendment: { type: boolean }
+        is_annual: { type: boolean }
+        form_variant: { type: string }
+        package_file_count: { type: integer }
+        package_image_count: { type: integer }
+        primary_estimated_tokens:
+          type: integer
+          description: An ESTIMATE from a character ratio, never a provider tokenizer count.
+
+    RunRequest:
+      type: object
+      required: [cik, parsing_label]
+      description: |
+        Only `parsing_label` is required. A blank image, summary or analysis label runs NO stage
+        and never causes another role's model to be used.
+      properties:
+        cik: { type: string, pattern: "^[0-9]{10}$" }
+        parsing_label: { type: string, minLength: 1 }
+        image_label: { type: [string, "null"] }
+        summary_label: { type: [string, "null"] }
+        analysis_label: { type: [string, "null"] }
+        accession: { type: [string, "null"] }
+        from_date: { type: [string, "null"], format: date }
+        to_date: { type: [string, "null"], format: date }
+
+    RunPlan:
+      type: object
+      required: [routing, prompt, filings, worst_case_total_usd, ceiling_usd, within_ceiling]
+      properties:
+        routing: { type: object, additionalProperties: true }
+        prompt: { type: object, additionalProperties: true }
+        filings:
+          type: array
+          items: { type: object, additionalProperties: true }
+        compatible_filings: { type: integer }
+        incompatible_filings: { type: integer }
+        worst_case_total_usd: { type: string }
+        ceiling_usd: { type: string }
+        already_spent_usd: { type: string }
+        within_ceiling: { type: boolean }
+        cost_note: { type: string }
+
+    RunSummary:
+      type: object
+      required: [run_id, created_at, cik, job_count]
+      properties:
+        run_id: { type: string }
+        created_at: { type: string, format: date-time }
+        cik: { type: string }
+        entity_label: { type: string }
+        parsing_label: { type: string }
+        selected_roles:
+          type: array
+          items: { type: string }
+        job_count: { type: integer }
+        ready_for_review: { type: integer }
+        failed: { type: integer }
+        incompatible: { type: integer }
+        interrupted: { type: integer }
+        actual_cost_usd: { type: string }
+
+    ExecutionStateValue:
+      type: string
+      enum:
+        [CREATED, SOURCE_READY, PREFLIGHT, QUEUED, RUNNING, RESPONSE_RECEIVED, VALIDATING,
+         READY_FOR_REVIEW, FAILED, INCOMPATIBLE, INTERRUPTED, CANCELLED]
+
+    ReviewStateValue:
+      type: string
+      description: |
+        Independent of execution state and never inferred from it. APPROVED records a judgement and
+        activates no reuse.
+      enum: [EVALUATION, UNDER_REVIEW, APPROVED, REJECTED, SUPERSEDED, INVALIDATED]
+
+    ChildJob:
+      type: object
+      required: [job_id, parent_run_id, filing, model_routing, execution_state, review_state]
+      additionalProperties: true
+      properties:
+        job_id: { type: string }
+        parent_run_id: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        filing: { $ref: "#/components/schemas/CatalogFiling" }
+        model_routing: { type: object, additionalProperties: true }
+        prompt: { type: object, additionalProperties: true }
+        settings: { type: object, additionalProperties: true }
+        execution_state: { $ref: "#/components/schemas/ExecutionStateValue" }
+        review_state: { $ref: "#/components/schemas/ReviewStateValue" }
+        source_set_id: { type: [string, "null"] }
+        source_set: { type: [object, "null"], additionalProperties: true }
+        validation: { type: [object, "null"], additionalProperties: true }
+        image_coverage: { type: [object, "null"], additionalProperties: true }
+        incompatibility: { type: [object, "null"], additionalProperties: true }
+        attempts:
+          type: array
+          items: { type: object, additionalProperties: true }
+        review_history:
+          type: array
+          items: { type: object, additionalProperties: true }
+        reserved_cost_usd: { type: [string, "null"] }
+        actual_cost_usd: { type: [string, "null"] }
+        estimated_input_tokens: { type: [integer, "null"] }
+        failure: { type: [string, "null"] }
+
+    ValidationRecord:
+      type: object
+      required: [status, findings]
+      additionalProperties: true
+      description: |
+        Coverage SIGNALS proved against the preserved bytes. `COMPLETE` is deliberately not a
+        permitted status: nothing measured here establishes it.
+      properties:
+        status: { type: string, enum: [REVIEW_REQUIRED, PARTIAL, UNPARSEABLE, EMPTY] }
+        status_note: { type: string }
+        findings:
+          type: array
+          items: { type: string }
+        node_count: { type: integer }
+        table_count: { type: integer }
+        reference_count: { type: integer }
+        references_resolved: { type: integer }
+        references_ambiguous: { type: integer }
+        references_unresolved: { type: integer }
+        artifacts_submitted: { type: integer }
+        artifacts_referenced: { type: integer }
+        model_selected_types:
+          type: object
+          additionalProperties: { type: integer }
+        numeric: { type: object, additionalProperties: true }
+
+    ReviewComment:
+      type: object
+      required: [comment_id, parent_run_id, target_type, target_id, author, created_at, text]
+      properties:
+        comment_id: { type: string }
+        parent_run_id: { type: string }
+        child_job_id: { type: [string, "null"] }
+        target_type: { type: string }
+        target_id: { type: string }
+        target_version: { type: string }
+        author: { type: string, description: A configured LABEL, never a personal identity. }
+        created_at: { type: string, format: date-time }
+        text: { type: string }
+        status: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
     Error:
       type: object
       required: [code, message]

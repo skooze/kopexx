@@ -1,7 +1,11 @@
 # AWS Identity and Secret Management
 
 IMPLEMENTATION STATUS: this policy is IMPLEMENTED GOVERNANCE and is enforced by tests today.
-The Bedrock provider adapter it constrains is PLANNED (Phase 2) and does not exist.
+The Bedrock provider adapter it constrains was PLANNED when that sentence was first written; it is
+IMPLEMENTED as of 2026-08-03, in Phase 2, together with a browser-facing review application this
+document had not previously had to consider. See "Phase 2, 2026-08-03" below. Workload identity on
+AWS, trust policies, deployment roles, Secrets Manager use and Terraform remain PLANNED; nothing is
+deployed.
 
 **FIRST EXERCISED 2026-08-03, IN PHASE 1.** AWS was reached for the first time — control-plane
 discovery and seven minimal model invocations — under temporary IAM Identity Center credentials
@@ -127,7 +131,12 @@ documentation.
 
 ## Bedrock provider requirements — Phase 2
 
-The adapter at `packages/llm_gateway/providers/bedrock.py`, when written, must:
+**WRITTEN 2026-08-03, IN PHASE 2.** The adapter now exists. Every requirement below is met, and the
+next section records how each one is held rather than merely asserted. The list stays in the
+imperative and stays unchanged: it binds the next adapter as strictly as it bound this one, and a
+requirement rewritten into the past tense stops constraining anything.
+
+The adapter at `packages/llm_gateway/providers/bedrock.py` must:
 
 - use the AWS SDK default credential provider chain;
 - accept region and model identifiers as configuration;
@@ -189,6 +198,129 @@ shells out to the CLI, if a shipped package acquires an AWS import or a region l
 CI gains an `id-token` permission or a credential step, or if the smoke tooling or its evidence
 becomes tracked. The instrument that can spend money lives under the gitignored `var/local-tools/`
 and refuses to run without an explicit opt-in flag.
+
+---
+
+## Phase 2, 2026-08-03
+
+Phase 1 reached AWS once, by hand, with the CLI. Phase 2 built the code path — and a browser, and a
+button that spends money. Both are IMPLEMENTED. This section records what that added to the attack
+surface and what holds each part of it closed. It supersedes nothing above; every requirement stated
+earlier still binds.
+
+### The adapter is the only AWS-shaped module in the repository
+
+`packages/llm_gateway/providers/bedrock.py` is the sole module that imports an AWS SDK.
+`tests/architecture/test_architecture.py` fails the build if `boto3` or `botocore` is imported
+anywhere in `packages/` outside the provider directory,
+`tests/architecture/test_phase1_aws_boundary.py` additionally forbids the capability catalog the two
+ways a package reaches AWS without importing an SDK — a subprocess to the CLI, and an HTTP client
+aimed at an AWS endpoint — and `tests/architecture/test_phase2_boundaries.py` extends the SDK ban to
+the browser-facing packages. One module is the entire review surface for this policy, which is the
+property the policy was written to obtain.
+
+**The client is constructed with a region and nothing else.** The factory takes one argument, that
+argument is a region, and it passes one keyword to the SDK. No parameter on the factory, on the
+provider, or anywhere in `packages/configuration` can carry an access key, a secret key, a session
+token, a profile's contents or a credential file path — so the prohibited construction shown above
+is not merely unwritten: there is no value anywhere in the process to write into it. Temporary
+credentials are resolved and refreshed by the default provider chain, exactly as this document
+required before any of the code existed.
+
+**The region has no default, and a missing one fails closed.** `LlmSettings` raises
+`MissingModelRegionError` for any non-mock provider configured without a region, and the client
+factory raises again if an empty one reaches it. The reason is Phase 1 evidence: one approved
+candidate is not offered in the project's preferred region at all, so a defaulted region would have
+made a real model appear unavailable for a reason nobody could see in the code — the form-family
+defect with a bill attached. Verified regions live in exactly one file,
+`../llm/bedrock-capability-snapshot.yaml`, and are reached through `packages/model_catalog`; a
+cross-region route is disclosed rather than taken silently. No region literal is repeated here,
+because a capability recorded twice drifts.
+
+**The SDK is an optional extra, so ordinary CI does not install it at all.** `boto3` is declared
+under the `aws` extra and imported lazily inside the client factory. Ordinary CI installs the `dev`
+extra, so "ordinary CI is AWS-free" now means the SDK is absent rather than merely unused, and
+importing the adapter — which the architecture tests do — costs nothing and requires nothing. A host
+without the extra gets a named error naming the extra to install, not an import traceback and not a
+fallback to some other provider.
+
+**No test reaches AWS, and none can.** The client factory is injectable, so the whole adapter is
+exercised against a fake client with no identity, no network, no port and no skip. That is what
+keeps the suite's property of having no environmental precondition, and what keeps `test-no-skips`
+honest now that a real provider exists.
+
+**What an invocation record holds.** The adapter writes the Converse arguments it built, and the
+provider's response, to the gitignored evaluation store as transport evidence. That envelope is the
+arguments, not the signed HTTP request: no authorization header, no security-token header and no
+credential-provider state exists inside it to leak or to redact. Image bytes are replaced by their
+SHA-256 and byte count, with the exact bytes preserved as a separate evidence object, so an envelope
+stays reconstructible without carrying every artifact twice. What is recorded beyond that is the
+safe operational set this document already names: region, provider request id, latency, token
+counts, stop reason, success or failure.
+
+**Cost control is implemented; cost is not yet measured.** The budget controls required above exist
+— a cumulative spend journal that survives a restart, reservation before the call, settlement after
+it, failed billable calls charged rather than forgiven, and one billable invocation at a time. Price
+inputs are verified in the capability snapshot. The token counts they multiply are not, so any
+dollar figure per filing is PENDING first measurement and must not be quoted as known.
+
+### The review application, which is the exposure Phase 2 actually added
+
+The review UI reads preserved SEC filings, shows run evidence, and has a control that spends money
+against a real AWS account. On loopback that is a single-user developer tool. On a LAN it is an
+unauthenticated remote control for someone else's bill. `packages/review_api/security.py` and
+`packages/configuration.ReviewSettings` hold that closed:
+
+- **Loopback is the default bind address**, and binding beyond it is a deliberate act.
+- **Binding beyond loopback is refused without a development authentication secret.** The refusal
+  is in the settings constructor, so the unsafe combination is unreachable by forgetting a flag
+  rather than merely discouraged in prose. The secret comes from ignored environment state, has no
+  default and no placeholder — an empty placeholder documents an unsafe design as the expected one
+  — must be at least sixteen characters, and is compared in constant time, because a timing oracle
+  on a short secret is a real oracle.
+- **Sessions are server-side and in memory.** The cookie carries an opaque random identifier and
+  nothing else: no role, no user record, no signed claim a client could forge or replay. A restart
+  logs everybody out, which is correct here — a session that survives a restart survives a
+  compromise, and there is nothing in a local tool worth the persistence machinery.
+- **Every state-changing request carries a CSRF token bound to the session.** A browser on another
+  origin can make the request; it cannot read the token.
+- **No CORS header is emitted at all.** The absence is the policy. A permissive header added "for
+  development" is how a permissive header reaches production.
+- **A strict content security policy is applied to every response, without exception**:
+  `default-src 'none'`, stylesheet and script served from the application's own origin, no
+  `unsafe-inline`, framing denied, plus `nosniff`, `no-referrer` and `no-store`. The session cookie
+  is marked `Secure` only when HTTPS is actually configured, because setting it over plain HTTP
+  makes the browser discard the cookie and produces a login loop that reads as a bug rather than as
+  the control it was meant to be.
+
+**Escaping the filing rather than sanitising it is what makes that policy possible.** A preserved
+filing is untrusted bytes from the open internet, and it is rendered as escaped text inside a
+preformatted block — never as markup. Because no filing can contribute an element, an attribute or a
+script, `script-src 'self'` is safe, no HTML sanitizer is needed and no sandboxed iframe is needed.
+A sanitizer would have been wrong for a second reason as well: it rewrites the bytes, and the bytes
+are the evidence coverage is proved against.
+
+**The browser receives no credential, no endpoint and no filesystem path.** It receives model
+labels, regions, states, counts, money, the preserved bytes of a filing and the exact bytes a model
+returned. There is no browser-to-provider route, because no response carries anything a browser
+could call a provider with — the entire model path is server-side through `packages/llm_gateway`.
+`tests/architecture/test_phase2_boundaries.py` fails the build if a browser-facing module so much as
+mentions a credential variable name or a provider endpoint.
+
+**The default access log is silenced deliberately.** The standard library's HTTP server logs the
+full request line, which carries the query string, which carries entity identifiers and search
+terms. `packages/observability` is the single home for structured logging with centralized
+redaction; a second, unredacted log written by the standard library beside it is exactly the defect
+that rule exists to prevent, and the log is the one place nobody thinks to check.
+
+### What Phase 2 did not add
+
+No workload identity, no trust policy, no Terraform, no Secrets Manager use, no deployed service,
+and no AWS role in any CI workflow — ordinary CI still grants `contents: read` and nothing else, and
+`tests/architecture/test_phase1_aws_boundary.py` still fails the build if it gains an `id-token`
+permission or a credential step. Only the parsing stage invokes a model: the image, summary and
+analysis roles are routed but raise `StageNotAuthorizedError` rather than invoke, so no second
+billable path exists to secure yet. Every section below remains PLANNED and binds when it is built.
 
 ---
 

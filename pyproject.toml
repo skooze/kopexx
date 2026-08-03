@@ -24,8 +24,18 @@ dependencies = [
     "httpx>=0.27",
 ]
 
+# THE AWS SDK IS OPTIONAL, AND THAT IS THE POINT. Ordinary CI installs `.[dev]`, so the phrase
+# "ordinary CI is AWS-free" means the provider SDK is not even present rather than merely unused.
+# `packages/llm_gateway/providers/bedrock.py` imports it lazily inside the client factory and
+# raises a named error when it is absent, so importing the adapter — which the architecture tests
+# do — costs nothing and requires nothing. Install it only on a host meant to reach a model.
+#
+# THE REVIEW APPLICATION ADDS NO DEPENDENCY AT ALL. It is served by `http.server` from the standard
+# library, its pages are rendered in Python, and its stylesheet and single script are module
+# constants. There is no web framework, no ASGI server, no bundler and no npm.
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5", "mypy>=1.10"]
+aws = ["boto3>=1.35"]
 
 # Explicit package discovery. Automatic flat-layout discovery fails here because the repository
 # root holds several non-Python top-level directories -- prompts, docs, tests -- and setuptools
@@ -52,13 +62,15 @@ pythonpath = ["."]
 # invoked, and a -q here combined with a -q there silently becomes -qq, which suppresses
 # the "N passed, M skipped" line entirely — so `make test-summary` printed nothing.
 addopts = "--strict-markers"
-# `integration` was removed with tests/integration/. Every test in that directory exercised the
-# deterministic parser or the DERA loader against a live PostgreSQL, and both are deleted. The
-# marker is not kept in reserve: --strict-markers means an unused marker is a promise the suite
-# does not keep, and the marker is re-added by whichever change writes the first integration test.
+# `integration` RETURNED IN PHASE 2, and it returned with the property it previously lacked. It was
+# removed with tests/integration/ because every test in that directory needed a live PostgreSQL, and
+# --strict-markers means an unused marker is a promise the suite does not keep. The Phase 2
+# integration test exercises the whole parser-only path against the in-process mock provider: no
+# database, no network, no credentials and no listening socket.
 markers = [
     "architecture: enforces structural invariants from rules.md",
     "security: proves a security control",
+    "integration: exercises a full path across packages, still with no environmental precondition",
 ]
 
 [tool.ruff]

@@ -110,7 +110,11 @@ class ModelCapability:
     mapping: Mapping
     availability: Availability
     access_status: str
-    verified_regions: frozenset[str]
+    # AN ORDERED TUPLE, NOT A SET, AND THE ORDER IS THE SNAPSHOT'S. Phase 2 routes a model
+    # that is not offered in the preferred region to the FIRST region the reviewed snapshot
+    # verified it in. A set would make that choice depend on hash ordering, which is a
+    # different region on a different interpreter run — an unreproducible bill.
+    verified_regions: tuple[str, ...]
     inference_profile_required: bool
     inference_profile_id: str | None
     text_input: bool

@@ -12,6 +12,16 @@
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
+>
+> **SUPERSEDED 2026-08-03 BY PHASE 2, ADDITIVELY.** The statement above was true when it was
+> written and is kept for that reason (`rules.md` section 21 rule 16). It is no longer true:
+> AWS IS configured, a real Bedrock adapter EXISTS in `packages/llm_gateway/providers/bedrock.py`,
+> and SEC filings HAVE been sent to real models — three preserved filings across five candidates
+> under two prompt versions. See `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`.
+>
+> **WHAT IS STILL TRUE.** No application database exists. No Redis exists. No summary artifact, no
+> image artifact and no chat session exists — Phase 2 ran the PARSING stage only, and the
+> orchestrator raises rather than running another. Nothing is deployed.
 
 IMPLEMENTATION STATUS: PLANNED. The acquisition, preservation and boundary foundation is
 IMPLEMENTED; the orchestrator, the model roles, coverage validation and the artifacts are not.
