@@ -7,6 +7,14 @@ the complete-filing-coverage invariant in sections 1 and 3 by Sprint 4.1 (ADR-00
 Sections 15 to 21 may be strengthened without an ADR and may never be weakened — section 22.
 Section 21, PRODUCT-DIRECTION-INVARIANT, was added by Commit 2 on 2026-08-02.
 
+AMENDED 2026-08-03 by the cleanup commit (ADR-0017), which DELETED the deterministic semantic
+parser, the application persistence layer, its migrations, and the DERA mirror and fact loader.
+Every amendment made that day is a STRENGTHENING or a correction of a statement that had become
+false. Section 21 rule 15 was tightened — the oracle exception it granted is withdrawn. Section 5
+lost four single-home rows whose owning packages no longer exist. Section 8 records the deletion of
+two sealed migrations additively, with the precondition that was verified first, and continues to
+bind every future migration. Nothing was relaxed to make the cleanup pass.
+
 ---
 
 ## 0. MANDATORY READ-FIRST INSTRUCTION
@@ -43,22 +51,34 @@ FinTek is a financial filing and historical analysis platform.
 
 ### What the product does
 
-1. Discovers all covered issuers (initially Nasdaq-listed issuers that have filed at least one
-   10-K or 10-Q).
-2. Retrieves every electronically available 10-K and 10-Q for those issuers, back to the
-   earliest electronic filings in the 1990s, including every document in the filed submission
-   package.
-3. Stores source filings and source datasets in controlled object storage.
-4. Extracts authoritative structured financial facts.
-5. Calculates normalized and derived financial metrics deterministically.
-6. Sends the intact original filing artifact to a user-selected parsing model, which determines
-   the filing's native structure and returns a clean parsed artifact.
+1. Maintains a catalog of SEC-reporting entities that have at least one qualifying substantive
+   10-K/10-Q-family filing. An entity with none never appears in search.
+2. Retrieves every qualifying filing for a selected entity and timeframe, back to the earliest
+   electronic filings in the 1990s, including every document in the filed submission package.
+3. **Checks its own durable source storage BEFORE contacting SEC**, and fetches only what is
+   missing, incomplete or hash-invalid.
+4. Preserves every original SEC artifact byte-for-byte, hashed and provenance-stamped, in
+   controlled object storage.
+5. Creates ONE visible parent run ID per request and ONE child job per filing. Each filing is
+   processed independently; a multi-year request is never concatenated into one invocation.
+6. Sends the complete relevant human-readable source set INTACT to a user-selected parsing model,
+   which determines the filing's native structure and returns an elastic parsed artifact.
 7. Validates that artifact against the preserved bytes for coverage, citations and numbers.
-8. Sends the accepted parse to an independently selected summary model, which returns a separate
-   summary and explanation artifact.
-9. Stores those summaries permanently and immutably (superseded, never overwritten).
-10. Renders financial data, charts, complete filing content, and summaries from stored data.
+8. Presents raw and parsed side by side for review, and records approval, rejection, supersession
+   and granular developer comments against the run.
+9. OPTIONALLY, and only when the user selects each one: analyzes image-bearing content with a
+   separately selected image model; produces a separate summary artifact with a separately
+   selected summary model; and opens a scoped analysis/chat session with a separately selected
+   analysis model. **Only the parsing model is required.**
+10. Stores APPROVED artifacts permanently and immutably (superseded, never overwritten), and
+    serves completed results from stored data with no model call.
 11. Offers an explicit, scoped, metered Deep Analysis action over the complete filing evidence.
+
+**AMENDED 2026-08-03.** Two steps were removed: "extracts authoritative structured financial
+facts" and "calculates normalized and derived financial metrics deterministically". The code that
+did both — the DERA fact loader, the fact lake and the curated metric definitions — is deleted
+(ADR-0017), and neither belongs in a list of what the product does while nothing does it. Numeric
+work returns when a measured requirement for it appears.
 
 ### What the product does not do
 
@@ -149,7 +169,8 @@ Violating any of these blocks sprint completion.
 9. **Never bypass SEC access controls.** All SEC traffic passes the shared rate limiter.
 10. **Never silently accept parser uncertainty.** Low confidence routes to review, not to
     publication.
-11. **Never run a destructive database test against the application database.** See below.
+11. **Never run a destructive database test against the application database.** See below. No
+    database of any kind exists today; this binds the persistence layer when one is built.
 12. **Never require, hold, or store a long-lived AWS access key.** See below.
 13. **Never accept model output on trust.** The selected parsing model determines what filing
     content means; the backend independently validates coverage, citations and numbers against the
@@ -295,9 +316,19 @@ Migration upgrade and downgrade tests run ONLY against a dedicated disposable te
 must FAIL CLOSED if the test target cannot be proven separate.
 ```
 
-A destructive test is any test that drops, truncates, or recreates schema objects. Today that is
-the migration round-trip and the append-only trigger test; anything added later that runs
-`alembic downgrade`, `DROP TABLE`, or `TRUNCATE` is one too.
+**DORMANT SINCE 2026-08-03, AND DELIBERATELY NOT DELETED.** There is no application database, no
+ORM, no migration, and no destructive database test in this repository; the machinery this section
+describes — `packages/persistence/engine`, the disposable-database targets, the preservation gate
+in `tests/conftest.py` — went with them (ADR-0017). **This section binds forward.** It is the
+specification the next persistence layer is built against, and it must be satisfied before the
+first test that drops, truncates or recreates a schema object is written. It is recorded here
+rather than rediscovered later because the incident that produced it cost 2,845 loaded facts.
+
+References below to `packages/persistence/engine` describe how the requirement WAS met, not code
+that exists.
+
+A destructive test is any test that drops, truncates, or recreates schema objects. Anything that
+runs a migration downgrade, `DROP TABLE`, or `TRUNCATE` is one.
 
 **Two variables, two purposes, no fallback.**
 
@@ -395,13 +426,22 @@ through a package's `__init__.py`) are prohibited.
 
 ### Data ownership
 
+**NONE OF THE STORES BELOW EXISTS TODAY.** The only implemented store is a filesystem object store
+holding preserved SEC artifacts. This table is a forward constraint on the persistence that gets
+designed from measured model artifacts, not a description of anything running. Amended 2026-08-03:
+the Parquet and DuckDB rows are retained as constraints rather than as commitments — ADR-0002 is
+reconsidered, not assumed, when that design happens.
+
 | Store | Owns | Must never own |
 |---|---|---|
-| S3 / MinIO | Raw filings, ZIPs, DERA archives, extracted instances, linkbases, table HTML, exact model request and response bodies | Queryable relational state |
-| Parquet | Immutable fact lake, versioned serving partitions, source-block text | Mutable state |
-| DuckDB | Query engine over immutable Parquet | Storage; concurrent writes |
-| PostgreSQL | All control-plane state including the ingest ledger | Financial time series at scale |
-| Redis | Cache, rate buckets, locks, single-flight, event fan-out | Anything authoritative |
+| Object storage | Original SEC artifacts, exact model request and response bodies, large exact artifacts | Queryable relational state |
+| Persistent artifact store | APPROVED parsed, image, summary and chat artifacts; run logs; approval state; comments; lineage | An interpretation no model produced |
+| Redis | A 24-hour cache of APPROVED reusable artifacts, rate buckets, locks, single-flight, event fan-out | **Anything authoritative** |
+| Parquet / DuckDB | Immutable derived serving partitions, if a measured need appears | Mutable state; the authoritative artifact |
+
+**Redis is an acceleration layer with a 24-hour TTL, never the authoritative store.** An artifact
+is served from Redis only when it is `APPROVED` and its full reuse key matches; the persistent
+artifact remains authoritative for every derived product result.
 
 ### Prohibited
 
@@ -431,19 +471,26 @@ Before writing a new function:
 | CIK normalization | `packages/sec_identity/cik.py` |
 | Accession normalization | `packages/sec_identity/accession.py` |
 | SEC URL construction | `packages/sec_identity/urls.py` |
-| Footnote ORACLE generation (benchmark only) | `packages/footnote_extractor/` |
-| Footnote grouping ORACLE (benchmark only) | `packages/footnote_canonicalizer/` |
-| Table-ownership ORACLE (benchmark only) | `packages/footnote_canonicalizer/` |
-| Table structure ORACLE and validator | `packages/table_parser/` |
-| Semantic interpretation of filing content | the SELECTED PARSING MODEL, never backend code |
-| Transport decoding, offsets and format detection | `packages/source_transport/` — Phase 3 |
-| Coverage validation of model output | `packages/coverage_validation/` — Phase 3 |
-| Four-role model routing and capability discovery | `packages/model_catalog/` — Phase 3 |
-| Fiscal period logic | `packages/fiscal/` — RESERVED, not yet created |
+| SEC HTTP traffic and rate limiting | `packages/sec_client/` |
+| Byte-exact preservation and hashing | `packages/storage/` |
+| Structured logging and field redaction | `packages/observability/` |
+| **Semantic interpretation of filing content** | **the SELECTED PARSING MODEL, never backend code** |
+| Qualifying form-family membership | the reviewed contract, SUPPLIED to `filing_discovery`; never a literal in runtime source |
 | Model invocation | `packages/llm_gateway/` |
-| Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, not yet created |
 | Cost calculation | `packages/llm_gateway/cost_calculator.py` |
-| Scope validation | `packages/deep_analysis/scope.py` — RESERVED, not yet created |
+| Filed-document listing, non-classifying | `packages/filing_acquisition/documents.py` — RESERVED, Phase 2 |
+| Transport decoding, offsets and format detection | `packages/source_transport/` — RESERVED, Phase 2 |
+| Coverage validation of model output | `packages/coverage_validation/` — RESERVED, Phase 2 |
+| Four-role model routing and capability discovery | `packages/model_catalog/` — RESERVED, Phase 2 |
+| Bedrock SDK usage | `packages/llm_gateway/providers/bedrock.py` only — RESERVED, Phase 2 |
+| Artifact approval and reuse | `packages/artifact_store/` — RESERVED, Phase 4 |
+| Scope validation | `packages/deep_analysis/scope.py` — RESERVED, Phase 7 |
+
+FOUR ROWS WERE REMOVED ON 2026-08-03, not renamed. Footnote oracle generation, footnote grouping,
+table ownership and table structure named `packages/footnote_extractor`,
+`packages/footnote_canonicalizer` and `packages/table_parser`. All three are deleted (ADR-0017).
+A single-home row for a package that does not exist is worse than no row: it reads as a reservation
+and invites someone to fill it.
 
 Reuse must be domain-driven. Do not create abstraction layers that exist only to be layers.
 
@@ -543,26 +590,34 @@ blocks production. Speculative TODOs are prohibited.
   invisible until something fails much later.
 
 ```
-SEALED MIGRATIONS
+SEALED MIGRATIONS — NONE EXIST. AMENDED 2026-08-03.
 
-0001_initial            applied to a live PostgreSQL on 2026-08-01 (Sprint 3). SEALED.
-                        scripts/generate_initial_migration.py must never be run again: it
-                        rewrites this file in place. It exists only as the record of how the
-                        revision was first produced, in an environment that had no database to
-                        autogenerate against.
+0001_initial and 0002_table_ownership were DELETED from the active tree by the cleanup commit,
+under explicit user authorization, after the rule's own precondition was VERIFIED FIRST:
 
-0002_table_ownership    applied to the same live PostgreSQL on 2026-08-02 (Sprint 4). SEALED.
-                        Adds footnote_table.ownership_kind, ownership_method, and
-                        ownership_evidence, two check constraints, and the unresolved-ownership
-                        index. A change to table ownership is revision 0003, never an edit here.
+    the application database `fintek` DOES NOT EXIST. Connecting with the configured application
+    URL returns FATAL: database "fintek" does not exist. Only `fintek_test` and
+    `fintek_integration_test` exist on the development host, both disposable, neither an
+    application database, and nothing in the repository can now reach either.
+
+No deployed environment ever ran those revisions, so no database is left silently diverged from a
+file claiming to describe it — which is the whole harm this rule exists to prevent. Both revisions
+remain in git history. See docs/adr/ADR-0017, section 5.
+
+THE RULE ITSELF IS NOT WEAKENED AND BINDS EVERY FUTURE MIGRATION. Once a migration has been
+applied to any database that is not disposable, it is never edited in place, never regenerated and
+never deleted. Schema changes come as a new revision. Deleting one requires proving, not asserting,
+that no non-disposable database has run it — and recording that proof, as this entry does.
 ```
 
-**The offline reversibility check must span every revision.** `make migration-check` generates
-`upgrade base:head` and `downgrade head:base`. Both ranges are derived and neither names a revision
-id. Alembic renders only the revisions inside the range it is given, so a hardcoded start silently
-stops covering every migration added after it — which is exactly what happened between `0002`
-arriving and the Sprint 4 closeout: the target exited 0 while generating none of `0002`'s downgrade
-SQL. `tests/unit/test_migrations.py` fails if the recipe names a revision id.
+**Alembic, the migration tests and `make migration-check` were removed with the revisions.** When
+persistence returns — from measured model artifacts, not before — the reversibility check returns
+with it, and it must span EVERY revision: `upgrade base:head` and `downgrade head:base`, both
+ranges DERIVED, neither naming a revision id. Alembic renders only the revisions inside the range
+it is given, so a hardcoded start silently stops covering every migration added after it. That is
+not hypothetical: between `0002` arriving and the Sprint 4 closeout the target exited 0 while
+generating none of `0002`'s downgrade SQL, and a test that read the recipe out of the Makefile was
+what caught it. Rebuild that test with the target.
 
 ---
 
@@ -1117,8 +1172,16 @@ ADR and may never be weakened.
     A claim about what filings contain requires measurement across multiple issuers, industries
     and eras. Corpus totals are dated evidence and are labelled as such wherever they appear.
 
-15. THE EXISTING DETERMINISTIC APPLE WORK IS AN ORACLE, NOT UNIVERSAL PRODUCT TRUTH.
-    It grades a parsing model. It does not define a correct parse and is not a requirement.
+15. THE DETERMINISTIC APPLE WORK IS DELETED. STRENGTHENED 2026-08-03.
+    This rule previously read "IS AN ORACLE, NOT UNIVERSAL PRODUCT TRUTH — it grades a parsing
+    model." That exception is WITHDRAWN and the code is gone (ADR-0017). Grading a model against a
+    deterministic parse makes the deterministic interpretation authoritative again through the
+    back door, which is what rule 1 forbids. The measurement stands as history: 43 canonical
+    footnotes across four Apple filings, 117 of 117 child blocks attached. It measures one issuer,
+    one filing agent and two of six transport eras, and it is not a recall floor for anything.
+    A model's output is validated against the PRESERVED SOURCE BYTES, never against a second
+    parse. Do not reintroduce a deterministic parser as a benchmark, a hint, a fallback, a
+    derived index, or a test fixture generator.
 
 16. HISTORICAL RECORDS ARE CORRECTED ADDITIVELY.
     Committed sprint records and changelog entries are not rewritten to pretend an earlier

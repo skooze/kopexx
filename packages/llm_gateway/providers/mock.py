@@ -9,37 +9,16 @@ from __future__ import annotations
 from ..token_counter import estimate_tokens
 from .base import ModelProvider, ModelRequest, ModelResponse
 
-DEFAULT_YAML_RESPONSE = """schema_version: "footnote-summary-v1.0.0"
-footnote:
-  id: "mock-footnote-0001"
-  number: "1"
-  title: Mock Footnote
-summary:
-  plain_language: A deterministic mock summary produced without invoking a real model.
-  purpose: Exercises the gateway path in tests.
-  classification: routine
-  classification_reason: Fixture content is intentionally unremarkable.
-financial_relationships: []
-important_facts: []
-period_changes: []
-topics:
-  - mock
-accounting_policies: []
-accounting_judgments: []
-risks_and_obligations: []
-deep_dive:
-  recommended: false
-  reasons: []
-quality:
-  confidence: 1.0
-  requires_review: false
-  ambiguous_items: []
-  missing_information: []
-source_coverage:
-  blocks_supplied: 0
-  blocks_referenced: 0
-  tables_supplied: 0
-  tables_referenced: 0
+# THE FIXTURE ASSERTS NO ARTIFACT CONTRACT. Its predecessor was a `footnote-summary-v1.0.0`
+# document with a fixed taxonomy of topics, accounting policies and risk categories, which quietly
+# made the mock the de facto response schema. No model has ever been invoked, so no response shape
+# is known; inventing one here would put the withdrawn ontology back through the test suite. What
+# this document has to be is a well-formed, unfenced YAML 1.2 mapping that exercises the boundary
+# validator, the safe parser and the audit path — and nothing more.
+DEFAULT_YAML_RESPONSE = """schema_version: "mock-response-v1"
+response:
+  text: A deterministic mock response produced without invoking a real model.
+  note: Exercises the gateway path — boundary validation, safe parsing, audit — offline.
 """
 
 

@@ -1,8 +1,15 @@
 # ADR-0005: Group canonical footnotes by XBRL role URI, with an ordered fallback chain
 
-STATUS: ACCEPTED
+STATUS: SUPERSEDED BY ADR-0016, IMPLEMENTATION DELETED BY ADR-0017
 DATE: 2026-08-01
 SPRINT: 1
+
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.**
+>
+> The canonical footnote is no longer a product concept: the selected parsing model determines what
+> a filing means. `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`
+> deleted the grouping implementation, so no code in the active tree performs the chain below.
+> The measurement and the reasoning stand as history. The full retrospective is in ADR-0017.
 
 ## Context
 

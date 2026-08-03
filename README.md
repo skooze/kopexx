@@ -49,9 +49,12 @@ every exception is a place where a paragraph quietly disappears. So the model in
 backend proves the result against the original bytes. Full reasoning:
 [ADR-0016](docs/adr/ADR-0016-corpus-first-model-first-architecture.md).
 
-The old footnote work wasn't wasted — 43 canonical footnotes across four Apple filings, 117 of 117
-child blocks attached correctly — but it's now a **benchmark for grading a model**, not the
-definition of a correct parse.
+The old footnote work produced a real measurement — 43 canonical footnotes across four Apple
+filings, 117 of 117 child blocks attached correctly — and the code that produced it has now been
+**deleted**, not kept as a benchmark. Grading a model against a deterministic parse would quietly
+make the deterministic answer authoritative again, and a yardstick built from one company can't
+speak for the other 111. What a parse is checked against is the preserved source bytes.
+[ADR-0017](docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md).
 
 ## Nothing is sent in pieces
 
@@ -74,19 +77,25 @@ The backend proves this against the preserved bytes. It doesn't take the model's
 
 | Phase | Status |
 |---|---|
-| **Phase 1** — representative filing corpus | **COMPLETE** |
-| **Phase 1.5** — intact-source compatibility | **OPEN**, and it blocks Phase 2 |
-| **Phase 2** — model contract and first real parsing experiments | **BLOCKED**, needs authorization |
-| Phases 3–8 — orchestrator, images, summaries, UI, chat, persistence | not started |
+| **Phase 0** — representative filing corpus | **COMPLETE** |
+| **Phase 0.5** — repository cleanup and corpus reverification | **COMPLETE** |
+| **Phase 1** — secure AWS access and model-capability verification | **NEXT**, and everything waits on it |
+| **Phase 2** — parser experiments *and* the review UI, built together | not started |
+| Phases 3–8 — optional model stages, persistence, beta UI, Deep Dive | not started |
 
-**What exists today.** The SEC client with rate limiting and throttle classification; CIK,
-accession and URL handling in one place; filing discovery; byte-exact acquisition with hashing and
-provenance; the accession document inventory; the complete SEC DERA mirror (78 packages, 25.36 GiB,
-all verified); the model gateway and its content boundary running against an in-process mock; and
-the committed test fixtures and contracts.
+**What exists today.** Eight small packages: SEC identity; the SEC client with rate limiting and
+throttle classification; configuration and User-Agent validation; structured logging with
+redaction; object storage with hashing; filing discovery and master-index reconciliation;
+byte-exact acquisition with provenance; and the model gateway with its content boundary, running
+against an in-process mock. Plus the committed source fixtures and identity contracts.
 
 **What does not exist.** Any orchestrator. Any parsed artifact. Any summary. Any UI. Any Deep Dive.
-Any deployment. Any call to any model.
+Any database. Any deployment. Any call to any model.
+
+**What was deleted on 2026-08-03.** The deterministic footnote and table parser, the 24-table
+PostgreSQL schema and its migrations, the DERA mirror and fact loader, the accession document
+classifier, and every script and specification that served them. Not deprecated, not moved to an
+`oracle/` directory — deleted. Git history is the archive.
 
 ## Getting started
 
@@ -112,34 +121,24 @@ that exercises the whole gateway path offline.
 ### Running the full suite
 
 ```bash
-make db-create-test          # disposable database for destructive migration tests
-make db-create-integration   # disposable database for persistence integration tests
-make db-upgrade-integration  # its schema
-make test-no-skips           # fails if anything skips
-make coverage                # with the 85% gate
+make test-no-skips   # fails if anything skips
+make coverage        # with the 85% gate
 ```
 
-Both database targets refuse to run unless they can prove the target is disposable and distinct.
-Setup, including the one privileged step: [docs/runbooks/test-database.md](docs/runbooks/test-database.md).
+**Nothing needs setting up first.** No database, no network, no credentials — the suite has no
+environmental precondition at all, which is why a skip in it has no legitimate cause.
 
 ## Databases
 
-Three names, and **the application one deliberately doesn't exist**:
+**There aren't any.** The application database was never recreated after it was dropped, and the
+schema, the ORM, the migrations and every test that opened a connection have now been deleted too.
+Nothing in this repository can reach a database.
 
-```
-DATABASE_URL                    fintek                    not created; nothing reads or writes it
-TEST_DATABASE_URL               fintek_test               migration tests drop every table in it
-INTEGRATION_TEST_DATABASE_URL   fintek_integration_test   persistence tests load and clean it
-```
-
-Not hypothetical. The migration round-trip test once pointed at the application database, and
-`make check` dropped every table and deleted 2,845 loaded facts while reporting green. A guard now
-refuses to run anything destructive until it can prove the target is separate — comparing parsed
-host, port, socket and database name, never the configured strings, because `@localhost/fintek` and
-`@127.0.0.1:5432/fintek` are different strings and the same database.
-
-The final schema is deliberately undesigned. It follows real model output, not the other way round
-— guessing it early is exactly what produced the ontology that had to be withdrawn.
+That isn't an oversight. The 24-table schema was designed before a single model had ever parsed a
+filing, and it encoded an interpretation no model had produced. The next one gets designed from
+artifacts real models actually return — and once there is something worth keeping, approved
+artifacts go to durable storage with a 24-hour Redis cache in front of them, never the other way
+round.
 
 ## Why AWS isn't set up
 
@@ -153,15 +152,12 @@ assumed role, always temporary. See [docs/security/aws-identity-and-secrets.md](
 ## Layout
 
 ```
-packages/            SEC identity and HTTP, storage, configuration, observability, the DERA
-                     mirror and fact loader, filing discovery and acquisition, the model
-                     gateway, the schema, and the demoted footnote/table benchmark packages
-migrations/          Alembic
-prompts/             versioned prompt files
-metric_definitions/  curated concept priorities
-scripts/             operational entry points
-tests/               unit, integration, architecture, security
-docs/                specs, ADRs, runbooks, sprint records
+packages/   SEC identity and HTTP, storage, configuration, observability, filing discovery
+            and acquisition, and the model gateway. Eight of them, 40 modules.
+prompts/    versioned prompt files
+tests/      unit, architecture, fixtures
+docs/       specs, ADRs, runbooks, sprint records
+var/        gitignored: preserved SEC objects, the 613-filing research corpus, the DERA mirror
 ```
 
 Packages get created when their code is written, not before.

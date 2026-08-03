@@ -1,96 +1,153 @@
 # Operations
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 6 onward); structured logging IMPLEMENTED (Sprint 1)
+> **RE-FOUNDED 2026-08-03. NEEDS_REVISION.** The subjects of a large part of this document were
+> deleted from the active tree: the DERA mirror and fact loader, the XBRL fact lake, deterministic
+> footnote extraction and canonical grouping, the application persistence layer, its migrations and
+> the local database stack. The product is orchestrator-driven and model-first — the selected
+> parsing model owns semantic interpretation and the backend transports, preserves, validates and
+> proves coverage against preserved bytes. What survives here is SEC transport, rate limiting,
+> throttling, structured logging and object storage. The rest is withdrawn and marked, not silently
+> carried forward. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+>
+> **NO MODEL HAS BEEN INVOKED, AWS IS NOT CONFIGURED, AND NOTHING IS DEPLOYED.** Every threshold
+> below that is not marked IMPLEMENTED is a target, not a measurement.
+
+IMPLEMENTATION STATUS: PLANNED; structured logging IMPLEMENTED (Sprint 1)
+
+The scheduling, idempotency, metric and alert sets for parsing, summarization and persistence are
+DEFERRED. They are redesigned from real model responses and accepted artifacts once Phase 2 has
+produced any, rather than inherited from a pipeline that no longer exists.
 
 ## Observability
 
 ### Logs
 
-Structured key-value records with a correlation identifier bound per unit of work.
+IMPLEMENTED (Sprint 1). Structured key-value records with a correlation identifier bound per unit
+of work.
 
 SECURITY-INVARIANT: filing text and model payload bodies are never logged. The formatter redacts
 a fixed field set (`content`, `payload`, `request_body`, `response_body`, `text`, `prompt`,
 `api_key`, `secret`, `authorization_token`, `access_token`, `password`). Payloads live in object
 storage and are referenced by URI and hash.
 
+A run's visible parent run identifier and each child filing job identifier are logged alongside the
+correlation identifier, so an operator can join what the dashboard displays to what the logs
+recorded.
+
 ### Metrics
+
+Surviving subjects — transport, storage and model invocation:
 
 ```
 SEC             request count by host and status, throttle events, cooldown entries,
                 bytes transferred, limiter wait time
-Ingest          filings discovered, acquired, parsed, failed; queue depth; retry rate
-Footnotes       per filing: expected, extracted, orphaned; grouping method distribution;
-                confidence distribution; review backlog
-Summaries       created, accepted, failed, requiring review; per-filing coverage ratio
+Storage         objects written, bytes stored, hash mismatches, re-acquisition avoided
+                (source already held, so EDGAR was not called)
+Acquisition     filings discovered, acquired, failed; retry rate
 Model           tokens in and out, cost, latency, retries, batch expiry,
                 boundary rejections by violation type and origin
-Serving         query latency, cache hit rate, publication lag, dataset version age
+Runs            parent runs started, child filing jobs by terminal state,
+                evaluation artifacts produced, approved, rejected
 Deep Analysis   sessions created, turns, scope rejections, budget exhaustions,
                 citation validation failures
 ```
 
+WITHDRAWN 2026-08-03, subject deleted: `Footnotes` (expected, extracted, orphaned, grouping-method
+distribution, review backlog), `Serving` (query latency, cache hit rate, publication lag, dataset
+version age), and the DERA half of ingest. `Summaries` is DEFERRED rather than withdrawn — the
+summary role survives as an optional model role, and its metrics are defined when a summary artifact
+first exists.
+
+Coverage, citation and numeric validation are proved against the preserved source bytes. There is
+no second parse to compare against and no metric here counts one.
+
 ### Traces
 
-One trace per filing through the pipeline, and one per Deep Analysis turn, with the correlation
-identifier propagated into the model invocation record.
+One trace per parent run, one span per child filing job, and one per Deep Analysis turn, with the
+correlation identifier propagated into the model invocation record.
 
 ### SLOs
 
+Surviving:
+
 ```
-Dashboard ticker query          p95 under 500 ms
-Chart series query              p95 under 800 ms
-Deep Analysis first token       p95 under 8 s
-Deep Analysis full response     p95 under 45 s
-Publication lag after ingest    under 24 h
-Footnote coverage on processed  100 percent, alert on any deviation
+Dashboard read of a stored artifact   p95 under 500 ms, invoking no model
+Deep Analysis first token             p95 under 8 s
+Deep Analysis full response           p95 under 45 s
 ```
+
+WITHDRAWN 2026-08-03: the chart-series latency target, the publication-lag target and
+`Footnote coverage on processed — 100 percent`. The first two belonged to the deleted serving
+layer. The third is superseded in kind, not relaxed: the invariant is that every human-readable
+source range is represented in the accepted parsed artifact or explicitly marked unresolved, proved
+against preserved bytes, and a filing that cannot prove it is `PARTIAL` or `REVIEW_REQUIRED` rather
+than an SLO miss. A coverage SLO is defined once parse acceptance is measured.
 
 ### Alerts
 
-Page: undeclared-automation 403; dataset publication failure; footnote coverage below 100 percent
-on a filing marked complete; any boundary rejection outside development.
+Page: undeclared-automation 403; any boundary rejection outside development; a completed parse
+marked complete whose coverage proof did not run.
 
-Ticket: SEC cooldown more than once per hour; DERA package missing past its expected window; review
-backlog above threshold; batch expiry above threshold; per-user quota exhaustion spike.
+Ticket: SEC cooldown more than once per hour; object-store hash mismatch; per-user quota
+exhaustion spike; batch expiry above threshold; approval backlog of evaluation artifacts above
+threshold.
+
+WITHDRAWN 2026-08-03: dataset publication failure, footnote coverage below 100 percent, and the
+DERA package-missing watch.
 
 ## Scheduling
 
-| Job | Cadence | Priority |
-|---|---|---|
-| Issuer universe snapshot | daily | 1 |
-| Filing discovery, incremental | hourly | 2 |
-| Amendment discovery | daily | 3 |
-| DERA mirror check | daily | 1 |
-| DERA load on new package | on arrival | 2 |
-| Freshness patch for new filings | hourly | 2 |
-| Summarization batch | nightly | 3 |
-| Dataset publication | after load | 2 |
-| Model or prompt reprocessing | on demand | 5 |
-| Historical backfill | continuous, lowest | 6 |
+Surviving jobs:
 
-Queue priority, highest first: a user-requested missing ticker; newly filed reports; popular
-issuers; recent history; historical backfill; reprocessing.
+| Job | Cadence | Priority | Status |
+|---|---|---|---|
+| Issuer universe snapshot | daily | 1 | PLANNED |
+| Filing discovery, incremental | hourly | 2 | PLANNED |
+| Amendment discovery | daily | 3 | PLANNED |
+| Historical backfill | continuous, lowest | 6 | PLANNED |
+
+Queue priority, highest first: a user-requested issuer; newly filed reports; popular issuers;
+recent history; historical backfill.
+
+WITHDRAWN 2026-08-03, subject deleted: the DERA mirror check, the DERA load on arrival, the
+freshness patch and dataset publication. DEFERRED: any parsing, summarization or reprocessing
+schedule. Parsing is user-initiated from the dashboard for the beta — a parent run over one issuer
+and timeframe — and a background parsing schedule is not designed until parse acceptance exists.
 
 ## Idempotency
 
 Every job carries an idempotency key. A killed and resumed job produces no duplicates and no gaps.
+Surviving keys:
 
 ```
-dataset_download      dera:{filename}:{sha256}
 filing_discovery      discovery:{cik}:{source}:{watermark}
 filing_download       acquire:{accession}:{strategy}
-filing_parse          parse:{accession}:{parser_version}:{source_sha256}
-xbrl_load             facts:{accession}:{source_dataset}
-block_extraction      blocks:{accession}:{parser_version}
-canonical_grouping    group:{accession}:{grouping_version}
-footnote_summary      summary:{accession}:{footnote_id}:{source_sha256}:{prompt_version}:{model_id}
-numeric_validation    validate:{summary_id}
-metric_calculation    metric:{cik}:{metric_id}:{period}:{formula_version}
-embedding             embed:{source_id}:{embedding_model}
-dataset_publication   publish:{dataset_version}
 deep_analysis_turn    turn:{session_id}:{turn_number}
 ```
 
-A key collision means the work is already done or in flight, so the job returns the existing
-result rather than repeating it. Note the summary key includes the source hash, the prompt
-version, and the model, so a prompt change produces new work while a re-run does not.
+A key collision means the work is already done or in flight, so the job returns the existing result
+rather than repeating it. Raw source acquisition checks the object store before EDGAR, so a
+re-requested filing costs no SEC request at all.
+
+WITHDRAWN 2026-08-03: `dataset_download`, `xbrl_load`, `block_extraction`, `canonical_grouping`,
+`metric_calculation`, `dataset_publication` and `embedding` — every one of them keyed on a deleted
+subsystem. DEFERRED: the parse and summary keys. Both were keyed on a deterministic
+`parser_version` and a footnote identifier; a model-first key has to name the model, the prompt
+version, the input mode and the source hash, and it is written when the model contract is measured
+rather than guessed now.
+
+## Artifact lifecycle
+
+A parsed artifact is an EVALUATION artifact until it is explicitly APPROVED. Only approved artifacts
+become reusable. The operational consequences are stated here and implemented nowhere yet:
+
+- An evaluation artifact is never served as an accepted parse and never satisfies a cache read.
+- Approval and rejection are recorded with the parent run identifier, the approver and the
+  developer comments attached at the point of decision.
+- Approved artifacts are cached in Redis with a **24-hour TTL** over an authoritative persistent
+  store. The cache is a latency device: a miss re-reads the store, and an expiry never invokes a
+  model. No Redis instance is configured.
+- The authoritative store is DEFERRED. The previous one was deleted with the schema it described,
+  and its replacement is designed from accepted artifacts rather than ahead of them.

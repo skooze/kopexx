@@ -16,7 +16,6 @@ from datetime import date
 
 from packages.sec_identity import accession_dashed, cik_padded, quarterly_index_url
 
-from .discovery import is_covered_form
 from .errors import ReconciliationError
 
 # master.idx is pipe-delimited with a header block ending in a line of dashes.
@@ -36,11 +35,17 @@ def quarters_between(start: date, end: date) -> list[tuple[int, int]]:
     return out
 
 
-def parse_master_index(raw: bytes, cik: str) -> set[str]:
-    """Accessions of covered filings for one CIK in a decompressed master index.
+def parse_master_index(raw: bytes, cik: str, *, qualifying_forms: frozenset[str]) -> set[str]:
+    """Accessions of qualifying filings for one CIK in a decompressed master index.
 
     HISTORICAL-FORMAT: some quarters repeat a row. The 25-NSE rows in 2019Q1 appear twice. A set
     absorbs that; a list would inflate the count and produce a phantom discrepancy.
+
+    THE SAME EXACT-STRING SET DISCOVERY USED. This function previously applied the identical
+    hardcoded guess that discovery applied, which is why the reconciliation designed to catch a
+    discovery gap could never see this one: both sides filtered the same forms out, agreed
+    perfectly, and reported a complete history that omitted the entire small-business and
+    transition families.
     """
     text = (
         gzip.decompress(raw).decode("latin-1") if raw[:2] == b"\x1f\x8b" else raw.decode("latin-1")
@@ -52,7 +57,7 @@ def parse_master_index(raw: bytes, cik: str) -> set[str]:
         if len(parts) != _FIELDS:
             continue
         row_cik, _name, form, _filed, path = parts
-        if row_cik.strip() != wanted or not is_covered_form(form):
+        if row_cik.strip() != wanted or form.strip() not in qualifying_forms:
             continue
         stem = path.rsplit("/", 1)[-1].removesuffix(".txt")
         try:
@@ -69,6 +74,7 @@ def reconcile_against_master(
     *,
     start: date,
     end: date,
+    qualifying_forms: frozenset[str],
 ) -> dict[str, object]:
     """Compare discovery with the master index over a quarter range.
 
@@ -87,7 +93,7 @@ def reconcile_against_master(
         except Exception as error:  # noqa: BLE001 - a missing quarter is reported, not fatal
             quarters_unavailable.append(f"{year}Q{quarter}: {type(error).__name__}")
             continue
-        in_index |= parse_master_index(raw, padded)
+        in_index |= parse_master_index(raw, padded, qualifying_forms=qualifying_forms)
         quarters_read += 1
 
     return {

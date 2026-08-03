@@ -29,6 +29,7 @@ from .cost_calculator import PricingRegistry, default_registry
 from .errors import BudgetExceededError
 from .payload_compiler import CompiledPayload, reject_native_tools
 from .providers.base import ModelProvider, ModelRequest, ModelResponse
+from .token_counter import estimate_tokens
 from .yaml_parser import parse_yaml
 
 
@@ -120,7 +121,11 @@ class LlmGateway:
         enforce(system_text, ContentFormat.PLAIN_TEXT, origin=f"{origin}.system")
         enforce(payload.content, payload.content_format, origin=origin)
 
-        estimated_input = payload.estimated_tokens + len(system_text) // 4
+        # ONE RATIO, NOT TWO. This used to add `len(system_text) // 4` while the payload's own
+        # estimate came from token_counter's 3.8 characters per token, so the single pre-spend
+        # budget guard mixed two different unverified ratios and under-counted the system prompt.
+        # Under-counting is the unsafe direction for a guard that runs BEFORE the money is spent.
+        estimated_input = payload.estimated_tokens + estimate_tokens(system_text)
         self._check_budget(budget, estimated_input, max_output_tokens, model_id)
 
         started = datetime.now(UTC)

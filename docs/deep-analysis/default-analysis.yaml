@@ -1,11 +1,16 @@
 # Generic forensic analysis, run when a Deep Analysis session is started with no question.
 #
-# IMPLEMENTATION STATUS: PLANNED (Sprint 7)
+# IMPLEMENTATION STATUS: PLANNED (Phase 7). Nothing here is implemented and no analysis has ever
+# been run.
 #
 # The categories are ordered by how often they change an investment view. The analysis works
 # through them, retrieves original evidence for those with signal, and reports only where the
 # authorized corpus actually supports a finding. Silence on a category means the corpus showed
 # nothing notable, and that is stated rather than left ambiguous.
+#
+# THESE ARE QUESTIONS PUT TO THE ANALYSIS MODEL, NOT A BACKEND TAXONOMY. Nothing here is a
+# category the backend recognizes, stores, indexes or routes on. The analysis model decides
+# whether a filing says anything about a tier-3 item; no code decides it first.
 
 analysis_version: "generic-forensic-v1.0.0"
 
@@ -46,15 +51,18 @@ prioritization:
     - questions_an_experienced_analyst_would_ask_next
 
 evidence_expectations:
-  tier_1: original footnote text or filed facts required for every reported finding
-  tier_2: original evidence required; summary alone is insufficient
-  tier_3: summary may establish presence; original evidence required for any conclusion
+  # A summary may not exist at all — the summary model is optional. Where a rung below mentions a
+  # summary it means "when one exists"; its absence removes an index, never a requirement.
+  tier_1: preserved original source text, or table values from the accepted parse that cite one,
+          required for every reported finding
+  tier_2: original evidence required; a summary alone is insufficient
+  tier_3: a summary may establish presence; original evidence required for any conclusion
   tier_4: synthesis over findings already established in this analysis
 
 output_separation:
   # These are reported as distinct sections and never blended.
   - filing_facts          what the company stated, cited
-  - calculated_metrics    arithmetic over filed facts, inputs cited
+  - calculated_metrics    arithmetic over values read from the filing, every input cited
   - interpretations       judgment, with confidence and counterarguments
   - risks                 with severity and evidence
   - missing_information   what the corpus cannot answer

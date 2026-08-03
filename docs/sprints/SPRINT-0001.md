@@ -3,6 +3,13 @@
 STATUS: COMPLETE
 DATE: 2026-08-01
 
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.** Deliverables that
+> survive: `sec_identity`, `configuration`, `sec_client`, `storage`, `observability`, the
+> `llm_gateway` format machinery, and the governance documents. Deleted from the active tree on
+> 2026-08-03: `packages/dera_notes`, `scripts/`, `metric_definitions/`, `prompts/footnote-summary/`,
+> `docker-compose.yml`, and the footnote and financial documentation sets. No measurement below is
+> disputed. Authoritative: `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
 ## Objective
 
 Establish durable project memory and the safety-critical primitives every later phase depends on:

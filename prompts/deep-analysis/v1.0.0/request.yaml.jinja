@@ -50,15 +50,17 @@ financial_series:
 {%- endfor %}
 {%- endfor %}
 {%- endif %}
-{%- if summary_index %}
-summary_index:
-{%- for entry in summary_index %}
-  - footnote_id: "{{ entry.footnote_id }}"
+{%- if parse_index %}
+parse_index:
+{%- for entry in parse_index %}
+  - node_id: "{{ entry.node_id }}"
     accession: "{{ entry.accession }}"
     period_end: "{{ entry.period_end }}"
-    title: {{ entry.title }}
+    label: {{ entry.label }}
+{%- if entry.summary %}
     summary: |
 {{ entry.summary | indent(6, true) }}
+{%- endif %}
 {%- endfor %}
 {%- endif %}
 {%- if original_evidence %}
@@ -66,7 +68,10 @@ original_evidence:
 {%- for item in original_evidence %}
   - source_id: "{{ item.source_id }}"
     accession: "{{ item.accession }}"
-    source_type: {{ item.source_type }}
+    document: {{ item.document }}
+{%- if item.node_id %}
+    node_id: "{{ item.node_id }}"
+{%- endif %}
 {%- if item.unit %}
     unit: {{ item.unit }}
 {%- endif %}

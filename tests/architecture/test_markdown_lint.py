@@ -58,7 +58,13 @@ def _markdown_files() -> list[Path]:
             timeout=30,
         ).stdout
         names = [n for n in (tracked + untracked).split("\0") if n]
-        return sorted({REPO_ROOT / n for n in names})
+        # A PATH IN THE INDEX NEED NOT BE ON DISK. `git ls-files` reports what the index holds,
+        # and a file deleted in the working tree but not yet staged is still listed — which is the
+        # normal state of a deletion under this repository's Git rules, where the index stays empty
+        # until the commit is approved. Opening one raises FileNotFoundError and fails four checks
+        # for a reason that is not a lint defect. Filtering is safe rather than lax because
+        # `test_the_lint_has_something_to_check` asserts the surviving set is still substantial.
+        return sorted({REPO_ROOT / n for n in names if (REPO_ROOT / n).is_file()})
     except (OSError, subprocess.SubprocessError):
         # No git available. Fall back to a walk so the check still runs rather than skipping.
         return sorted(

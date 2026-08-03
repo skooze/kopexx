@@ -8,6 +8,9 @@ REPLACES: an earlier, withdrawn ADR-0016 ("complete filing content scope") that 
 right; its mechanism was not. See "The withdrawn ADR-0016" below.
 DOES NOT SUPERSEDE: ADR-0003, ADR-0004, ADR-0011, ADR-0012, ADR-0014, ADR-0015, or the response
 direction of ADR-0013.
+SUPERSEDED IN PART, 2026-08-03: section 16 in full and section 15 in part, by
+`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`, which DELETED the
+deterministic parser demoted there to a benchmark oracle.
 
 **NO MODEL HAS BEEN INVOKED. NO BEDROCK CALL HAS BEEN MADE.** Every model-related statement in
 this ADR is a design decision or a stated intent, never a measured result. Model availability,

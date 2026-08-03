@@ -13,9 +13,9 @@ locally**, not by reading the workflow and retyping the command. If you find you
 the workflow has drifted and that is itself the defect to fix.
 
 ```
-make check            everything the quality job runs except coverage
-make coverage         the coverage gate
-make migration-check  offline Alembic generation, base to head and head to base
+make check           everything the quality job runs except coverage
+make coverage        the coverage gate
+make test-no-skips   the suite, failing if anything skips
 ```
 
 Tools resolve from `./.venv/bin` when present and from `PATH` otherwise, so the same target
@@ -36,12 +36,14 @@ PATH=/tmp/ci-venv/bin:$PATH make check
 mv .venv-hidden .venv          # ALWAYS restore
 ```
 
-The quality job also runs `make db-upgrade` and `make test-no-skips` against a PostgreSQL service
-container. To match that locally you need a reachable database; without one those two targets are
-not reproducible and `make check` is as close as you get.
+**Everything in the quality job is reproducible locally.** The suite has no environmental
+precondition — no database, no network, no credentials — so `make check`, `make coverage` and
+`make test-no-skips` behave identically on a runner and on a laptop. Before 2026-08-03 the job
+also stood up a PostgreSQL service and ran migrations, and those steps were not reproducible
+without a local server; the persistence layer they served is deleted.
 
-A failure that reproduces this way but not with `make check` alone is an environment or
-dependency-declaration problem, not a code problem. See the next section.
+A failure that reproduces in the bare environment above but not with your own `.venv` is an
+environment or dependency-declaration problem, not a code problem. See the next section.
 
 ---
 
@@ -49,7 +51,7 @@ dependency-declaration problem, not a code problem. See the next section.
 
 ```
 error: Multiple top-level packages discovered in a flat-layout:
-['prompts', 'packages', 'artifacts', 'migrations', 'metric_definitions']
+['prompts', 'packages', 'docs', 'tests']
 ```
 
 Setuptools cannot guess which root directories are Python packages.
@@ -81,7 +83,7 @@ installs only what is declared, so it fails where you do not.
 
 ```bash
 # every third-party import in the repository
-grep -rhoE "^\s*(import|from)\s+[a-zA-Z_][a-zA-Z0-9_]*" packages scripts migrations tests \
+grep -rhoE "^\s*(import|from)\s+[a-zA-Z_][a-zA-Z0-9_]*" packages tests \
   --include=*.py | sed -E 's/^\s*(import|from)\s+//' | sort -u
 ```
 
@@ -96,8 +98,10 @@ python3 -m venv /tmp/verify && /tmp/verify/bin/pip install -e ".[dev]"
 /tmp/verify/bin/python -m pytest tests
 ```
 
-This is exactly how `sqlalchemy`, `alembic`, and `psycopg` were found missing: the
-package-discovery failure aborted the install before any import could reveal them.
+This is exactly how three database dependencies were once found missing: the package-discovery
+failure aborted the install before any import could reveal them. The same check run in the other
+direction is what found `pydantic` DECLARED and never imported by a single module — an undeclared
+import and an unused declaration are both defects, and only one of them fails CI.
 
 ---
 
@@ -178,68 +182,62 @@ to make a commit pass.
 
 ## Failure: `make test-no-skips` — "tests skipped where all tests were expected to run"
 
-The quality job runs a PostgreSQL 18 service container, so every database test must EXECUTE. The
-gate prints each skipped test and its reason:
+**A skip now has no legitimate cause anywhere.** The suite requires no database, no network and no
+credentials, so nothing in it can correctly decide it is unable to run. Before 2026-08-03 "no
+reachable PostgreSQL" was an available excuse and a real one; it is gone with the database.
+
+The gate prints each skipped test and its reason:
 
 ```
 FAIL: 1 test(s) skipped where all tests were expected to run.
-  tests/integration/test_dera_load.py::test_a_rerun_inserts_nothing
-      Skipped: no reachable PostgreSQL; this test exercises the live control plane
+  tests/unit/test_example.py::test_something
+      Skipped: <the reason the test gave>
 ```
 
-A skip here is a guard that quietly stopped being enforced. Do not silence it — a skipped database
-test is indistinguishable from a passing one in the summary line, which is how two live migration
-tests went unexecuted for two sprints.
+Diagnose by reading the reason, then fix the TEST — do not silence the gate. A skipped test is
+indistinguishable from a passing one in the summary line, which is how two live migration tests
+went unexecuted for two sprints.
 
-Diagnose in this order:
+The hook records skips raised during `setup` AND during `call`. Watching only `setup` misses a
+`pytest.skip()` inside a test body, which is how the first version of this gate passed a suite
+containing a deliberate skip.
 
-1. **Did the service container come up?** The job's `Initialize containers` step shows the health
-   check. `pg_isready -U fintek` must succeed before the steps run.
-2. **Is `DATABASE_URL` set for the job?** It is a job-level `env`. A test resolving the local
-   development default instead means the variable did not reach the step.
-3. **Did `make db-upgrade` run?** The tests write real rows; without the schema they fail rather
-   than skip, which is a different symptom.
-4. **Did the reachability probe answer wrongly?** `database_reachable()` in `tests/conftest.py`
-   handles both connection styles: a `?host=/run/postgresql` URL is a Unix socket and has no TCP
-   endpoint, so probing `localhost:5432` for it would answer a question about a different server.
-
-Reproduce locally with a database running:
+Reproduce locally with the same target CI runs:
 
 ```bash
-make db-upgrade
 make test-no-skips
 ```
 
-Without a database, `make test` is the right target and its skips are legitimate.
+---
+
+## Failure: "packages.<name> still imports; it was deleted and must not return"
+
+The `Verify the deleted packages are gone` step installs the distribution and asserts that
+`footnote_extractor`, `footnote_canonicalizer`, `table_parser`, `persistence` and `dera_notes`
+CANNOT be imported.
+
+**Cause.** One of the deleted trees was recreated under `packages/`, or something outside
+`packages/` was added to `[tool.setuptools.packages.find]`.
+
+**Fix.** Remove it. A deletion the distribution can undo is not a deletion, and ADR-0017 records
+why none of these may come back — as runtime, as a benchmark, as an oracle, or as a fixture
+generator. Do not resolve this by narrowing the check.
 
 ---
 
-## Failure: `db-verify-isolation` — "resolve to the SAME database"
+## Failure: "a filing-form allowlist is hardcoded in runtime source"
 
-The job refuses to run destructive tests that could reach the application data. Both URLs are
-job-level `env` in the workflow; one of them is wrong. Fix the workflow, never the guard.
+`tests/architecture/test_architecture.py` parses every module under `packages/` and fails if a
+string literal matching an SEC 10-family form appears in evaluated code. Comments and docstrings
+are exempt, because the AST distinguishes them.
 
-## Failure: "the suite changed the APPLICATION database"
+**Cause.** Someone reintroduced a form allowlist instead of supplying the qualifying set.
 
-A destructive test reached `DATABASE_URL`, or a non-destructive one left rows behind. The message
-names each table with its before and after counts. See `docs/runbooks/test-database.md`.
-
-## Failure: the live database tests
-
-They **skip**, they do not fail, when no PostgreSQL is reachable:
-
-```
-SKIPPED - no reachable PostgreSQL; this test exercises the live control plane
-```
-
-That is correct on a developer machine without one. In CI it is a failure, caught by
-`make test-no-skips` above. If they ever report as passes without a database, that is a defect in
-the guard, not a convenience.
-
-The URL is resolved in exactly one place, `packages/persistence/engine.database_url()`: the
-environment, then the project `.env`, then a local-development default. No credential appears in
-any tracked file — the CI container uses `POSTGRES_HOST_AUTH_METHOD: trust` and the development
-host uses peer authentication over a Unix socket.
+**Fix.** Pass the qualifying forms in, from the reviewed contract in
+`tests/fixtures/form_family.yaml`. `packages/filing_discovery` shipped a guessed hyphenated list
+for four sprints that matched none of the small-business or transition families, and the
+reconciliation meant to catch that gap applied the same filter, so both sides agreed and reported
+a complete history. ADR-0017 section 8.
 
 ---
 

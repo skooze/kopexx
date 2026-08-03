@@ -1,21 +1,30 @@
 # LLM Content Boundary
 
-IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 1)
+IMPLEMENTATION STATUS: IMPLEMENTED — the format machinery only
 OWNER PACKAGE: `packages/llm_gateway`
 DECISION RECORD: `docs/adr/ADR-0013-plain-text-or-yaml-llm-boundary.md`
+
+> **NO MODEL HAS EVER BEEN INVOKED, AND NO REQUEST OR RESPONSE CONTRACT IS DECLARED.** The
+> compiler, the validator, the safe parser, the budget guard and the audit record are implemented
+> and exercised against the mock provider. What a real model is *asked* and what it *returns* are
+> unknown, so this document specifies FORMAT and nothing else. The footnote-shaped request contract
+> it used to list — `compile_footnote_summary_request`, a canonical footnote with its source blocks
+> and tables — was deleted with the deterministic parser whose output it carried. The real contracts
+> are derived from observed model behaviour, not declared here in advance. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
 
 ---
 
 ## The rule
 
-Model-visible content is exactly one of two formats.
+Model-visible SYNTHETIC content — anything this system composes — is exactly one of two formats.
 
 ```
 plain_text   unmarked normalized human-readable text, containing no Markdown
 yaml         exactly one unfenced YAML 1.2 document, with no prose before or after it
 ```
 
-Prohibited in model-visible content, in both directions:
+Prohibited in model-visible synthetic content, in both directions:
 
 ```
 markdown                markdown_fences         markdown_tables
@@ -31,14 +40,50 @@ produces JSON tool arguments.
 
 ---
 
+## The ORIGINAL-SOURCE EXCEPTION
+
+There is exactly one exception, it is narrow, and it is load-bearing: `INTACT_SOURCE_ONLY` requires
+that a preserved SEC artifact reach the parsing model unchanged.
+
+```
+An untouched original SEC artifact may be sent intact, in whatever syntax SEC published it —
+HTML, SGML, XML, XBRL, inline XBRL, PDF, image, plain text.
+```
+
+The conditions are cumulative and none of them is waivable.
+
+```
+ADMITTED BY PROVENANCE, NEVER BY SYNTAX
+    the bytes are identical to a preserved artifact whose SHA-256 is recorded in the source store,
+    and were not constructed, normalized, reflowed, re-serialized or repaired by this system
+
+NEVER REWRITTEN INTO YAML OR PLAIN TEXT
+    rewriting an original into a permitted format destroys the property the exception exists to
+    protect. An artifact that has been rewritten is synthetic content and loses the exception
+
+ONE-DIRECTIONAL
+    no model RESPONSE may use it. A response is synthetic content in both directions of travel and
+    is one unfenced YAML 1.2 document, or plain text for an explicitly unstructured task
+
+NEVER DUPLICATED INTO A WRAPPER
+    the original is not embedded in a verbose envelope that repeats it, describes it in its own
+    syntax, or fences it
+```
+
+The exception does not route through the payload compiler. The compiler exists to produce synthetic
+content and would have to alter an original to emit it, which is the thing forbidden. Mandatory
+rule: `rules.md` section 3.
+
+---
+
 ## The five serialization contexts
 
-Only the first is constrained by this document. Confusing them is the most common way this rule
-gets misapplied.
+Only the first is constrained by this document, and the original-source exception above is the one
+carve-out inside it. Confusing these five is the most common way this rule gets misapplied.
 
 | # | Context | Permitted formats | Rationale |
 |---|---|---|---|
-| 1 | Model-visible content | plain text, YAML 1.2 | This document |
+| 1 | Model-visible synthetic content | plain text, YAML 1.2 | This document |
 | 2 | Internal application state | any typed representation | Never reaches a model |
 | 3 | Browser and API traffic | JSON, OpenAPI | A browser is not a model |
 | 4 | Database storage | relational columns, JSONB | Storage, not content |
@@ -57,8 +102,10 @@ every structured response it returns.
 
 ## Inputs
 
-Typed domain objects: a canonical footnote with its source blocks and tables, a Deep Analysis
-request with its authorized scope and retrieved evidence, a scope-classification request.
+A mapping, or a string of prose, plus the name of the originating subsystem. **Nothing filing-shaped
+and nothing domain-typed.** The gateway is generic by construction: it knows about model identity,
+roles, budgets, formats, bytes, tokens, cost and latency, and it knows nothing about what a filing
+contains. It must not learn.
 
 ## Outputs
 
@@ -68,20 +115,42 @@ token count, and its originating subsystem. After invocation, a parsed Python ob
 
 ## Public interface
 
+The complete surface of `packages.llm_gateway` as it exists today.
+
 ```
-packages.llm_gateway
+COMPILATION
     compile_yaml(payload, origin)                -> CompiledPayload
     compile_plain_text(text, origin)             -> CompiledPayload
-    compile_footnote_summary_request(request)    -> CompiledPayload
+    CompiledPayload                              content, format, estimated tokens, origin
+    reject_native_tools(tools)                   -> None, raises NativeToolUseProhibitedError
+
+VALIDATION
     validate_plain_text(text)                    -> BoundaryReport
     validate_yaml_text(text)                     -> BoundaryReport
+    validate(text, format)                       -> BoundaryReport
     enforce(text, format, origin)                -> None, raises BoundaryViolationError
+    BoundaryReport   ContentFormat   Violation
+
+PARSING AND EMISSION
     parse_yaml(text)                             -> Any, raises YamlSafetyError/YamlParseError
+    require_mapping(value)                       -> dict
     require_string(mapping, key)                 -> str
     to_yaml(mapping)                             -> str
+
+INVOCATION AND ACCOUNTING
+    estimate_tokens(text)                        -> int, a character-ratio ESTIMATE
     LlmGateway(provider).invoke(...)             -> GatewayResult
-    reject_native_tools(tools)                   -> None, raises NativeToolUseProhibitedError
+    Budget   GatewayResult   InvocationRecord
+    PricingRegistry   ModelPricing   default_registry
+
+ERRORS
+    LlmGatewayError   BoundaryViolationError   BudgetExceededError
+    NativeToolUseProhibitedError   ProviderError   YamlParseError   YamlSafetyError
 ```
+
+Two names a reader may remember are gone. `ModelCapabilities` described a model this project has
+never reached and had no constructor and no caller; `SerializationComparison` was the evidence shape
+for the ADR-0013 decision, which is made and recorded. Both were deleted as dead code.
 
 ## Dependencies
 
@@ -92,8 +161,9 @@ packages.llm_gateway
 No package outside `packages/llm_gateway/providers` may import a provider SDK. Enforced by
 `tests/architecture/test_architecture.py::test_bedrock_client_not_imported_outside_provider`.
 
-The gateway must not import `packages/summarization`, `packages/deep_analysis`, or any other
-application package. Dependency flows toward the gateway, never out of it.
+The gateway must not import any application package. Dependency flows toward the gateway, never out
+of it. A domain type inside this package is how the footnote-shaped contract got here the first
+time.
 
 ## Data owned
 
@@ -102,29 +172,30 @@ response body, token counts, cost, latency, and the boundary validation outcome.
 
 ## Data explicitly not owned
 
-Filing content, canonical footnotes, financial facts, and summaries. The gateway transports and
-validates; it does not interpret.
+Filing content, preserved source artifacts, parsed artifacts, and summaries. The gateway transports
+and validates; it does not interpret.
 
 ---
 
 ## Invariants
 
-1. Model-visible content is plain text or one unfenced YAML 1.2 document.
-2. Only `payload_compiler` produces model-visible content.
-3. Only `providers/` imports a provider SDK.
-4. The exact request and response bodies are persisted unmodified.
-5. Budgets are checked before invocation, never after.
-6. Native tool definitions are refused.
-7. Every identifier emitted into YAML is quoted.
-8. Model output is parsed by the hardened safe parser, never by a general-purpose loader.
+1. Model-visible synthetic content is plain text or one unfenced YAML 1.2 document.
+2. Only `payload_compiler` produces model-visible synthetic content.
+3. A preserved SEC artifact is admitted by provenance, sent intact, and never rewritten.
+4. Only `providers/` imports a provider SDK.
+5. The exact request and response bodies are recorded unmodified.
+6. Budgets are checked before invocation, never after.
+7. Native tool definitions are refused.
+8. Every identifier emitted into YAML is quoted.
+9. Model output is parsed by the hardened safe parser, never by a general-purpose loader.
 
 ---
 
 ## The pipeline
 
 ```
-typed domain object
-  -> payload compiler          builds model-visible content from typed fields
+a mapping or a string of prose
+  -> payload compiler          builds model-visible synthetic content
   -> boundary validator        rejects prohibited serializations
   -> budget guard              refuses before spend
   -> provider adapter          the only place a provider SDK is used
@@ -136,15 +207,19 @@ typed domain object
 The compiler is the primary control; the validator is a backstop that catches a bypass. Both
 exist because a defence that depends on one mechanism has no failure margin.
 
+A preserved SEC artifact enters at the provider adapter instead, carrying its recorded SHA-256. It
+skips the compiler because the compiler would have to change it. Everything after the provider —
+response validation, safe parsing, audit — is identical.
+
 ---
 
 ## Two verified YAML facts that drive the design
 
 ### YAML 1.2 does not coerce yes, no, on, off
 
-PyYAML implements YAML 1.1, whose boolean resolver turns those bare scalars into booleans. A
-footnote field whose value is the word `no` would silently become `False`. `ruamel.yaml` in pure
-safe mode implements the YAML 1.2 core schema and leaves them as strings.
+PyYAML implements YAML 1.1, whose boolean resolver turns those bare scalars into booleans. A field
+whose value is the word `no` would silently become `False`. `ruamel.yaml` in pure safe mode
+implements the YAML 1.2 core schema and leaves them as strings.
 
 Verified during Sprint 1:
 
@@ -164,8 +239,8 @@ cik: 0000320193      ->  320193       (int)  identifier destroyed
 cik: "0000320193"    ->  '0000320193' (str)  correct
 ```
 
-Every CIK, accession number, fiscal period, zero-prefixed footnote number, and version string is
-quoted by the serializer. `require_string` refuses to return an identifier that arrived unquoted
+Every CIK, accession number, fiscal period, date, zero-prefixed label, and version string is quoted
+by the serializer. `require_string` refuses to return an identifier that arrived unquoted
 rather than coercing it back, because the leading zeros are already unrecoverable at that point.
 
 Covered by `test_yaml_parser_preserves_quoted_cik` and `test_yaml_parser_preserves_accession`.
@@ -232,9 +307,10 @@ indicates a code defect rather than a data problem.
 
 ## Scaling
 
-The gateway is stateless and scales horizontally. Token estimation is a character-ratio
-calculation and is not a bottleneck. The audit sink is the only shared resource; in production it
-writes bodies to object storage and a row to PostgreSQL.
+The gateway is stateless and scales horizontally. Token estimation is a character-ratio calculation
+and is not a bottleneck. The audit sink is the only shared resource. **Where the record is durably
+written is undecided** — no application database exists and the persistent artifact store is
+designed from measured artifacts, not before them. `InvocationRecord` is an in-process value today.
 
 ## Unit-test approach
 
@@ -242,44 +318,36 @@ Each detector is tested against a positive and a negative case. The compiler is 
 content free of every prohibited construct. The parser is tested against duplicate keys, unsafe
 tags, each resource limit, and the two identifier-preservation facts above.
 
-## Integration-test approach
+## Pipeline-test approach
 
 The full pipeline is exercised against the mock provider: compile, validate, invoke, validate the
-response, parse, and assert the audit record holds the exact bodies. A provider returning JSON is
-asserted to be rejected rather than parsed.
+response, parse, and assert the record holds the exact bodies. A provider returning JSON is asserted
+to be rejected rather than parsed. There is no live-provider test, because no provider has been
+reached.
 
 ## Current test coverage
 
 ```
-tests/unit/test_llm_boundary.py     26 tests
-tests/unit/test_yaml_parser.py      10 tests
-tests/architecture/test_architecture.py  8 tests, of which 3 enforce this boundary
+tests/unit/test_llm_boundary.py          26 tests
+tests/unit/test_yaml_parser.py           16 tests
+tests/architecture/test_architecture.py  12 tests, of which 3 enforce this boundary
 ```
 
 ---
 
 ## Cost rationale
 
-Serialization overhead multiplies across roughly 170,000 filings and every footnote within them.
-JSON repeats every key on every record and escapes every quote in filing prose. XML repeats every
-tag name twice. Markdown adds fence, pipe, and emphasis characters carrying no information a
-summarizer needs.
+Serialization overhead multiplies across every filing processed and every unit of content within
+one. JSON repeats every key on every record and escapes every quote in filing prose. XML repeats
+every tag name twice. Markdown adds fence, pipe, and emphasis characters carrying no information a
+model needs.
 
-The token comparison harness in `packages/llm_gateway/token_counter.py` records, for every
-benchmark fixture:
+**No serialization measurement has been taken and no saving is claimed.** The comparison harness
+that produced one — and the `SerializationComparison` shape it emitted — was removed once ADR-0013
+was decided and recorded. `estimate_tokens` is a character-ratio heuristic adequate for a budget
+guard and for relative comparison, and it is not a provider tokenizer count.
 
-```
-serialization_comparison:
-  plain_text_tokens: 0
-  yaml_tokens: 0
-  markdown_tokens: 0
-  json_tokens: 0
-  xml_tokens: 0
-  selected_format: yaml
-  selected_tokens: 0
-```
-
-The production path selects plain text or YAML regardless of which serialization tokenizes
+The production path selects plain text or YAML regardless of which serialization would tokenize
 smallest, because the boundary is a correctness and security constraint rather than an
-optimization. The measurement exists so the decision rests on evidence and so a regression is
-visible.
+optimization. That is why losing the harness costs the decision nothing: the measurement quantified
+a benefit, it never chose the format.

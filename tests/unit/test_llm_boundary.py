@@ -11,15 +11,13 @@ import pytest
 from packages.llm_gateway import (
     Budget,
     BudgetExceededError,
+    CompiledPayload,
     ContentFormat,
-    FootnoteSummaryRequest,
     LlmGateway,
     NativeToolUseProhibitedError,
-    SourceBlockPayload,
-    TablePayload,
     Violation,
-    compile_footnote_summary_request,
     compile_plain_text,
+    compile_yaml,
     validate_plain_text,
     validate_yaml_text,
 )
@@ -55,7 +53,7 @@ def test_plain_text_payload_rejects_markdown(text: str, expected: Violation) -> 
 
 
 def test_plain_text_payload_rejects_json() -> None:
-    report = validate_plain_text('{"footnote": {"number": "9"}}')
+    report = validate_plain_text('{"node": {"number": "9"}}')
     assert not report.ok
     assert Violation.JSON_OBJECT in report.violations
 
@@ -95,7 +93,7 @@ def test_empty_payload_rejected() -> None:
 
 # --- YAML -----------------------------------------------------------------------------------
 
-VALID_YAML = 'footnote:\n  id: "fn-0009"\n  title: Debt\ntopics:\n  - debt\n  - liquidity\n'
+VALID_YAML = 'node:\n  id: "n-0009"\n  title: A model-chosen label\nlabels:\n  - alpha\n  - beta\n'
 
 
 def test_yaml_payload_accepts_unfenced_yaml() -> None:
@@ -134,32 +132,48 @@ def test_yaml_payload_rejects_multiple_documents() -> None:
 # --- compiler -------------------------------------------------------------------------------
 
 
-def _sample_request() -> FootnoteSummaryRequest:
-    return FootnoteSummaryRequest(
-        cik="0000320193",
-        accession="0000320193-25-000079",
-        form="10-K",
-        period_end="2025-09-27",
-        footnote_id="fn-0009",
-        footnote_number="9",
-        footnote_title="Debt",
-        source_blocks=[
-            SourceBlockPayload("debt-narr-01", "narrative", "The Company issues unsecured notes."),
-        ],
-        tables=[
-            TablePayload(
-                "debt-mat-01",
-                "Future Debt Maturities",
-                "USD millions",
-                ["year", "amount"],
-                [["2026", 1250], ["2027", 1800]],
-            )
-        ],
+def _sample_payload() -> CompiledPayload:
+    """A generic model-visible request, compiled through the only permitted path.
+
+    DELIBERATELY CARRIES NO FILING ONTOLOGY. This helper used to build a `FootnoteSummaryRequest`
+    with a footnote id, number and title, a typed source block and a typed table — the
+    deterministic parser's output shape. That contract is deleted and no model has been invoked, so
+    no request shape can honestly be asserted. What these tests actually check is the FORMAT
+    boundary, and the format boundary is a property of the compiler, not of any payload schema. The
+    mapping below therefore exercises exactly the things that can go wrong: identifiers that YAML
+    1.2 would destroy if left unquoted, prose long enough to become a literal block scalar, and a
+    nested sequence of records.
+    """
+    return compile_yaml(
+        {
+            "request": {"task": "boundary_probe", "prompt_version": "test-v1"},
+            "filing": {
+                "cik": "0000320193",
+                "accession": "0000320193-25-000079",
+                "form": "10-K",
+                "period_end": "2025-09-27",
+            },
+            "nodes": [
+                {
+                    "id": "node-0001",
+                    "title": "A node label the model chose",
+                    "text": (
+                        "A paragraph long enough to be emitted as a literal block scalar so the "
+                        "model sees natural paragraph structure rather than one folded line."
+                    ),
+                },
+            ],
+            "rows": [
+                {"period": "2026", "amount": 1250},
+                {"period": "2027", "amount": 1800},
+            ],
+        },
+        origin="test.boundary_probe",
     )
 
 
 def test_model_visible_payload_contains_no_markdown() -> None:
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     assert "```" not in payload.content
     assert "|" not in payload.content.replace("|-", "")  # block scalars use |- , not tables
     assert "**" not in payload.content
@@ -167,28 +181,49 @@ def test_model_visible_payload_contains_no_markdown() -> None:
 
 
 def test_model_visible_payload_contains_no_json() -> None:
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     assert not payload.content.lstrip().startswith("{")
     assert '":' not in payload.content
 
 
 def test_model_visible_payload_contains_no_xml() -> None:
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     assert "<?xml" not in payload.content
     assert "</" not in payload.content
 
 
 def test_model_visible_payload_contains_no_html() -> None:
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     for tag in ("<html", "<body", "<div", "<table", "<p>"):
         assert tag not in payload.content.lower()
 
 
 def test_compiled_payload_quotes_identifiers() -> None:
     """FINANCIAL-INVARIANT: an unquoted CIK loses its leading zeros in YAML 1.2."""
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     assert '"0000320193"' in payload.content
     assert '"0000320193-25-000079"' in payload.content
+
+
+def test_identifier_quoting_covers_generic_node_ids_not_a_filing_ontology() -> None:
+    """The quoting rule keys on transport and identity names, never on filing content kinds.
+
+    `footnote_id`, `canonical_footnote_id`, `footnote_number` and `parser_version` were removed
+    from IDENTIFIER_KEYS with the parser that produced them. A model-chosen label lands under the
+    generic `id` and `number` keys, which are quoted, so a zero-prefixed label a filing actually
+    uses still survives the round trip.
+    """
+    from packages.llm_gateway.yaml_serializer import IDENTIFIER_KEYS
+
+    assert {"id", "number", "cik", "accession"} <= IDENTIFIER_KEYS
+    assert not (
+        {"footnote_id", "canonical_footnote_id", "footnote_number", "parser_version"}
+        & IDENTIFIER_KEYS
+    ), "the deleted parser's identifiers must not reappear in the quoting rule"
+
+    payload = compile_yaml({"node": {"id": "0009", "number": "007"}}, origin="test.quoting")
+    assert '"0009"' in payload.content
+    assert '"007"' in payload.content
 
 
 def test_compile_yaml_rejects_prohibited_content() -> None:
@@ -210,13 +245,13 @@ def test_compile_plain_text_normalizes_whitespace() -> None:
 def test_model_gateway_rejects_native_tool_schema() -> None:
     """Native tool calling requires JSON Schema definitions and yields JSON arguments."""
     gateway = LlmGateway(MockProvider())
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     with pytest.raises(NativeToolUseProhibitedError):
         gateway.invoke(
             model_id="mock-model-v1",
-            system_text="You summarize one canonical footnote.",
+            system_text="You return one unfenced YAML 1.2 document.",
             payload=payload,
-            prompt_version="footnote-summary-v1.0.0",
+            prompt_version="test-v1",
             tools=[{"name": "search", "input_schema": {"type": "object"}}],
         )
 
@@ -225,12 +260,12 @@ def test_gateway_records_exact_request_and_response_bodies() -> None:
     """SECURITY-INVARIANT: the original model-visible content is preserved unmodified."""
     provider = MockProvider()
     gateway = LlmGateway(provider)
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     result = gateway.invoke(
         model_id="mock-model-v1",
-        system_text="You summarize one canonical footnote.",
+        system_text="You return one unfenced YAML 1.2 document.",
         payload=payload,
-        prompt_version="footnote-summary-v1.0.0",
+        prompt_version="test-v1",
     )
     record = result.record
     assert record.request_body == payload.content
@@ -243,27 +278,27 @@ def test_gateway_records_exact_request_and_response_bodies() -> None:
 
 def test_gateway_parses_yaml_response() -> None:
     gateway = LlmGateway(MockProvider())
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     result = gateway.invoke(
         model_id="mock-model-v1",
-        system_text="You summarize one canonical footnote.",
+        system_text="You return one unfenced YAML 1.2 document.",
         payload=payload,
-        prompt_version="footnote-summary-v1.0.0",
+        prompt_version="test-v1",
     )
-    assert result.parsed["summary"]["classification"] == "routine"
-    assert result.parsed["footnote"]["number"] == "1"  # quoted, so still a string
+    assert result.parsed["schema_version"] == "mock-response-v1"
+    assert "text" in result.parsed["response"]
 
 
 def test_gateway_rejects_json_model_response() -> None:
     """A provider returning JSON must be caught at the boundary, not parsed."""
-    gateway = LlmGateway(MockProvider('{"summary": {"classification": "routine"}}'))
-    payload = compile_footnote_summary_request(_sample_request())
+    gateway = LlmGateway(MockProvider('{"response": {"text": "json is not permitted"}}'))
+    payload = _sample_payload()
     with pytest.raises(RuntimeError, match="rejected at the boundary"):
         gateway.invoke(
             model_id="mock-model-v1",
-            system_text="You summarize one canonical footnote.",
+            system_text="You return one unfenced YAML 1.2 document.",
             payload=payload,
-            prompt_version="footnote-summary-v1.0.0",
+            prompt_version="test-v1",
         )
     assert gateway.audit[-1].status == "BOUNDARY_REJECTED"
 
@@ -271,13 +306,13 @@ def test_gateway_rejects_json_model_response() -> None:
 def test_gateway_enforces_budget_before_invocation() -> None:
     provider = MockProvider()
     gateway = LlmGateway(provider)
-    payload = compile_footnote_summary_request(_sample_request())
+    payload = _sample_payload()
     with pytest.raises(BudgetExceededError):
         gateway.invoke(
             model_id="mock-model-v1",
-            system_text="You summarize one canonical footnote.",
+            system_text="You return one unfenced YAML 1.2 document.",
             payload=payload,
-            prompt_version="footnote-summary-v1.0.0",
+            prompt_version="test-v1",
             budget=Budget(max_input_tokens=1),
         )
     assert provider.invocations == [], "budget must be enforced before spend"

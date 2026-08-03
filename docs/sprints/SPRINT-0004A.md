@@ -13,6 +13,13 @@ This record exists because Sprint 4.1 did not end the way it began, and the hone
 useful than a tidy one. It opened as a scope correction, became a second architecture drift, and
 ended by being replaced with a corpus-first recovery. All three phases are recorded below.
 
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.** The deterministic
+> parser this record adjudicates — `packages/footnote_extractor`, `packages/footnote_canonicalizer`
+> and `packages/table_parser` — was demoted to an oracle here and has now been DELETED from the
+> active tree, together with `packages/persistence`, `migrations/` and `packages/dera_notes`. The
+> account below stands unchanged. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
 ---
 
 ## 1. What Sprint 4.1 set out to correct

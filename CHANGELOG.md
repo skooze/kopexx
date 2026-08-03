@@ -7,6 +7,143 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 `Data migrations` and `Operational changes`.
 
 
+## Commit 3 — delete the rejected parser and the application persistence layer (2026-08-03, not yet committed)
+
+Removes the withdrawn architecture from the active repository. ADR-0016 withdrew deterministic
+semantic parsing from product authority and DEMOTED the implementation to a benchmark oracle; this
+change DELETES it, together with the application database it wrote to, the migrations that
+described that database, the DERA mirror and fact loader, and everything that existed only to serve
+them. **Git history is the archive. Nothing was moved to `oracle/`, `legacy/`, `deprecated/` or
+`tests/support/`.** One authoritative explanation, not repeated elsewhere:
+`docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
+### Removed
+
+- **The deterministic semantic parser.** `packages/footnote_extractor`,
+  `packages/footnote_canonicalizer`, `packages/table_parser`. The Sprint 4 measurement stands as
+  history — 43 canonical footnotes across four Apple filings, 117 of 117 child blocks attached,
+  zero orphans — and the code that produced it is gone. It measured one issuer, one filing agent
+  and two of six transport eras, and grading a parsing model against a deterministic parse would
+  have made the deterministic answer authoritative again through the back door.
+- **The application persistence layer and its migrations.** `packages/persistence` (24 ORM
+  tables), `migrations/`, `alembic.ini`, `docker-compose.yml`. Ten of the twenty-four tables were
+  the rejected ontology directly, including a `filing.processing_state` CHECK constraint that
+  enumerated `EXTRACTING_FOOTNOTES` and `GROUPING_FOOTNOTES` as pipeline states. **The
+  sealed-migration rule in `rules.md` section 8 was satisfied, not bypassed:** the application
+  database `fintek` was verified NOT to exist before anything was removed, so no deployed
+  environment is left diverged from a file claiming to describe it.
+- **The DERA mirror and fact loader.** `packages/dera_notes` fails three of the seven parts of the
+  DERA/XBRL retention test — it writes to deleted tables, cannot work without them, and has no
+  near-term use. Its coverage was also structurally inadequate for the role proposed for it: NOTES
+  starts at 2009Q1 and covers XBRL filers only, against a corpus of which 281 of 613 filings
+  predate HTML-era markup. **The 26 GB mirror itself is untouched** in the gitignored `var/dera/`.
+- **The accession document classifier.** `packages/filing_acquisition/inventory.py` assigned a
+  nine-term Regulation S-K document ROLE taxonomy and ruled that a courtesy PDF duplicated the
+  primary document, suppressing a filed source range on a semantic-equivalence judgement — a direct
+  violation of COMPLETE-CONTENT-INVARIANT. It had no production caller.
+- All seven `scripts/`, `metric_definitions/`, `artifacts/`, `prompts/footnote-summary/`,
+  `docs/footnotes/`, four `docs/financial/` specifications, `docs/sec/dera-notes.md`,
+  `docs/architecture/{components,data-flows}.md`, three `docs/llm/` summary specifications and nine
+  runbooks.
+- From `packages/llm_gateway`: `FootnoteSummaryRequest`, `SourceBlockPayload`, `TablePayload`,
+  `compile_footnote_summary_request`, and — as dead code with zero callers and zero tests —
+  `ModelCapabilities` and `SerializationComparison`. Four footnote identifiers left the YAML
+  quoting rule. The mock provider's canned response was a `footnote-summary-v1.0.0` document with a
+  fixed taxonomy, which quietly made the mock the de facto response schema; it is now a minimal
+  mapping asserting no contract.
+- **346 test functions**, with their subjects. A reduced total is the correct outcome of a
+  deletion; nothing was kept for the count.
+- Dependencies `sqlalchemy`, `alembic`, `psycopg[binary]` — and `pydantic`, which was declared and
+  never imported by a single module. Runtime dependencies are now `ruamel.yaml` and `httpx`.
+- Make targets `migration-check`, `db-*` and `test-integration`; the CI PostgreSQL service, both
+  disposable-database environment variables and the five database steps; the `integration` pytest
+  marker.
+
+### Fixed
+
+- **A guessed form allowlist that contradicted the reviewed contract.**
+  `packages/filing_discovery` shipped `ANNUAL_FORMS = ("10-K", "10-K405", "10-KSB")` and
+  `QUARTERLY_FORMS = ("10-Q", "10-QSB")`, matching on the part before `/A`. EDGAR files `10KSB` and
+  `10QSB` unhyphenated — `10QSB` alone is 120,120 filings and the fourth most common form in the
+  family — so the filter matched none of the small-business family and none of the transition
+  family, while `tests/fixtures/form_family.yaml`, which adjudicates all 41 observed strings, sat
+  beside it saying qualifying logic is generated from the inventory and never hardcoded. **The
+  reconciliation designed to catch a discovery gap applied the same filter to the master index, so
+  both sides agreed perfectly and reported a complete history.** The qualifying set is now a
+  required argument with no default, matched on the exact filed string; an empty set is rejected;
+  and an architecture test parses runtime source and fails on a form literal.
+- **The pre-spend budget guard mixed two token ratios.** `gateway.invoke` added
+  `len(system_text) // 4` to a payload estimate computed at 3.8 characters per token, under-counting
+  the system prompt — the unsafe direction for a check that runs before the money is spent. Both
+  now use `estimate_tokens`.
+
+### Added
+
+- `docs/adr/ADR-0017`, the single authoritative record of what was deleted and why.
+- `tests/architecture/test_openapi_contract.py`, 9 tests: the contract parses, every local `$ref`
+  resolves, no reference leaves the document, no component schema is orphaned, **no `servers:`
+  entry claims a deployed server**, every operation is marked `PLANNED`, and the browser-facing
+  contract names no provider credential or endpoint. Commit 2 recorded that OpenAPI parsing and
+  `$ref` validation ran only as local ad hoc checks with no test reading the file.
+- `tests/unit/test_observability.py`, 12 tests. The package had none at all while carrying the
+  SECURITY-INVARIANT that filing text, model payload bodies and credential material are never
+  logged. Redaction is parametrized over **every** entry in `REDACTED_FIELDS`, and one test asserts
+  an unlisted field IS emitted so the others cannot pass vacuously.
+- An architecture guard that no runtime package hardcodes a filing-form allowlist, parsed from the
+  AST so a comment or docstring naming a form stays legal.
+- A CI step proving the five deleted packages cannot be imported from an installed distribution.
+- Hash verification extended to **every** committed original SEC document. The four Apple primary
+  documents are 3.9 MiB of the fixture tree and had no verification of their own — the manifest
+  recorded their hashes and no test compared them. A test also fails if derived parser output
+  returns to `tests/fixtures/`.
+
+### Changed
+
+- `roadmap.md` is restructured around the delivery order the product actually needs: cleanup →
+  **secure AWS and model-access verification** → **parser experiments and the review UI, built
+  together** → optional model stages → persistence and the approval gate → background population →
+  beta UI → Deep Dive. The review UI moved from Phase 6 to Phase 2 because a parsed artifact cannot
+  be evaluated without seeing it beside the filing it came from.
+- The roadmap now states, as requirements: only the parsing model is required and the other three
+  selectors may be blank; multimodal parsers are visibly labelled and disable the image selector;
+  a text-only parser with no image model must REPORT unanalyzed image-bearing content rather than
+  claim complete coverage; local durable source storage is checked and hash-verified before EDGAR;
+  parsed artifacts are EVALUATION artifacts until explicitly APPROVED; only approved artifacts
+  become reusable, cached in Redis with a **24-hour TTL** over an authoritative persistent store;
+  background population needs a separate authorization; one visible parent run ID per request with
+  one child job per filing; and granular developer comments stored with the run logs.
+- `rules.md`: section 1 drops the two product steps whose code is deleted; section 5 loses four
+  single-home rows for packages that no longer exist; section 8 records the migration deletion
+  additively with the precondition that was verified first, and continues to bind every future
+  migration; the data-ownership table becomes a forward constraint and states that Redis is a
+  24-hour acceleration layer, never authoritative; TEST-DATABASE-ISOLATION-INVARIANT is marked
+  DORMANT and forward-binding rather than deleted. **Section 21 rule 15 is STRENGTHENED**: the
+  oracle exception it granted is withdrawn.
+- `techspecs.md` is rewritten against the code that exists: eight packages, 40 modules, 3,469
+  lines, with the measured dependency graph and a candid list of what the cleanup cost.
+- `docs/testing/strategy.md` is rewritten. It described 876 tests across fifteen packages, three
+  database identities and a live migration round trip, none of which existed.
+- `pyproject.toml` description, dependency list and packaging commentary. The include pattern is
+  documented as the rule rather than as a package count, which is what lets a deleted package keep
+  appearing to exist.
+
+### Operational changes
+
+- **The suite has no environmental precondition.** No database, no network, no credentials. CI
+  needs no service container, and a skip has no legitimate cause.
+- `fintek_test` and `fintek_integration_test` remain on the development host as **unused
+  leftovers**. Nothing in the repository can reach them. Removing them is host administration and
+  requires separate authorization; no PostgreSQL role, database, service or configuration was
+  touched by this change.
+- 309 tests, 0 skipped, 90.89 percent coverage against an 85 percent gate.
+
+### Data migrations
+
+None. No application database exists, no revision was applied or downgraded, and no replacement
+schema was created. Revisions `0001_initial_control_plane_schema` and `0002_table_ownership` remain
+in git history.
+
+
 ## Commit 2 — architecture and governance realignment (2026-08-02, not yet committed)
 
 Reconciles the active documentation, governance, architecture, roadmap and sprint plan with the

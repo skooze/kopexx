@@ -180,15 +180,27 @@ touches AWS.
 ## The LLM content boundary
 
 ```
-Model-visible content is ONLY unmarked normalized plain text, or exactly one unfenced YAML 1.2
-document. JSON, JSON Lines, JSON Schema, XML, XBRL, inline XBRL, HTML, XHTML, Markdown, and
-native tool schemas or arguments are prohibited in both directions. Native tool calling is
+Model-visible SYNTHETIC content is ONLY unmarked normalized plain text, or exactly one unfenced
+YAML 1.2 document. JSON, JSON Lines, JSON Schema, XML, XBRL, inline XBRL, HTML, XHTML, Markdown,
+and native tool schemas or arguments are prohibited in both directions. Native tool calling is
 prohibited.
+
+ORIGINAL-SOURCE EXCEPTION. A preserved SEC artifact is sent INTACT in whatever syntax SEC
+published — plain text, SGML, HTML, XML, XBRL, inline XBRL, PDF, image. It is admitted by
+PROVENANCE, not by syntax: the bytes must be identical to a preserved artifact whose SHA-256 is
+recorded. Never rewrite an original artifact into YAML to satisfy the synthetic-content rule, and
+never semantically slice or reconstruct it. The exception is one-directional: no model RESPONSE
+may use it.
 ```
 
 All model access goes through `packages/llm_gateway`. Browser-facing JSON in `docs/api/` is
-outside this boundary — a browser is not a model. Full specification in
-`docs/llm/content-boundary.md` and ADR-0013.
+outside this boundary — a browser is not a model. Provider-required JSON is permitted only as the
+API transport envelope. Full specification in `docs/llm/content-boundary.md` and ADR-0013.
+
+**No request or response contract is declared anywhere, and none may be invented.** The gateway
+compiles an arbitrary mapping and validates its format; that is everything that can honestly be
+asserted before a model has been reached. The footnote-shaped request contract that used to live
+in `payload_compiler.py` was deleted with the parser that produced it.
 
 ---
 
@@ -197,29 +209,50 @@ outside this boundary — a browser is not a model. Full specification in
 Sprints 1 and 2 built the foundation: SEC identity, HTTP client with rate limiting, object storage,
 the LLM content boundary, and the complete DERA mirror. Sprint 3 retrieved the first filings.
 Sprint 4 turned the footnote thesis into production code — 43 canonical footnotes across four Apple
-filings, 117 of 117 child blocks attached, zero orphans. **That measurement stands. Its role does
-not: it is now a validation oracle, never the product.**
+filings, 117 of 117 child blocks attached, zero orphans. **That measurement stands as history. The
+implementation is DELETED**, along with the application database, its migrations, and the DERA
+mirror and fact loader. Git history is the archive. ADR-0017 says why, once.
 
 The project is tracked in PHASES, not sprints. `roadmap.md` is authoritative.
 
 ```
-Phase 1    Representative filing corpus            COMPLETE
-Phase 1.5  Intact-source compatibility             OPEN — blocks Phase 2
-Phase 2    Model contract and parsing experiments  BLOCKED pending user authorization and live
-                                                   Bedrock capability discovery
-Phase 3-8  orchestrator, images, summaries, UI, chat, persistence   NOT STARTED
+Phase 0    Representative filing corpus                  COMPLETE
+Phase 0.5  Repository cleanup and corpus reverification  COMPLETE
+Phase 1    Secure AWS and model-access verification      NEXT — nothing after it can start
+Phase 2    Parser experiments AND the review UI, TOGETHER
+Phase 3-8  optional model stages, persistence and the approval gate, background population,
+           beta UI, Deep Dive, breadth                   NOT STARTED
 ```
 
-**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.**
-Do not treat any cost figure as known: every parameter in `docs/llm/cost-model.md` is a
-placeholder, and the first real measurement is Phase 2.
+**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.
+NO APPLICATION DATABASE EXISTS.** Do not treat any cost figure as known: every parameter in
+`docs/llm/cost-model.md` is a placeholder, and the first real measurement is Phase 2.
 
-Commit 1 — preservation, reusable infrastructure and test-database isolation — is committed,
-pushed and CI-green. Commit 2 is the architecture and governance realignment. Commit 3, which
-withdraws the rejected parser implementation, has not begun; the implementation files are still
-present and still pass their tests, and that is deliberate.
+**ONLY THE PARSING MODEL IS REQUIRED.** A parser-only run is a complete, valid run and is the first
+functional workflow built. The image, summary and analysis/chat selectors may be left blank, and
+the orchestrator runs only the stages the user selected — never silently selecting a blank model,
+substituting another, adding a stage, or skipping a selected one.
 
-Read `roadmap.md`, ADR-0015 and ADR-0016 before proposing anything that widens or narrows scope.
+**The parser-review UI is built WITH the first model experiments, not after them.** A parsed
+artifact cannot be evaluated without seeing it beside the filing it came from.
+
+Read `roadmap.md`, ADR-0016 and ADR-0017 before proposing anything that widens or narrows scope.
+
+### What no longer exists, so you do not go looking for it
+
+```
+packages/footnote_extractor      packages/footnote_canonicalizer   packages/table_parser
+packages/persistence             packages/dera_notes               migrations/  alembic.ini
+scripts/                         metric_definitions/               artifacts/
+docs/footnotes/                  prompts/footnote-summary/         docker-compose.yml
+packages/filing_acquisition/inventory.py   — the accession document classifier
+make migration-check  make db-*  make test-integration   — the targets that drove them
+sqlalchemy  alembic  psycopg  pydantic                   — the dependencies they needed
+```
+
+Do not recreate any of it, in `packages/` or anywhere else. Do not park deleted code in `oracle/`,
+`legacy/`, `deprecated/`, `benchmark/` or `tests/support/`. CI fails if any of the five deleted
+packages imports, and an architecture test fails if a filing-form literal returns to runtime source.
 
 Packages are created when their code arrives. Reserved names live in `techspecs.md` section 2
 with a status column, and an architecture test rejects empty stub packages.
@@ -234,25 +267,24 @@ validation and GitHub Actions cannot drift apart. Never write a validation comma
 the workflow.
 
 ```
-make check            fmt-check, lint, typecheck, test, migration-check
-make coverage         tests with coverage and the 85% gate
-make migration-check  offline alembic generation, base:head and head:base
+make check           fmt-check, lint, typecheck, test
+make coverage        tests with coverage and the 85% gate
+make test-no-skips   the suite, failing if ANY test skips
 ```
 
-Both migration ranges are derived and neither names a revision id. A hardcoded start silently
-stops covering every migration added after it; a test reads the recipe out of the Makefile to
-prevent that returning.
+**The suite has no environmental precondition at all** — no database, no network, no credentials.
+That is why `test-no-skips` is the same suite as `test` and why a skip has no legitimate cause.
+`make migration-check` and every `make db-*` target went with the database.
 
 Paths, defined once in the Makefile:
 
 ```
-PY_PATHS     packages tests scripts migrations     format and lint
-MYPY_PATHS   packages scripts migrations           type check
+PY_PATHS     packages tests     format and lint
+MYPY_PATHS   packages           type check
 ```
 
-`tests` is excluded from type checking on purpose: it exercises SQLAlchemy internals where
-`Model.__table__` is typed as `FromClause`, and silencing that with blanket ignores would weaken
-the check for the source that matters.
+`tests` is excluded from type checking so a test may use the loose idioms tests use without
+weakening the check on the source that matters.
 
 Not covered by `make check`, run before proposing a commit:
 

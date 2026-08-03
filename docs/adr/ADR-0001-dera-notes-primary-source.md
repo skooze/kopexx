@@ -1,8 +1,16 @@
 # ADR-0001: DERA Financial Statement and Notes Data Sets as the primary structured source
 
-STATUS: ACCEPTED
+STATUS: SUPERSEDED AS AN ACTIVE DECISION BY ADR-0017
 DATE: 2026-08-01
 SPRINT: 1
+
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.**
+>
+> DERA NOTES is no longer the primary numeric source, because there is no numeric pipeline:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` deleted the mirror,
+> the fact loader and the reconciliation code. The mirrored DERA data itself remains on disk,
+> gitignored and untouched. The comparison below stands as history; the full retrospective is in
+> ADR-0017.
 
 ## Context
 

@@ -137,102 +137,101 @@ def test_the_workflow_keeps_least_privilege_permissions(workflow: dict) -> None:
         assert "permissions" not in job or job["permissions"] == {"contents": "read"}
 
 
+# --- no database, and no way for one to come back ----------------------------------------------
+#
+# These five checks replaced five that verified the OPPOSITE: that the job stood up a postgres:18
+# service, created two disposable databases, proved their identities distinct, and applied Alembic
+# migrations before any test ran. Those were correct while an application schema existed. It does
+# not: the ORM, the migrations, and every test that opened a connection are deleted. The guard is
+# inverted rather than dropped, because "no database" is exactly the kind of property that erodes
+# by accident — one service block copied back from an old workflow and the suite is coupled to a
+# server again.
+
+
 def _database_name(url: str) -> str:
     return urlparse(url.replace("postgresql+psycopg", "postgresql")).path.lstrip("/")
 
 
-def test_the_quality_job_creates_both_disposable_databases(workflow: dict) -> None:
-    """Two disposable targets, each created explicitly.
+def test_no_job_stands_up_a_database_service(workflow: dict) -> None:
+    """No surviving test opens a database connection, so no job may provision one."""
+    for job_name, job in workflow["jobs"].items():
+        assert "services" not in job, (
+            f"{job_name} declares a service container. The application persistence layer and every "
+            "database test were deleted; a service here is a dependency nothing needs."
+        )
 
-    An action bump must not be the edit that removes either one, and a suite whose database is
-    never created fails obscurely at collection rather than saying what is missing.
+
+def test_no_job_configures_a_database_url(workflow: dict) -> None:
+    """Not the application database, and not a disposable one either.
+
+    Checked on every environment mapping in the file rather than on a known set of names, so a
+    differently-named variable carrying a connection string is caught too.
     """
-    quality = workflow["jobs"]["quality"]
-    assert "postgres" in quality["services"]
+    scopes: list[tuple[str, dict]] = [("workflow", workflow.get("env") or {})]
+    for job_name, job in workflow["jobs"].items():
+        scopes.append((job_name, job.get("env") or {}))
+        for step in job.get("steps", []):
+            scopes.append((f"{job_name} step", step.get("env") or {}))
 
-    commands = [str(step.get("run", "")) for step in quality["steps"]]
-    assert any("make db-create-test" in c for c in commands), "migration target never created"
-    assert any("make db-create-integration" in c for c in commands), (
-        "integration target never created"
+    for scope, env in scopes:
+        for variable, value in env.items():
+            assert "postgres" not in str(value).lower(), (
+                f"{scope}: {variable} carries a PostgreSQL connection string "
+                f"({_database_name(str(value))!r}); ordinary CI has no database"
+            )
+            assert "DATABASE_URL" not in variable, f"{scope}: {variable} names a database"
+
+
+def test_no_step_runs_a_deleted_database_or_migration_target(workflow: dict) -> None:
+    """The Make targets these steps invoked no longer exist; a reference would fail obscurely."""
+    deleted_targets = (
+        "db-create-test",
+        "db-create-integration",
+        "db-upgrade",
+        "db-upgrade-test",
+        "db-upgrade-integration",
+        "db-verify-isolation",
+        "migration-check",
+        "test-integration",
     )
-
-
-def test_the_two_disposable_databases_are_distinct(workflow: dict) -> None:
-    """Sharing one target would make the two suites destroy each other.
-
-    The migration round trip runs `downgrade base`. Pointed at the database a persistence test is
-    loading into, it deletes the schema mid-suite — and which suite wins depends on ordering, so
-    the result is intermittent rather than reliably red.
-    """
-    env = workflow["jobs"]["quality"]["env"]
-    migration = _database_name(env["TEST_DATABASE_URL"])
-    integration = _database_name(env["INTEGRATION_TEST_DATABASE_URL"])
-
-    assert migration == "fintek_test"
-    assert integration == "fintek_integration_test"
-    assert migration != integration
-    assert env["TEST_DATABASE_URL"] != env["INTEGRATION_TEST_DATABASE_URL"]
-
-
-def test_ordinary_ci_never_creates_or_uses_an_application_database(workflow: dict) -> None:
-    """No CI step may touch a database named like the application's.
-
-    Checked three ways because any one of them alone is escapable: the service container must not
-    create it, no configured URL may name it, and no step may migrate it. `fintek_test` and
-    `fintek_integration_test` are NOT matches — the comparison is on the parsed database name, not
-    on a substring, so a prefix test cannot produce a false alarm or a false pass.
-    """
-    quality = workflow["jobs"]["quality"]
-
-    assert quality["services"]["postgres"]["env"]["POSTGRES_DB"] != "fintek"
-
-    assert "DATABASE_URL" not in quality["env"], (
-        "DATABASE_URL names the application database and must be absent from ordinary CI"
-    )
-    for variable, url in quality["env"].items():
-        if "postgres" in str(url):
-            assert _database_name(str(url)) != "fintek", (
-                f"{variable} names the application database"
+    for job_name, step in _steps(workflow):
+        command = str(step.get("run", ""))
+        for target in deleted_targets:
+            assert f"make {target}" not in command, (
+                f"{job_name} invokes `make {target}`, which was deleted with the application "
+                "database and its migrations"
             )
 
-    commands = [str(step.get("run", "")) for step in quality["steps"]]
-    assert not any("make db-upgrade\n" in c or c.strip() == "make db-upgrade" for c in commands), (
-        "`make db-upgrade` migrates DATABASE_URL, which ordinary CI must never have"
-    )
 
+def test_the_quality_job_proves_the_deleted_packages_cannot_be_imported(workflow: dict) -> None:
+    """A deletion that the distribution can undo is not a deletion.
 
-def test_database_identities_are_verified_before_any_test_runs(workflow: dict) -> None:
-    """Order matters. Verifying after the suite proves nothing that has not already happened."""
-    steps = workflow["jobs"]["quality"]["steps"]
-    commands = [str(step.get("run", "")) for step in steps]
-
-    verify = next(i for i, c in enumerate(commands) if "make db-verify-isolation" in c)
-    first_test = next(
-        i
-        for i, c in enumerate(commands)
-        if any(t in c for t in ("make test-unit", "make test-integration", "make test-no-skips"))
-    )
-    assert verify < first_test, "identities are verified only after tests have already run"
-
-    migrate = next(i for i, c in enumerate(commands) if "make db-upgrade-integration" in c)
-    assert verify < migrate, "a migration runs before the target's identity is proven"
-    assert migrate < first_test, "the integration suite runs before its schema exists"
-
-
-def test_each_suite_receives_its_own_database_target(workflow: dict) -> None:
-    """The migration suite gets the migration target; the persistence suites get theirs.
-
-    Both are supplied as job-level environment variables read by one resolver, so local and CI
-    behaviour cannot diverge: there is no CI-only path that resolves a database differently.
+    The rejected deterministic parser, the application ORM and the DERA fact loader must fail to
+    import from an installed distribution. Asserting it in CI is what stops a reintroduction from
+    being silent.
     """
-    env = workflow["jobs"]["quality"]["env"]
-    assert set(env) == {"TEST_DATABASE_URL", "INTEGRATION_TEST_DATABASE_URL"}, (
-        f"unexpected database configuration in ordinary CI: {sorted(env)}"
-    )
+    commands = " ".join(str(step.get("run", "")) for step in workflow["jobs"]["quality"]["steps"])
+    for module in (
+        "footnote_extractor",
+        "footnote_canonicalizer",
+        "table_parser",
+        "persistence",
+        "dera_notes",
+    ):
+        assert module in commands, f"CI does not prove packages.{module} is absent"
 
+
+def test_the_zero_skip_gate_still_runs(workflow: dict) -> None:
+    """The gate that survived the database removal, and is stronger without it.
+
+    Every skip previously had a legitimate cause available — no reachable PostgreSQL. The suite now
+    has no environmental precondition at all, so a skip here has no legitimate cause whatsoever.
+    """
     commands = [str(step.get("run", "")) for step in workflow["jobs"]["quality"]["steps"]]
-    assert any("make test-integration" in c for c in commands)
+    assert any("make test-no-skips" in c for c in commands), "the zero-skip gate is not run"
     assert any("make test-unit" in c for c in commands)
+    assert any("make test-architecture" in c for c in commands)
+    assert any("make coverage" in c for c in commands)
 
 
 def test_the_workflow_runs_the_makefile_rather_than_its_own_commands(workflow: dict) -> None:

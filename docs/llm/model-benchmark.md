@@ -1,17 +1,22 @@
 # Summarization Model Benchmark
 
 > **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
-> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> 613 filings across six transport eras** was acquired and measured — dated Phase 0 evidence, not a
 > permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
 > The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
 > preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
 > a filing means. The user selects four models independently — parsing, image, summary, and
-> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
-> content ontology, migration `0003` and the local application database are withdrawn. Sections
-> below that describe the withdrawn design are historical.
+> analysis/chat — and **only the parsing model is required**. The current authorized input mode is
+> `INTACT_SOURCE_ONLY`. Sections below that describe the withdrawn design are historical.
+>
+> **UPDATED 2026-08-03.** The deterministic content ontology and the local application database are
+> no longer merely withdrawn — the parser, the persistence layer and the migrations are DELETED, and
+> no application database exists. **Grading a parsing model against a deterministic parse is now
+> prohibited** (`rules.md` section 21 rule 15).
 >
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
-> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
 
 ---
 
@@ -28,7 +33,7 @@ placeholder.
 GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4 Maverick, Qwen3 VL 235B.
 
 **None is currently configured or accessible.** Model IDs, versions, regions, modalities, context
-and output limits, supported request formats and prices are DISCOVERED LIVE in Phase 1.5 and are
+and output limits, supported request formats and prices are DISCOVERED LIVE in Phase 1 and are
 never hardcoded. No identifier in this repository is trusted until discovery returns it.
 
 ## What Phase 2 measures, per role
@@ -67,16 +72,28 @@ The parser request and response contracts are provisional until real responses r
 text or exactly one unfenced YAML 1.2 document, with the original-source exception for the intact
 artifact. **The artifact format follows what the models actually return**, not the reverse.
 
-## The Apple oracle
+## There is no oracle, and grading against one is prohibited
 
-The 43 canonical footnotes, 117 of 117 attachments and the table-ownership census are a **recall
-floor for grading a parsing model**. A model that finds fewer is suspect. A model that finds more
-is not thereby wrong — the oracle is one issuer, and it does not define a correct parse.
+An earlier version of this section named the deterministic Apple parse — 43 canonical footnotes,
+117 of 117 attachments, the table-ownership census — a **recall floor for grading a parsing model**.
+That is withdrawn. The code is deleted and the practice is now forbidden: `rules.md` section 21
+rule 15 and ADR-0017 section 3.
+
+Grading a model against a deterministic parse makes the deterministic interpretation authoritative
+again through the back door, which is exactly what ADR-0016 withdrew. It also generalizes one
+issuer, one filing agent and two of six transport eras onto a corpus of 112 issuers, 75 SIC
+industries and six eras — and a benchmark that is wrong about breadth is worse than none, because it
+produces a number and a number gets believed.
+
+**A parse is validated against the PRESERVED SOURCE BYTES, never against a second parse.** That
+control needs no oracle, and it is stronger, because it does not require another interpretation to
+be correct first.
 
 
-IMPLEMENTATION STATUS: smoke benchmark PLANNED (Sprint 5); full benchmark PLANNED (pre-backfill)
+IMPLEMENTATION STATUS: PLANNED — the first measurement is Phase 2
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
-GATES: `prompts/footnote-summary/v1.0.0/evaluation.yaml`
+GATES: not yet written. The footnote-summary evaluation gates were deleted with the prompt they
+       scored; real gates are derived from observed model behaviour.
 DEEP ANALYSIS MODEL: `docs/llm/analysis-model-benchmark.md` — separate task, separate gates
 
 ## Principle
@@ -276,10 +293,10 @@ to decide, the corpus is too small and is extended rather than the gate relaxed.
 
 ## Serialization comparison
 
-Every fixture records token counts across plain text, YAML, Markdown, JSON, and XML, per the
-harness in `packages/llm_gateway/token_counter.py`. The production path selects plain text or YAML
-regardless of the result, because the boundary is a correctness constraint. The measurement
-quantifies the benefit and detects regression.
+Historical. The harness that recorded token counts across plain text, YAML, Markdown, JSON and XML
+was removed once ADR-0013 was decided; `packages/llm_gateway/token_counter.py` now offers a
+character-ratio estimate only. The production path selects plain text or YAML regardless of any such
+result, because the boundary is a correctness constraint and never was an optimization.
 
 ## Result storage
 

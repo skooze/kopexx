@@ -38,10 +38,11 @@ POLICY_DOCUMENTS = frozenset(
         "rules.md",
         "docs/security/aws-identity-and-secrets.md",
         "tests/architecture/test_aws_identity.py",
-        # Enforces the same prohibition for the deterministic extraction packages, and therefore
-        # names the same variables. Added when Sprint 4 created it, not to silence a finding.
-        "tests/architecture/test_deterministic_extraction.py",
         "CHANGELOG.md",
+        # `tests/architecture/test_deterministic_extraction.py` was allowlisted here while it
+        # enforced the same prohibition for the deterministic extraction packages. Both it and
+        # those packages are deleted, and the allowlist shrank rather than being carried forward —
+        # an entry that outlives its file is an exemption nobody is watching.
     }
 )
 

@@ -11,55 +11,44 @@ RUFF   := $(VENV_BIN)ruff
 MYPY   := $(VENV_BIN)mypy
 PYTHON := $(VENV_BIN)python
 PYTEST := $(PYTHON) -m pytest
-ALEMBIC := $(VENV_BIN)alembic
 
-# Every Python path in the repository. Formatting and linting cover all four.
-PY_PATHS := packages tests scripts migrations
+# Every Python path in the repository. Formatting and linting cover both.
+#
+# `scripts` and `migrations` were removed from this list because those directories no longer
+# exist. Every script was an entry point for the deterministic parser, the application database,
+# or the DERA fact loader, and all three are deleted; Alembic and its revisions went with the
+# application schema they described.
+PY_PATHS := packages tests
 
-# Type checking covers shipped source only. tests/ is excluded deliberately: it exercises
-# SQLAlchemy internals where `Model.__table__` is typed as FromClause, producing six errors that
-# are typing friction rather than defects. Silencing them with blanket ignores would weaken the
-# check for the source that matters. Revisit if the test suite grows logic worth type-checking.
-MYPY_PATHS := packages scripts migrations
+# Type checking covers shipped source only. tests/ is excluded deliberately, so a test may use the
+# loose idioms tests use without weakening the check on the source that matters.
+MYPY_PATHS := packages
 
 # Where a suite run records its own output, so the counts can be reported without running the
 # suite a second time. Gitignored.
 TEST_LOG := .pytest-last-run.log
 
 # Every implemented package. A package absent from this list is not measured, so its coverage
-# gap is invisible and the 85% gate passes without it — which is the same vacuity trap as an
-# architecture test scanning an empty directory. Add a package here in the sprint that creates it.
+# gap is invisible and the gate passes without it — which is the same vacuity trap as an
+# architecture test scanning an empty directory. Add a package here in the change that creates it.
 COV_PACKAGES := --cov=packages.sec_identity --cov=packages.configuration \
                 --cov=packages.sec_client --cov=packages.storage \
-                --cov=packages.llm_gateway --cov=packages.dera_notes \
-                --cov=packages.observability --cov=packages.footnote_extractor \
-                --cov=packages.footnote_canonicalizer --cov=packages.table_parser \
-                --cov=packages.filing_acquisition --cov=packages.filing_discovery \
-                --cov=packages.persistence
+                --cov=packages.llm_gateway --cov=packages.observability \
+                --cov=packages.filing_acquisition --cov=packages.filing_discovery
 
-.PHONY: help install fmt fmt-check lint typecheck test test-unit test-integration \
-        test-architecture test-security test-no-skips coverage migration-check db-upgrade \
-        db-create-test db-upgrade-test db-create-integration db-upgrade-integration \
-        db-verify-isolation test-summary \
-        check up down clean
+.PHONY: help install fmt fmt-check lint typecheck test test-unit \
+        test-architecture test-security test-no-skips coverage test-summary \
+        check clean
 
 help:
 	@echo "install          create the virtualenv and install dependencies"
-	@echo "check            the sprint gate: format, lint, types, tests, migrations"
+	@echo "check            the gate: format, lint, types, tests"
 	@echo "fmt / fmt-check  apply or verify formatting  ($(PY_PATHS))"
 	@echo "lint             ruff                        ($(PY_PATHS))"
 	@echo "typecheck        mypy                        ($(MYPY_PATHS))"
 	@echo "test             full suite"
-	@echo "test-no-skips    full suite, failing if any test skipped (CI has a database)"
+	@echo "test-no-skips    full suite, failing if any test skipped"
 	@echo "coverage         suite with a coverage report and the 85% gate"
-	@echo "migration-check  offline alembic generation, base to head and head to base"
-	@echo "db-upgrade       apply migrations to the application database (DATABASE_URL)"
-	@echo "db-create-test   create the disposable database for destructive tests"
-	@echo "db-upgrade-test  apply migrations to the disposable test database"
-	@echo "db-create-integration   create the disposable database for persistence tests"
-	@echo "db-upgrade-integration  apply migrations to the disposable integration database"
-	@echo "db-verify-isolation     prove every configured database identity is distinct"
-	@echo "up / down        local stack"
 	@echo ""
 	@echo "CI runs these same targets. Do not duplicate the commands in the workflow."
 
@@ -82,8 +71,8 @@ typecheck:
 
 # -ra prints a short summary of every non-passing outcome WITH ITS REASON. Without it a skip is a
 # bare 's' in a progress line, and "203 passed, 2 skipped" reads as success while the two tests
-# that would have caught a schema defect never ran. Verbosity flags live here rather than in
-# pyproject addopts so the Makefile stays the single definition of how the suite is invoked.
+# that would have caught a defect never ran. Verbosity flags live here rather than in pyproject
+# addopts so the Makefile stays the single definition of how the suite is invoked.
 #
 # Output is recorded to $(TEST_LOG) as well as shown, so `test-summary` can report the counts from
 # THIS run instead of starting another one. Redirect-then-cat rather than a pipe: it preserves
@@ -94,56 +83,30 @@ test:
 test-unit:
 	$(PYTEST) tests/unit -ra
 
-test-integration:
-	$(PYTEST) tests/integration -ra
-
 test-architecture:
 	$(PYTEST) tests/architecture -ra
 
-# ANTI-VACUITY GATE for environments that have a database. A skip here is a guard that quietly
-# stopped being enforced, so it fails the run instead of being reported as a pass. The variable is
-# read by a hook in tests/conftest.py, which names every skipped test and its reason.
+test-security:
+	$(PYTEST) -m security -ra
+
+# ANTI-VACUITY GATE. A skip is a guard that quietly stopped being enforced, so it fails the run
+# instead of being reported as a pass. The variable is read by a hook in tests/conftest.py, which
+# names every skipped test and its reason.
+#
+# THE SUITE NOW HAS NO ENVIRONMENTAL PRECONDITION AT ALL. It previously needed two live PostgreSQL
+# databases, and every database test skipped without them. There is no application database, no
+# ORM and no migration left in this repository, so every test runs everywhere — which is why this
+# target is the same suite as `test`, not a privileged variant of it.
 test-no-skips:
 	@FINTEK_FORBID_SKIPS=1 $(PYTEST) tests -ra > $(TEST_LOG) 2>&1; status=$$?; cat $(TEST_LOG); exit $$status
 
 coverage:
 	$(PYTEST) tests -q $(COV_PACKAGES) --cov-report=term-missing --cov-fail-under=85
 
-# Apply migrations to the APPLICATION database. The URL is resolved by
-# packages/persistence/engine, which is its single home.
-db-upgrade:
-	$(ALEMBIC) upgrade head
-
-# The disposable database destructive tests run against. Idempotent; refuses a target that cannot
-# be proven separate from the application database.
-db-create-test:
-	$(PYTHON) scripts/create_test_database.py
-
-# Migrations against the disposable database. The destructive tests reset it themselves, so this
-# target is only for inspecting the test schema by hand. The URL goes through assert_disposable,
-# so this can never be pointed at the application database by editing one variable.
-db-upgrade-test:
-	DATABASE_URL="$$($(PYTHON) scripts/create_test_database.py --print-url)" $(ALEMBIC) upgrade head
-
-# Fails if the destructive target is not provably a separate, disposable, test-designated
-# database. Run BEFORE the suite so a misconfiguration is caught before anything drops a table.
-# Migrations are applied through FINTEK_ALEMBIC_URL, the invocation-specific override that
-# migrations/env.py reads AHEAD of DATABASE_URL. Setting DATABASE_URL here instead would work
-# by coincidence and would put the integration URL in the variable the application reads.
-db-create-integration:
-	$(PYTHON) scripts/create_test_database.py --target integration
-
-db-upgrade-integration:
-	FINTEK_ALEMBIC_URL="$$($(PYTHON) scripts/create_test_database.py --target integration --print-url)" \
-		$(ALEMBIC) upgrade head
-
-db-verify-isolation:
-	@$(PYTHON) scripts/create_test_database.py --verify
-
 # Exact pass and skip counts on one line, for a CI log a reviewer reads rather than expands.
 #
 # Reads the log written by the LAST suite run. It used to invoke pytest itself, which meant CI ran
-# all 330 tests a second time purely to print a number, and — worse — reported counts from a
+# the whole suite a second time purely to print a number, and — worse — reported counts from a
 # different execution than the one the zero-skip gate had just enforced.
 #
 # Greps for the outcome line rather than taking the last one: pytest's progress dots carry no
@@ -152,29 +115,12 @@ test-summary:
 	@test -f $(TEST_LOG) || { echo "no recorded run; run 'make test' or 'make test-no-skips' first" >&2; exit 1; }
 	@grep -E '^=*[0-9]+ (passed|failed|error)|[0-9]+ (passed|failed|error).* in ' $(TEST_LOG) | tail -1
 
-# Offline migration reversibility, base to head and back again. Needs no database: --sql generates
-# DDL without connecting.
+# The gate a change must pass. Documentation synchronization is verified by review, not by make.
 #
-# BOTH RANGES ARE DERIVED, NEVER HARDCODED. The downgrade used to read `0001_initial:base`. That was
-# correct while 0001 was the only revision and silently stopped covering anything new the moment
-# 0002 arrived: alembic renders only the revisions inside the range it is given, so the target
-# reported green while generating none of 0002's downgrade SQL — 25 statements, zero of them
-# touching table ownership. `head:base` spans every revision that exists, including ones not written
-# yet, so a future migration cannot be excluded by forgetting to edit this line.
-# tests/unit/test_migrations.py enforces that this recipe names no revision id.
-migration-check:
-	$(ALEMBIC) upgrade base:head --sql > /dev/null
-	$(ALEMBIC) downgrade head:base --sql > /dev/null
-
-# The gate a sprint must pass. Documentation synchronization is verified by review, not by make.
-check: fmt-check lint typecheck test migration-check
-
-up:
-	docker compose up -d
-
-down:
-	docker compose down
+# `migration-check` was removed with the migrations. It generated Alembic DDL offline across
+# base:head and head:base for an application schema that no longer exists.
+check: fmt-check lint typecheck test
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .pytest_cache .ruff_cache .mypy_cache var/objects $(TEST_LOG)
+	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info $(TEST_LOG)

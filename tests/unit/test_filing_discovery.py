@@ -2,6 +2,13 @@
 
 Uses httpx MockTransport so the overflow-shard path, form filtering, and era classification are
 exercised without touching the network.
+
+THE QUALIFYING FORM SET COMES FROM THE REVIEWED CONTRACT, NOT FROM THIS FILE. `QUALIFYING` below is
+read out of `tests/fixtures/form_family.yaml`, the adjudicated inventory of every 10-family string
+observed across 135 EDGAR quarterly master indexes. Hardcoding a list here would let the code and
+the contract drift apart silently, which is the exact failure this suite now exists to prevent:
+discovery shipped `("10-K", "10-K405", "10-KSB")` and `("10-Q", "10-QSB")` for four sprints while
+the committed contract said EDGAR's real strings are unhyphenated.
 """
 
 from __future__ import annotations
@@ -9,9 +16,11 @@ from __future__ import annotations
 import gzip
 import json
 from datetime import date
+from pathlib import Path
 
 import httpx
 import pytest
+from ruamel.yaml import YAML
 
 from packages.filing_discovery import (
     DiscoveredFiling,
@@ -19,7 +28,6 @@ from packages.filing_discovery import (
     SubmissionsShapeError,
     classify_era,
     discover_filings,
-    is_covered_form,
     issuer_profile,
     parse_master_index,
     quarters_between,
@@ -28,6 +36,13 @@ from packages.filing_discovery import (
 from packages.sec_client import FakeClock, SecHttpClient, SecRateLimiters
 
 UA = "Kopexx Research contact@example.com"
+
+FORM_FAMILY = Path(__file__).resolve().parents[1] / "fixtures" / "form_family.yaml"
+QUALIFYING = frozenset(
+    entry["form"]
+    for entry in YAML(typ="safe", pure=True).load(FORM_FAMILY.read_text(encoding="utf-8"))["forms"]
+    if entry["included"]
+)
 
 
 def _client(handler) -> SecHttpClient:
@@ -70,23 +85,70 @@ def _row(accession: str, form: str, filed: str, **extra) -> dict:
 # --- form coverage -------------------------------------------------------------------------
 
 
+def test_the_qualifying_set_is_the_reviewed_contract() -> None:
+    """Anti-vacuity. Every filtering test below is meaningless if this set is wrong or empty."""
+    assert len(QUALIFYING) == 22, (
+        f"the reviewed contract holds 22 included forms, got {len(QUALIFYING)}"
+    )
+
+
 @pytest.mark.parametrize(
     "form",
-    ["10-K", "10-Q", "10-K/A", "10-Q/A", "10-K405", "10-K405/A", "10-KSB", "10-QSB"],
+    # The unhyphenated small-business and transition strings a guessed allowlist cannot match.
+    # `10QSB` alone is 120,120 filings by 9,771 issuers — the fourth most common form in the
+    # entire 10-family — and the withdrawn filter matched none of them.
+    [
+        "10-K",
+        "10-Q",
+        "10-K/A",
+        "10-Q/A",
+        "10-K405",
+        "10-K405/A",
+        "10KSB",
+        "10QSB",
+        "10KSB40",
+        "10KSB40/A",
+        "10-KT",
+        "10-QT",
+        "10KT405",
+        "10KT405/A",
+    ],
 )
-def test_covered_forms_include_historical_variants(form: str) -> None:
-    """HISTORICAL-FORMAT: 10-K405 was the annual report through 2002. Apple filed two.
-
-    Excluding it leaves a two-year hole in the annual series that nothing downstream notices.
-    """
-    assert is_covered_form(form)
+def test_the_contract_covers_the_strings_edgar_actually_files(form: str) -> None:
+    """HISTORICAL-FORMAT: EDGAR's submission types are exact strings, not a normalizable family."""
+    assert form in QUALIFYING
 
 
 @pytest.mark.parametrize(
-    "form", ["8-K", "4", "424B2", "DEF 14A", "S-1", "SC 13G/A", "20-F", "11-K"]
+    "form",
+    [
+        "8-K",
+        "4",
+        "424B2",
+        "DEF 14A",
+        "S-1",
+        "SC 13G/A",
+        "20-F",
+        "11-K",
+        "10-KSB405",
+        "10KSB405",
+        "NT 10-K",
+        "10-D",
+    ],
 )
-def test_uncovered_forms_are_excluded(form: str) -> None:
-    assert not is_covered_form(form)
+def test_non_family_and_guessed_variants_are_excluded(form: str) -> None:
+    """A form nobody reviewed fails the gate rather than being admitted by a prefix rule."""
+    assert form not in QUALIFYING
+
+
+def test_discovery_refuses_an_empty_qualifying_set() -> None:
+    """Discovering nothing and reporting success is the failure mode this replaced."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"filings": {"recent": _block([]), "files": []}})
+
+    with _client(handler) as client, pytest.raises(SubmissionsShapeError, match="empty"):
+        discover_filings(client, "0000320193", qualifying_forms=frozenset())
 
 
 # --- era classification ---------------------------------------------------------------------
@@ -136,7 +198,7 @@ def test_discovery_reads_the_overflow_shard() -> None:
         return httpx.Response(200, json=shard)
 
     with _client(handler) as client:
-        filings = discover_filings(client, "0000320193")
+        filings = discover_filings(client, "0000320193", qualifying_forms=QUALIFYING)
 
     assert len(filings) == 2, "the overflow shard was not read"
     assert {f.accession for f in filings} == {
@@ -146,7 +208,7 @@ def test_discovery_reads_the_overflow_shard() -> None:
     assert filings[0].filing_date > filings[1].filing_date, "newest first"
 
 
-def test_discovery_filters_to_covered_forms_only() -> None:
+def test_discovery_filters_to_qualifying_forms_only() -> None:
     recent = _block(
         [
             _row("0000320193-25-000079", "10-K", "2025-10-31"),
@@ -160,7 +222,7 @@ def test_discovery_filters_to_covered_forms_only() -> None:
         return httpx.Response(200, json={"filings": {"recent": recent, "files": []}})
 
     with _client(handler) as client:
-        filings = discover_filings(client, 320193)
+        filings = discover_filings(client, 320193, qualifying_forms=QUALIFYING)
 
     assert {f.form for f in filings} == {"10-K", "10-Q"}
 
@@ -178,7 +240,7 @@ def test_discovery_deduplicates_across_a_shard_boundary() -> None:
         return httpx.Response(200, json=_block([row]))
 
     with _client(handler) as client:
-        filings = discover_filings(client, "320193")
+        filings = discover_filings(client, "320193", qualifying_forms=QUALIFYING)
 
     assert len(filings) == 1
 
@@ -206,7 +268,7 @@ def test_pre_2001_empty_primary_document_is_preserved() -> None:
         return httpx.Response(200, json={"filings": {"recent": recent, "files": []}})
 
     with _client(handler) as client:
-        filings = discover_filings(client, "0000320193")
+        filings = discover_filings(client, "0000320193", qualifying_forms=QUALIFYING)
 
     assert filings[0].primary_document == ""
     assert filings[0].era == "pem_armored"
@@ -219,7 +281,7 @@ def test_malformed_submissions_payload_raises_rather_than_returning_less() -> No
         return httpx.Response(200, json={"name": "Apple Inc."})
 
     with _client(handler) as client, pytest.raises(SubmissionsShapeError):
-        discover_filings(client, "0000320193")
+        discover_filings(client, "0000320193", qualifying_forms=QUALIFYING)
 
 
 def test_submissions_block_missing_required_keys_raises() -> None:
@@ -229,7 +291,7 @@ def test_submissions_block_missing_required_keys_raises() -> None:
         )
 
     with _client(handler) as client, pytest.raises(SubmissionsShapeError):
-        discover_filings(client, "0000320193")
+        discover_filings(client, "0000320193", qualifying_forms=QUALIFYING)
 
 
 def test_issuer_profile_returns_identity_without_filing_arrays() -> None:
@@ -264,7 +326,7 @@ def test_quarters_between_spans_year_boundaries() -> None:
     assert len(quarters_between(date(1994, 1, 1), date(2025, 12, 31))) == 128
 
 
-def test_master_index_parsing_selects_the_issuer_and_covered_forms() -> None:
+def test_master_index_parsing_selects_the_issuer_and_qualifying_forms() -> None:
     body = (
         "Description:           Master Index\n"
         "-------------------------------------------\n"
@@ -272,15 +334,17 @@ def test_master_index_parsing_selects_the_issuer_and_covered_forms() -> None:
         "320193|Apple Inc.|8-K|2025-08-01|edgar/data/320193/0000320193-25-000060.txt\n"
         "789019|Microsoft|10-K|2025-07-30|edgar/data/789019/0000950170-25-000000.txt\n"
     )
-    found = parse_master_index(gzip.compress(body.encode()), "0000320193")
-    assert found == {"0000320193-25-000079"}, "only Apple's covered forms belong"
+    found = parse_master_index(
+        gzip.compress(body.encode()), "0000320193", qualifying_forms=QUALIFYING
+    )
+    assert found == {"0000320193-25-000079"}, "only Apple's qualifying forms belong"
 
 
 def test_master_index_duplicate_rows_do_not_inflate_the_count() -> None:
     """HISTORICAL-FORMAT: some quarters list a row twice."""
     line = "320193|Apple Inc.|10-Q|2025-08-01|edgar/data/320193/0000320193-25-000073.txt\n"
     body = "header\n---\n" + line + line
-    assert len(parse_master_index(body.encode(), "0000320193")) == 1
+    assert len(parse_master_index(body.encode(), "0000320193", qualifying_forms=QUALIFYING)) == 1
 
 
 def test_reconciliation_raises_when_the_index_knows_a_filing_discovery_missed() -> None:
@@ -316,4 +380,4 @@ def test_discovered_filing_record_is_serialisable() -> None:
     )
     record = filing.as_record()
     assert json.loads(json.dumps(record))["accession"] == "0000320193-25-000079"
-    assert filing.is_annual and not filing.is_amendment
+    assert not filing.is_amendment

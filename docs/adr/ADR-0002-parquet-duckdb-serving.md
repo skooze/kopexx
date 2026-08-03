@@ -1,8 +1,16 @@
 # ADR-0002: Serve analytics from immutable versioned Parquet queried by in-process DuckDB
 
-STATUS: ACCEPTED
+STATUS: SUPERSEDED AS AN ACTIVE DECISION BY ADR-0017
 DATE: 2026-08-01
 SPRINT: 1
+
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.**
+>
+> There is no fact lake and no serving layer to publish:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` deleted the numeric
+> pipeline and the application persistence layer. The DuckDB lock finding and the reasoning below
+> stand as history, and are RECONSIDERED rather than assumed when persistence is designed from
+> measured model artifacts. The full retrospective is in ADR-0017.
 
 ## Context
 

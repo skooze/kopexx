@@ -3,6 +3,13 @@
 STATUS: COMPLETE
 DATE: 2026-08-01
 
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.** The SEC HTTP client
+> survives unchanged in role. Deleted from the active tree on 2026-08-03: `packages/dera_notes` and
+> the mirror script, `packages/persistence` and its 24 tables, `migrations/` including revision
+> `0001_initial`, `alembic.ini` and `docker-compose.yml`. The mirrored DERA bytes under `var/dera/`
+> are untouched, and no application database ever existed. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
 ## Objective
 
 Discharge URGENT-01 by actually mirroring the SEC DERA datasets, which required building the SEC

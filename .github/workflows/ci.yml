@@ -3,6 +3,17 @@ name: ci
 # Every validation command here is defined once, in the Makefile. CI invokes those targets rather
 # than repeating them, so the local pre-commit suite and this workflow cannot drift apart.
 # rules.md section 17 requires that reconciliation.
+#
+# NO DATABASE SERVICE, AND THAT IS NOT A RELAXATION. This job used to run a postgres:18 service
+# container, create two disposable databases, prove their identities distinct, apply Alembic
+# migrations, and run a zero-skip gate whose whole purpose was to catch database tests skipping
+# for want of a server. The application persistence layer, its ORM, its migrations and every test
+# that touched a database are deleted — there is no schema left to migrate and no destructive test
+# left to isolate. The zero-skip gate SURVIVES and is now stronger: with no environmental
+# precondition anywhere in the suite, a skip in this job has no legitimate cause at all.
+#
+# NO AWS. No `id-token` permission, no credential configuration, no provider SDK. Nothing in this
+# repository has ever reached a model, and ordinary CI must not be the thing that changes that.
 
 on:
   push:
@@ -18,80 +29,12 @@ jobs:
   quality:
     runs-on: ubuntu-latest
 
-    # A live PostgreSQL. Without it the migration and persistence tests SKIP, and a suite that
-    # skips its only database tests reports green while proving nothing about the schema.
-    #
-    # NO APPLICATION DATABASE IS EVER CREATED HERE. The server hosts two DISPOSABLE databases and
-    # nothing else. `fintek` — the name the application uses — is never created and never
-    # connected to, so no CI step can write to a database shaped like production. The service
-    # container must create something, so it creates the migration test target directly.
-    #
-    # DISPOSABLE CI-ONLY CREDENTIAL. The password below is a fixed, obviously non-production value
-    # that exists for the lifetime of one Actions job. It is written here in the open deliberately:
-    #
-    #   - It protects nothing. The container is created and destroyed by this job, is reachable
-    #     only from this job's network namespace, and holds four Apple filings' worth of public
-    #     SEC data.
-    #   - A repository secret would be worse, not better. It would imply the value is sensitive,
-    #     add a rotation obligation for something that cannot leak anything, and make the workflow
-    #     unreadable and unreproducible for a contributor.
-    #   - `trust` was the previous setting. It accepts ANY connection with no password at all,
-    #     which means the workflow never exercises the authentication path the application code
-    #     takes, and it normalises a posture that must never reach a real deployment.
-    #
-    # It is not a pattern for any deployed database, and it says nothing about how one will
-    # authenticate — that decision is still open. The local development host uses peer
-    # authentication over a Unix socket and stores no password at all.
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: fintek
-          POSTGRES_PASSWORD: ci-disposable-not-a-secret
-          POSTGRES_DB: fintek_test
-        ports:
-          - 5432:5432
-        # The health check authenticates rather than merely probing the port: PGPASSWORD makes
-        # pg_isready complete a real connection, so the job waits for a server that will actually
-        # accept the credential the tests use, not one that is merely listening.
-        options: >-
-          --health-cmd "PGPASSWORD=ci-disposable-not-a-secret pg_isready -U fintek -d fintek_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    # TWO DISPOSABLE DATABASES ON ONE SERVER, AND NO APPLICATION DATABASE.
-    #
-    #   fintek_test               the destructive migration round trip drops and rebuilds it
-    #   fintek_integration_test   the persistence suites load, query and clean it
-    #
-    # They must be distinct from each other, because `downgrade base` in the first would delete
-    # the schema the second is loading into. `make db-verify-isolation` proves every identity
-    # before any test runs, and tests/architecture/test_ci_workflow.py proves these lines say so.
-    #
-    # DATABASE_URL IS DELIBERATELY UNSET. Nothing in CI may reach an application database, so the
-    # variable that names one is absent rather than pointed somewhere harmless — an unset variable
-    # cannot be quietly reused, and any code that falls back to a default is caught here rather
-    # than in a deployment.
-    #
-    # These URLs carry the disposable credential above. No step echoes them: `make` targets read
-    # them from the environment, and the one command that reports on them —
-    # `make db-verify-isolation` — prints only host, port, and database name, never the URL.
-    env:
-      TEST_DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek_test
-      INTEGRATION_TEST_DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek_integration_test
-
     # OFFICIAL ACTIONS ARE PINNED TO A REVIEWED MAJOR TAG, matching how every other dependency in
     # this repository is handled. The third-party scanner in the security job is stricter — a fixed
     # release plus a checksum — because it is not maintained by GitHub.
     #
     # checkout@v4 and setup-python@v5 both declare `runs.using: node20`, which GitHub has
-    # deprecated; every run emitted a deprecation notice. Verified against the official
-    # repositories: checkout is node24 from v5 onward and setup-python from v6 onward, and v7 is
-    # the current major of both. Neither v7 change affects this workflow — checkout v7 restricts
-    # fork checkouts under `pull_request_target`/`workflow_run`, which this workflow does not use,
-    # and setup-python v7 removed a `pip-install` input this workflow never set.
-    #
+    # deprecated; every run emitted a deprecation notice. v7 is the current major of both.
     # tests/architecture/test_ci_workflow.py parses this file and fails if a node20 major returns.
     steps:
       - uses: actions/checkout@v7
@@ -110,6 +53,19 @@ jobs:
       - name: Verify the distribution imports
         run: python -c "import packages; print(packages.__file__)"
 
+      # THE DELETED TREES MUST NOT COME BACK THROUGH THE DISTRIBUTION. Importing them has to fail,
+      # and a failure to fail is a silent reintroduction of the rejected architecture.
+      - name: Verify the deleted packages are gone
+        run: |
+          set -euo pipefail
+          for module in footnote_extractor footnote_canonicalizer table_parser persistence dera_notes; do
+            if python -c "import packages.$module" 2>/dev/null; then
+              echo "packages.$module still imports; it was deleted and must not return" >&2
+              exit 1
+            fi
+            echo "packages.$module correctly absent"
+          done
+
       - name: Format check
         run: make fmt-check
 
@@ -119,59 +75,26 @@ jobs:
       - name: Type check
         run: make typecheck
 
-      # Idempotent: the service container already created this one, so the target confirms it
-      # rather than creating it. Kept explicit so the workflow does not depend on POSTGRES_DB
-      # continuing to name the same database.
-      - name: Create the disposable migration-test database
-        run: make db-create-test
-
-      # The second disposable database. The service container creates exactly one, so this is the
-      # step that brings the integration target into existence.
-      - name: Create the disposable integration-test database
-        run: make db-create-integration
-
-      # Fails the job if any two configured databases resolve to the same one, or if either
-      # disposable target IS the application database — before any test can write or drop
-      # anything. Compares parsed host, port, socket, and database name, not the configured
-      # strings, which can spell one database two ways.
-      - name: Prove every database identity is distinct
-        run: make db-verify-isolation
-
-      # The schema the persistence suites write against, and the first proof in CI that the
-      # migration applies to a real server, which offline DDL generation cannot establish.
-      # Routed through FINTEK_ALEMBIC_URL, never through DATABASE_URL.
-      - name: Apply migrations to the integration database
-        run: make db-upgrade-integration
-
       - name: Unit tests
         run: make test-unit
 
-      - name: Integration tests
-        run: make test-integration
-
-      # ANTI-VACUITY GATE. Both disposable databases are running, so the tests that require one
-      # must RUN. If any test skips here, the reason is printed and the job fails, because a skip
-      # in this environment means a guard silently stopped being enforced.
-      - name: Database tests must not skip
-        run: make test-no-skips
-
-      # Exact counts on one line. "330 passed" is what a reviewer needs, and finding it should not
-      # require expanding a step and scrolling past a screen of progress dots.
-      - name: Report test totals
-        if: always()
-        run: make test-summary
-
       # Enforces the structural invariants in rules.md, including the LLM content boundary:
       # no provider SDK outside the provider adapter, no Markdown prompt files, no prompt
-      # instructing a model to emit a prohibited format, and no empty package stubs.
+      # instructing a model to emit a prohibited format, no empty package stubs, and the OpenAPI
+      # contract's own parse and reference resolution.
       - name: Architecture tests
         run: make test-architecture
 
-      # Offline DDL generation across the full revision range, base to head and head to base.
-      # Needs no database. The range is derived from the head revision, so a new migration is
-      # covered without editing anything here or in the Makefile.
-      - name: Migration reversibility
-        run: make migration-check
+      # ANTI-VACUITY GATE. The suite has no environmental precondition, so every test must RUN.
+      # If any test skips here, the reason is printed and the job fails.
+      - name: Tests must not skip
+        run: make test-no-skips
+
+      # Exact counts on one line. That is what a reviewer needs, and finding it should not require
+      # expanding a step and scrolling past a screen of progress dots.
+      - name: Report test totals
+        if: always()
+        run: make test-summary
 
       - name: Coverage
         run: make coverage
@@ -231,8 +154,7 @@ jobs:
       # Enforcing, not advisory. The previous `|| true` existed because `--strict` errors on
       # fintek itself, which is an editable local install and not on PyPI. --skip-editable is
       # the correct exclusion, so the gate can now fail the job on a real advisory instead of
-      # swallowing every result. Verified: exits 0 on the current dependency set, and exits 1
-      # against a deliberately vulnerable pin.
+      # swallowing every result.
       - name: Dependency vulnerability scan
         run: |
           set -euo pipefail

@@ -1,17 +1,30 @@
 # Deep Analysis Threat Model
 
-IMPLEMENTATION STATUS: PLANNED (Sprint 7); boundary controls IMPLEMENTED (Sprint 1)
-DECISION RECORDS: ADR-0012, ADR-0013
+> **UPDATED 2026-08-03 (ADR-0017).** The analysis/chat model role survives and this threat model is
+> kept. The fact lake, canonical footnotes and the 24-table schema it named were DELETED, so the
+> boundaries and threats are restated over preserved source bytes and the accepted parsed artifact.
+> No control described here is implemented, and the named tests do not exist yet. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
+IMPLEMENTATION STATUS: PLANNED (Phase 7); the LLM content-boundary controls it relies on are
+IMPLEMENTED in `packages/llm_gateway` (Sprint 1)
+DECISION RECORDS: ADR-0012, ADR-0013, ADR-0017
 
 ## Trust boundaries
 
 ```
-browser            UNTRUSTED   sends only session_id and message
-filing content     UNTRUSTED   data, never instruction
-model output       UNTRUSTED   validated before it reaches a user or a store
-session record     TRUSTED     server-side, immutable scope
-fact lake          TRUSTED     derived from filed SEC sources
+browser              UNTRUSTED   sends only session_id and message
+filing content       UNTRUSTED   data, never instruction
+parsed artifact      UNTRUSTED   a model product; proved against preserved bytes, never assumed
+model output         UNTRUSTED   validated before it reaches a user or a store
+session record       TRUSTED     server-side, immutable scope
+preserved source     TRUSTED     the filed bytes, with their SHA-256 and provenance
 ```
+
+The parsed artifact moved to the untrusted side when the deterministic parser was withdrawn. It is
+produced by a model, and treating it as authoritative would put a model's interpretation inside the
+trust boundary — which is exactly what validation against preserved bytes exists to prevent. The
+one thing this system trusts about a filing is the bytes it downloaded and hashed.
 
 ## Threats
 
@@ -42,7 +55,7 @@ TEST: `test_cross_ticker_request_rejected_without_model_call`.
 RESIDUAL: a novel alias the detector misses reaches the model, which is instructed to refuse, and
 retrieval tools would still return nothing outside scope. Budgets bound the cost.
 
-### T-03 Accession or footnote identifier substitution
+### T-03 Accession or node identifier substitution
 
 ATTACK: a crafted identifier belonging to another issuer is supplied to a retrieval operation.
 BOUNDARY: the retrieval tool implementation.
@@ -156,7 +169,7 @@ Controls run in increasing cost order so an abusive request is stopped before it
 3  budget and quota check       one indexed lookup
 4  deterministic entity detector free
 5  ambiguity classifier         cheap model call, only when 4 is inconclusive
-6  scope-filtered retrieval     database work
+6  scope-filtered retrieval     artifact-store work
 7  analysis model invocation    the expensive step
 8  response validation          free
 ```

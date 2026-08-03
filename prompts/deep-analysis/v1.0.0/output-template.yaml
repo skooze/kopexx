@@ -30,7 +30,8 @@ filing_facts:
       - "<source id>"
 
 calculated_metrics:
-  # Arithmetic over filed facts. Inputs are named so the calculation can be reproduced.
+  # Arithmetic over values read from the supplied evidence. Every input is named so the
+  # calculation can be reproduced against the filing itself.
   - metric: <name>
     value: <numeric>
     unit: <USD|USD_millions|percent|ratio|shares>
@@ -78,14 +79,18 @@ quality:
 # ---------------------------------------------------------------------------------------------
 # Shape B: retrieval request
 # ---------------------------------------------------------------------------------------------
+# Every identifier below comes from the evidence already supplied to you. Do not construct one.
+# An identifier the server cannot resolve inside the authorized scope is refused.
+#
 # response_type: retrieval_request
 # retrieval:
-#   operation: <search_authorized_filings|get_authorized_footnote|get_authorized_table|
-#               get_authorized_fact|get_authorized_metric|get_authorized_source_excerpt>
+#   operation: <search_authorized_filings|get_authorized_node|get_authorized_table|
+#               get_authorized_source_excerpt>
 #   query: <free text, for search operations>
-#   footnote_id: "<for get_authorized_footnote>"
+#   node_id: "<for get_authorized_node: a node of a parsed artifact you were shown>"
 #   table_id: "<for get_authorized_table>"
-#   metric: <for get_authorized_fact and get_authorized_metric>
+#   source_id: "<for get_authorized_source_excerpt: a preserved original source range>"
+#   include_children: <true|false, for get_authorized_node>
 #   period_start: "<YYYY-MM-DD>"
 #   period_end: "<YYYY-MM-DD>"
 #   maximum_results: <integer, server clamps this>

@@ -2,8 +2,8 @@
 
 FINANCIAL-INVARIANT: identifiers must be emitted as quoted strings. YAML 1.2 parses an unquoted
 0000320193 as the integer 320193, silently destroying the leading zeros that make it a valid CIK.
-The same applies to accession numbers, fiscal periods, zero-prefixed footnote numbers, and
-version strings such as 1.0.0.
+The same applies to accession numbers, fiscal periods, zero-prefixed labels a filing or a model
+supplies, and version strings such as 1.0.0.
 
 This module never emits Markdown, fences, or explanatory prose. Its output is exactly one
 unfenced YAML 1.2 document.
@@ -19,22 +19,27 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString, LiteralScalarStri
 
 # Field names whose values are identifiers and must always be quoted, even when they look
 # numeric. Matching is on the leaf key name at any depth.
+#
+# THIS IS A QUOTING RULE, NOT A FILING ONTOLOGY. Every entry names a transport or identity field —
+# an SEC identifier, a date, a version, a generic node or artifact id. Nothing here asserts that a
+# filing HAS a particular kind of content. The withdrawn entries `footnote_id`,
+# `canonical_footnote_id`, `footnote_number` and `parser_version` came from the deterministic
+# footnote pipeline that was deleted; the generic `id` and `number` keys already cover whatever
+# labels a filing or a parsing model actually produces. Add a key here only when a real payload
+# needs it, never in anticipation of one.
 IDENTIFIER_KEYS: Final[frozenset[str]] = frozenset(
     {
         "cik",
         "accession",
         "accession_number",
-        "adsh",
-        "footnote_id",
-        "canonical_footnote_id",
         "source_id",
-        "table_id",
-        "block_id",
-        "fact_id",
+        "artifact_id",
+        "node_id",
+        "run_id",
+        "job_id",
         "session_id",
         "id",
         "number",
-        "footnote_number",
         "fiscal_period",
         "fp",
         "fy",
@@ -42,10 +47,8 @@ IDENTIFIER_KEYS: Final[frozenset[str]] = frozenset(
         "period_start",
         "filing_date",
         "report_date",
-        "ddate",
         "schema_version",
         "prompt_version",
-        "parser_version",
         "version",
         "model_id",
         "form",

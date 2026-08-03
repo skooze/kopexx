@@ -1,26 +1,34 @@
 # Product Definition
 
 > **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
-> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> 613 filings across six transport eras** was acquired and measured — dated Phase 0 evidence, not a
 > permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
-> The deterministic content ontology, migration `0003` and the local application database are
-> withdrawn.
+>
+> **UPDATED 2026-08-03.** The deterministic semantic parser, the application persistence layer and
+> its migrations, the DERA mirror and the accession document classifier are no longer merely
+> withdrawn — they are DELETED from the active tree, and no application database exists. The
+> surviving runtime is transport, identity, boundary and generic infrastructure only.
 >
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
-> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
 
-IMPLEMENTATION STATUS: PLANNED. The acquisition, preservation and validation foundation is
-IMPLEMENTED; the orchestrator, the model roles and the artifacts are not.
+IMPLEMENTATION STATUS: PLANNED. The acquisition, preservation and boundary foundation is
+IMPLEMENTED; the orchestrator, the model roles, coverage validation and the artifacts are not.
 
 ## What the beta is
 
 **An orchestrator-driven, model-first SEC filing product.**
 
-The user picks a company, a timeframe, and four models. The backend acquires the filings, preserves
-the original SEC artifacts byte-for-byte, sends each filing intact to the user's chosen parsing
-model, proves the returned parse against the preserved bytes, sends the accepted parse to the
-user's chosen summary model, and serves the results. Ordinary browsing of a completed result
-invokes no model at all.
+The user picks a company, a timeframe, and **a parsing model — the only required selection**. The
+backend checks its own durable source storage first, acquires anything missing from EDGAR,
+preserves the original SEC artifacts byte-for-byte, sends each filing intact to the chosen parsing
+model, proves the returned parse against the preserved bytes, and shows the result for review.
+Image analysis, summarization and Deep Dive are optional stages that run only when the user selects
+a model for them. Ordinary browsing of a completed result invokes no model at all.
+
+**A parser-only run is a complete, valid run.** It is the first functional workflow this project
+builds, and the orchestrator never turns it into a fuller pipeline on its own initiative.
 
 **The backend orchestrates and validates. It is not the authoritative semantic parser.** No backend
 code decides what is MD&A, a risk factor, a footnote, an exhibit, a certification or a signature
@@ -29,15 +37,21 @@ this document exists to prevent recurring.
 
 ## The four model roles
 
-The user chooses all four **independently**, for every job. No role inherits another's model, there
-is no automatic substitution, and there is no silent fallback.
+The user chooses each **independently**, for every job. No role inherits another's model, there is
+no automatic substitution, and there is no silent fallback. **Only parsing is required**; the other
+three selectors may be left blank, and a blank selector means that stage does not run, produces no
+artifact, and shows no placeholder.
 
-| Role | What it does |
-|---|---|
-| **Parsing** | Determines the filing's native semantic structure and returns a clean parsed artifact |
-| **Image** | Analyzes image-bearing source objects when the parsing model is text-only |
-| **Summary** | Turns an accepted parse into a separate summary and explanation artifact |
-| **Analysis / chat** | Deep Dive, follow-up questions and comparisons inside an immutable scope |
+| Role | Required | What it does |
+|---|---|---|
+| **Parsing** | **YES** | Determines the filing's native semantic structure and returns a clean parsed artifact |
+| **Image** | optional | Analyzes image-bearing source objects when the parsing model is text-only |
+| **Summary** | optional | Turns an accepted parse into a separate summary and explanation artifact |
+| **Analysis / chat** | optional | Deep Dive, follow-up questions and comparisons inside an immutable scope |
+
+The orchestrator executes only the stages the user selected, in order, and stops after the last one.
+It never silently selects a blank model, substitutes another, adds a stage, skips a selected stage,
+invokes an extra model, or retries through a different model.
 
 If the parsing model is multimodal it handles images itself; the image selector stays visible but
 disabled for that job and no image model is invoked redundantly. If the parsing model is text-only,
@@ -46,31 +60,62 @@ containing document, never meaning — and the selected image model analyzes the
 linked artifacts.
 
 **Approved beta candidates:** GPT OSS 120B, NVIDIA Nemotron 3 Super 120B, Qwen3 235B A22B, Llama 4
-Maverick, Qwen3 VL 235B. **None is currently configured or accessible.** Availability, model IDs,
-regional support, modality, limits and prices are subject to live discovery in Phase 1.5, which has
-not run.
+Maverick, Qwen3 VL 235B. **None is currently configured or accessible.** These are LABELS, not
+verified provider identifiers. Availability, model IDs, regional support, modality, limits and
+prices are subject to live discovery in Phase 1, which has not run.
 
 ## The workflow
+
+Steps 1 to 9 are the required path. Steps 10 to 13 run only when the user selected a model for that
+stage.
+
+```
+discover -> check local source storage -> acquire byte-exact -> preserve
+         -> assemble the intact human-readable source set -> parsing model
+         -> validate against preserved bytes -> review / approve
+         -> optional image / summary / chat stages
+```
 
 1. Search a locally maintained catalog of entities that have qualifying 10-K/10-Q-family filings.
 2. Select an entity by ticker, historical ticker, current or historical name, SEC filer name, or
    alias.
 3. Select a timeframe, bounded below by the entity's earliest known qualifying filing.
-4. Select the four models independently.
-5. Retrieve and preserve the original SEC source artifacts byte-for-byte.
-6. Determine the complete relevant human-readable source set.
-7. Send that set **intact** to the selected parsing model, when the pairing is compatible.
-8. Receive a clean parsed filing artifact.
-9. Persist the parsed artifact **separately from** the original source.
-10. Send the accepted parse and its supporting evidence to the selected summary model.
-11. Persist a separate summary and explanation artifact.
-12. Render original source, clean parse, and summary as three distinct views.
-13. Use the selected analysis/chat model for Deep Dive and conversation.
-14. Use the image model only when the selected parser is text-only.
-15. Cache reusable accepted results.
-16. Persist durable artifacts and their lineage.
-17. Stream processing progress to the frontend.
-18. Serve completed results with no further model calls.
+4. Select a parsing model. Optionally select an image, summary or analysis/chat model.
+5. Open ONE visible, copyable parent run ID, with one child job per filing.
+6. **Check durable local source storage BEFORE contacting SEC** — verify object presence, byte count
+   and SHA-256, and reuse a valid preserved original. Fetch from EDGAR only what is missing,
+   incomplete or hash-invalid, and preserve what is fetched byte-for-byte.
+7. Determine the complete relevant human-readable source set **mechanically**.
+8. Send that set **intact** to the selected parsing model, one filing per invocation, when the
+   pairing is compatible. Refuse and explain when it is not.
+9. Receive a clean parsed filing artifact, prove its coverage, citations and numbers against the
+   preserved bytes, and store it **separately from** the original source as an EVALUATION artifact
+   for review.
+10. Send the accepted parse and its supporting evidence to the selected summary model, and store a
+    separate summary and explanation artifact.
+11. Use the image model only when the selected parser is text-only and an image model was selected.
+12. Use the selected analysis/chat model for Deep Dive and conversation.
+13. Render original source, clean parse, and summary as distinct views, with source-reference
+    navigation between them.
+14. Reuse only APPROVED artifacts, on an exact reuse key.
+15. Stream processing progress, validation warnings, cost and timing to the frontend.
+16. Serve completed results with no further model calls.
+
+## Evaluation, approval and reuse
+
+**A parsed artifact is an EVALUATION artifact until a human explicitly approves it.** It is
+reviewable immediately and it does not satisfy a user search as a trusted result before approval.
+Approval is per filing and needs no other model: a parser-only artifact may be approved on its own.
+
+Only an approved artifact becomes reusable. The **authoritative** copy lives in persistent storage;
+Redis holds a reusable cache entry with a **24-hour TTL** and is an acceleration layer, never the
+source of truth. Reuse requires an exact match on filing identity, source hash, model identity and
+version, prompt version, settings and validation-policy version — two versions of a model are never
+interchangeable, and neither are two prompts.
+
+Every run carries a visible parent run ID, and granular developer comments attach to the run, a
+filing, a child job, any node of a parsed artifact, a summary, a chat message, a validation warning
+or an error.
 
 ## Intact-source-only
 
@@ -165,7 +210,7 @@ product cannot serve is worse than not showing it.
 The beta needs a working local catalog long before it needs the whole of EDGAR, and the roadmap
 says so explicitly so the UI is never left waiting on Phase 8.
 
-**MINIMUM BETA CATALOG — required no later than Phase 3, complete before Phase 6 can be complete.**
+**MINIMUM BETA CATALOG — complete before Phase 6, the functional beta UI, can be complete.**
 
 ```
 stable CIK identity                    current authoritative filer name
@@ -194,7 +239,7 @@ operational scheduling. Phase 8 expands the working catalog; it does not create 
 in September. A selectable timeframe is bounded below by the entity's earliest known qualifying
 filing, so the UI cannot offer a range the product cannot serve.
 
-## Corpus evidence — dated Phase 1, 2026-08-02
+## Corpus evidence — dated Phase 0, measured 2026-08-02, reverified 2026-08-03
 
 These are measurements of one sample on one date. They are evidence, not permanent constants.
 

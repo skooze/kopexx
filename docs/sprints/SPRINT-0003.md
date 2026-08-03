@@ -16,6 +16,13 @@ Sprint completion and committing are separate events; `rules.md` section 15 requ
 approval for each commit and section 20 requires each SHA to be recorded here. The work was
 approved and committed in three stages, which is why there are three SHAs rather than one.
 
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.** Surviving:
+> `packages/filing_discovery`, `packages/filing_acquisition` less `inventory.py`, and the committed
+> filing fixtures with their preserved objects. Deleted from the active tree on 2026-08-03: the
+> accession document classifier and its Regulation S-K role taxonomy, DERA fact loading and
+> reconciliation, `packages/persistence` and the migrations the ledger wrote to, and all seven
+> scripts. Authoritative: `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
 ---
 
 ## Outcome

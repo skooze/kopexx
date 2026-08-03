@@ -1,19 +1,21 @@
 # Model Abstraction
 
-IMPLEMENTATION STATUS: IMPLEMENTED for the interface and the mock provider; Bedrock adapter PLANNED
+IMPLEMENTATION STATUS: IMPLEMENTED for the provider interface and the mock provider; a real
+provider adapter is PLANNED for Phase 2 and blocked on Phase 1
 OWNER PACKAGE: `packages/llm_gateway`
 
 ## Principle
 
-Application code selects a model by required capability, never by a hard-coded provider model
-identifier. A model swap is a configuration change.
+**The USER selects the model, per job, for each of the four roles independently.** Application code
+never hard-codes a provider model identifier, never substitutes one model for another, and never
+falls back silently. An identifier reaches the adapter as configuration or as an explicit user
+selection, and a model swap changes no code.
 
 ## Interfaces
 
-```
-ModelCapabilities        model_id, provider, max_input_tokens, max_output_tokens,
-                         supports_batch, supports_flex, supports_reasoning_effort
+The complete provider surface, in `packages/llm_gateway/providers/base.py`.
 
+```
 ModelRequest             model_id, system_text, user_content, user_content_format,
                          max_output_tokens
 
@@ -24,18 +26,29 @@ ModelProvider.invoke(request) -> ModelResponse
 ModelProvider.count_tokens(text) -> int | None
 ```
 
-`ModelCapabilities` deliberately has **no** `supports_structured_output` and no
-`supports_native_tools` field. Both describe provider features that require JSON at the model
-boundary and are therefore unusable in this system regardless of whether a provider offers them
-(ADR-0013). Adding those fields would invite a call site to branch on them.
+`user_content_format` is `plain_text` or `yaml` — the two permitted SYNTHETIC formats. **This
+interface has no representation for a preserved SEC artifact sent intact under the original-source
+exception**, and it will need one before the first real parsing run. Its shape is not guessed here;
+it is designed against a real adapter and a real provider request in Phase 2.
+
+There is no `ModelCapabilities` type. There used to be — `model_id`, `provider`, token limits,
+batch, flex and reasoning-effort flags — and it was deleted as dead code: it had no constructor and
+no caller anywhere in the repository, and every field in it describes a provider this project has
+never reached. **Capability facts are discovered live in Phase 1 and recorded then**, and a type
+asserting their existence in advance was a standing invitation to write one down from memory.
+
+Whatever replaces it keeps the original omission: no `supports_structured_output` and no
+`supports_native_tools`. Both describe provider features that require JSON at the model boundary and
+are unusable in this system regardless of whether a provider offers them (ADR-0013). Their presence
+would invite a call site to branch on them.
 
 ## AWS identity — binding on the Bedrock adapter
 
-The Bedrock provider, when written in Sprint 5, uses the AWS SDK default credential provider
-chain. It accepts region and model identifiers as configuration and optionally a non-secret
-profile name. It never accepts access-key or secret-key parameters, never constructs a client with
-explicit credential values, never reads credentials from `.env`, never caches them, and never
-writes them into an invocation record.
+The Bedrock provider, when written, uses the AWS SDK default credential provider chain. It accepts
+region and model identifiers as configuration and optionally a non-secret profile name. It never
+accepts access-key or secret-key parameters, never constructs a client with explicit credential
+values, never reads credentials from `.env`, never caches them, and never writes them into an
+invocation record.
 
 The mock provider requires no AWS identity and must keep working without one, so the default test
 suite never needs AWS access.
@@ -56,6 +69,10 @@ A provider adapter does **not**: build model-visible content, validate the bound
 retries, or calculate cost. Those belong to the gateway.
 
 ## Error normalization
+
+An incompatible filing/model pairing is not a provider error. It is refused before invocation,
+explained to the user with bytes, tokens and the limit, and costs nothing. The user may select a
+different compatible model; the system may not.
 
 | Provider condition | Normalized | Retryable |
 |---|---|---|

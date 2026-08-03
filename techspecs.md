@@ -2,106 +2,96 @@
 
 THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 
-> **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
-> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
-> permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
-> The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
-> preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
-> a filing means. The user selects four models independently — parsing, image, summary, and
-> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
-> content ontology, migration `0003` and the local application database are withdrawn. Sections
-> below that describe the withdrawn design are historical.
+> **CUT BACK TO TRANSPORT ON 2026-08-03.** The deterministic semantic parser, the application
+> PostgreSQL persistence layer, its Alembic migrations, the DERA mirror and fact loader, and the
+> accession document classifier were DELETED from the active tree — not deprecated, not moved,
+> not retained as an oracle. Git history is the archive. What remains acquires, preserves,
+> transports and validates; a user-selected parsing model determines what a filing means.
+> Authoritative and not repeated elsewhere:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`, which builds on
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`.
 >
-> **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
-> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+> **NO MODEL HAS BEEN INVOKED. AWS IS NOT CONFIGURED. NO APPLICATION DATABASE EXISTS.**
 
-Sections describing future work are marked `PLANNED` and are not descriptions of behaviour that
-exists.
+Sections marked `PLANNED` describe work that does not exist. `roadmap.md` is authoritative for
+sequencing.
 
-LAST SYNCHRONIZED WITH CODE: Sprint 4.1, after the complete-filing content model, migration `0003`,
-and the application backfill
-VERIFICATION: 876 tests passing and 0 skipped, roughly 92 percent coverage across all fifteen
-measured packages, ruff format and lint clean across `packages tests scripts migrations`, mypy clean across
-101 source files in `packages scripts migrations`, offline Alembic upgrade `base:head` and
-downgrade `head:base` across all three revisions, live round trip on `fintek_test`, gitleaks clean
-over history and the working tree, and pip-audit clean. Run locally.
+LAST SYNCHRONIZED WITH CODE: 2026-08-03, the cleanup commit.
 
-The source-file count fell from 59 to 41 when the alignment review removed eighteen packages that
-contained only a docstring (ADR-0015), rose to 45 when type checking extended to `scripts` and
-`migrations`, reached 53 when filing discovery and acquisition arrived, 65 with the DERA loader and
-the database-isolation guard, 82 with footnote extraction and canonicalization, and is 101 now that
-the complete-filing content model exists.
+VERIFICATION, measured locally on that date:
 
-`packages/` holds fifteen implemented libraries. Two were added in Sprint 3 — `filing_discovery`
-and `filing_acquisition` — three in Sprint 4: `footnote_extractor`, `footnote_canonicalizer`, and
-`table_parser` — and two in Sprint 4.1: `filing_parser` and `filing_content`. `dera_notes` grew
-from a mirror into a mirror plus a fact loader; `filing_acquisition` grew an accession inventory.
-
-> **Scope correction, Sprint 4.1 (ADR-0016).** The product covers every human-readable part of
+```
+309 tests passing, 0 skipped          coverage 90.89 percent against an 85 percent gate
+ruff format and lint clean            across `packages tests`
+mypy clean                            40 source files in `packages`
+wheel and sdist built and inspected   packages/ and dist-info only
+external import check                 8 runtime packages import; 5 deleted packages do not
+gitleaks clean over history and tree  pip-audit clean
+```
 
 ---
 
-# CURRENT STATE — AUTHORITATIVE. Everything below this section is historical.
+# 1. CURRENT STATE
 
-## 1. Implemented retained infrastructure
+## 1.1 Runtime packages — eight, 40 modules, 3,469 lines
 
-All committed, all passing, none of it interpreting meaning.
-
-```
-packages/sec_identity        CIK, accession and URL normalization — the single home
-packages/sec_client          HTTP with the shared rate limiter and throttle classification
-packages/configuration       startup validation, including the SEC User-Agent gate
-packages/observability       structured logging
-packages/storage             object storage and content hashing
-packages/filing_discovery    qualifying-filing discovery
-packages/filing_acquisition  byte-exact acquisition, provenance, accession document inventory
-packages/dera_notes          the DERA mirror and numeric fact loader
-packages/llm_gateway         the model chokepoint, payload compiler and boundary validator,
-                             running against an in-process mock. NO REAL PROVIDER ADAPTER EXISTS.
-packages/persistence         engine, identity comparison, migration-target resolution
-```
-
-## 2. Committed test infrastructure
+None of them interprets meaning.
 
 ```
-five original SEC filing fixtures, pinned by SHA-256 and size
-tests/fixtures/form_family.yaml         41 adjudicated forms, 22 in, 19 out
-tests/fixtures/corpus_identity.yaml     issuer and co-registration identity cases
-form-family, identity and identity-rules contract tests
-accession-inventory tests
-three database identities with no fallback, and the tests that prove them distinct
-the CI-workflow architecture tests, which parse the workflow itself
+packages/sec_identity        CIK, accession and URL normalization — the single home       5 modules
+packages/sec_client          HTTP with the shared rate limiter and throttle classification 5
+packages/configuration       startup validation, including the SEC User-Agent gate         4
+packages/observability       structured logging, field redaction, correlation scope        3
+packages/storage             object storage and content hashing                            3
+packages/filing_discovery    qualifying-filing discovery against a SUPPLIED form set       4
+packages/filing_acquisition  byte-exact acquisition with provenance                        3
+packages/llm_gateway         the model chokepoint, boundary validator and YAML 1.2 parser 12
+                             running against an in-process mock. NO REAL PROVIDER ADAPTER.
 ```
 
-## 3. Deterministic work DEMOTED to oracle
+## 1.2 Dependency graph — measured, not asserted
 
 ```
-packages/footnote_extractor        committed. Benchmark only.
-packages/footnote_canonicalizer    committed. Benchmark only.
-packages/table_parser              committed. Benchmark only.
+configuration        -> (none)
+observability        -> (none)
+storage              -> (none)
+sec_identity         -> (none)
+sec_client           -> configuration
+llm_gateway          -> (none)
+filing_discovery     -> sec_identity
+filing_acquisition   -> sec_identity, storage
 ```
 
-Their measured Apple results stand as a recall floor for grading a parsing model. **They are not a
-product requirement and they do not define a correct parse.**
+No cycles. No package imports a database driver, a web framework, or a provider SDK. Two packages —
+`configuration` and `observability` — currently have **no non-test caller**; they are the
+designated single homes for startup validation and structured logging and are wired in Phase 2.
+This is recorded rather than hidden: unwired code is a liability, and both now carry tests that
+prove the behaviour they will be wired for.
 
-## 4. Uncommitted parser work awaiting withdrawal
+## 1.3 Committed test infrastructure
 
-**NONE. This is a correction to an earlier expectation.**
+```
+five ORIGINAL SEC SOURCE documents        four inline-XBRL primary documents plus the 1994
+                                          complete submission, every one hash-verified against
+                                          the manifest on every run
+four original FilingSummary.xml artifacts hash-verified against the manifest
+tests/fixtures/filings/manifest.yaml      source URL, SHA-256 and byte count for every object
+tests/fixtures/form_family.yaml           41 adjudicated forms, 22 included, 19 excluded
+tests/fixtures/corpus_identity.yaml       issuer and co-registration identity cases
+three transport HTML fixtures             two 403 bodies and one directory listing
+```
 
-`packages/filing_parser`, `packages/filing_content`, `scripts/extract_filing_content.py`, the
-complete-content-model document and migration `0003_filing_content_coverage.py` were deleted from
-the working tree **before Commit 1 and without ever being committed**. They exist in no commit.
-Verified: `git status` reports no uncommitted change under `packages/` or `scripts/`.
+**No derived parser output is committed any more.** The four `report-inventory.yaml` and four
+`table-ownership.json` fixtures were the deterministic pipeline's own output; a test now fails if
+either name reappears under `tests/fixtures/`.
 
-Commit 3 therefore concerns the DEMOTED packages in section 3 and their scripts, not a pile of
-uncommitted parser code.
-
-## 5. Corpus evidence — dated Phase 1, 2026-08-02
+## 1.4 Corpus evidence — dated Phase 0, reverified 2026-08-03
 
 ```
 112 issuers            613 filings            6 transport eras
-760,174,532 bytes of preserved objects, 613 of 613 hash-verified, 0 throttle events
-22 direct substantive form strings, 19 adjudicated exclusions
+760,174,532 bytes preserved, 613 of 613 hash-verified, 0 missing, 0 hash mismatches
+22 direct substantive form strings, 19 adjudicated exclusions, all 22 present in the corpus
+0 duplicate (cik, accession) pairs   0 accession-to-CIK ownership mismatches
 75 SIC industries      138 amendments         313 annual, 300 quarterly
 187 filings carry images, 11 carry PDFs, packages range from 4 to 283 files
 44 percent of primary documents exceed ~200,000 ESTIMATED tokens
@@ -109,221 +99,111 @@ uncommitted parser code.
 
 A measurement of one sample on one date. Not a permanent constant.
 
-## 6. Planned model-first components — NONE EXIST
+## 1.5 Databases — none
 
 ```
-minimum beta ENTITY catalog                          Phase 3, completed before Phase 6
-     CIK identity, authoritative name, aliases, current and evidenced historical tickers,
-     qualifying filing identities, exact filed forms, earliest and latest qualifying filing,
-     filing dates and report periods, local search, filing-bounded timeframe.
-     No fabricated historical ticker data. NOT the EDGAR universe.
-universe-scale catalog expansion                     Phase 8
-     EDGAR-wide population, full-history acquisition, alias reconciliation, scheduled sync,
-     checkpoints, amendment monitoring, new-issuer discovery, index and perf optimization.
-model catalog and live capability discovery          Phase 3
-four-role capability router                          Phase 3
-intact-source compatibility checker                  Phase 1.5 / 3
-durable job state and streaming                      Phase 3
-real provider adapter                                Phase 2
-parsed artifact                                      Phase 2
-image-analysis artifact                              Phase 4
-summary artifact                                     Phase 5
-beta UI                                              Phase 6
-Deep Dive and chat                                   Phase 7
+fintek                    DOES NOT EXIST. Verified 2026-08-03: connecting with the configured
+                          application URL returns FATAL: database "fintek" does not exist.
+fintek_test               exists on the development host, 1 table, UNUSED
+fintek_integration_test   exists on the development host, 25 tables, UNUSED
 ```
 
-## 7. Deferred persistence
+Nothing in this repository can reach any of them: no ORM, no engine, no driver dependency, no
+migration, no test. The two disposable databases are host leftovers; removing them is host
+administration and needs separate authorization.
 
-**The final PostgreSQL schema and the Redis design are DEFERRED to Phase 8**, after real parsed
-artifacts from real models exist. Designing them earlier is what produced the withdrawn migration
-`0003`.
+## 1.6 What was deleted
 
-What is committed is `0001_initial_control_plane_schema` and `0002_table_ownership`. Both are
-SEALED under `rules.md` section 8 and are never edited. They still contain the footnote-centric
-tables — `filing_section`, `canonical_footnote`, `footnote_source_block`, `footnote_table`,
-`footnote_summary` — which are **superseded in direction but present in history**. No `0003` and no
-`0004` exist.
+| Deleted | Was |
+|---|---|
+| `packages/footnote_extractor` | renderer inventory, footnote candidates, `Note N —` heading parsing, inline-XBRL tagged spans, presentation linkbase |
+| `packages/footnote_canonicalizer` | the five-stage grouping chain, item-disclosure exclusions, table OWNERSHIP, footnote completeness, footnote-schema persistence |
+| `packages/table_parser` | original-filing table structure, header hierarchy, cell provenance |
+| `packages/persistence` | 24 ORM tables, engine, URL resolution, disposable-database isolation |
+| `migrations/`, `alembic.ini` | `0001_initial_control_plane_schema`, `0002_table_ownership` |
+| `packages/dera_notes` | DERA discovery, mirror ledger, TSV, dimensions, normalize, validate, registration, loader, reconcile, report |
+| `packages/filing_acquisition/inventory.py` | accession document classifier and its Item 601 role taxonomy |
+| `scripts/` (all seven) | parser, migration, test-database and DERA entry points |
+| `metric_definitions/` | curated concept priorities and the item-disclosure exclusion taxonomy |
+| `prompts/footnote-summary/` | the footnote-summary prompt set |
+| `artifacts/dera/` | byte-identical copies of ledgers that travel with the payloads in `var/dera/` |
+| `docs/footnotes/`, parts of `docs/financial/`, `docs/sec/dera-notes.md`, `docs/architecture/components.md`, `docs/architecture/data-flows.md`, nine runbooks | specifications for the above |
 
-## 8. Current database state
-
-```
-fintek                    DOES NOT EXIST. Dropped deliberately and not recreated.
-                          Ordinary CI does not create it and does not set DATABASE_URL.
-fintek_test               disposable. The migration round trip drops every table in it.
-fintek_integration_test   disposable. The persistence integration suites load and clean it.
-```
-
-No application database exists on any host. Nothing reads or writes one.
-
-## 9. Current phase statuses
-
-```
-Phase 1    Representative filing corpus            COMPLETE
-Phase 1.5  Intact-source compatibility             OPEN — blocks Phase 2
-Phase 2    Model contract and parsing experiments  BLOCKED PENDING USER AUTHORIZATION AND LIVE
-                                                   BEDROCK CAPABILITY DISCOVERY
-Phase 3-8                                          NOT STARTED
-```
-
-**NO MODEL HAS EVER BEEN INVOKED. AWS IS NOT CONFIGURED. NOTHING IS DEPLOYED. NO SUMMARY EXISTS.**
-
-> every processed 10-K and 10-Q, not the footnotes alone. Financial-statement footnotes remain a
-> specialized content type with their own dedicated guarantee. Authoritative model:
-> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`. There is no separate
-> content-model document: the parsed artifact is deliberately loosely typed and no universal
-> filing taxonomy exists.
-
-## Build and packaging
-
-`pyproject.toml` declares explicit setuptools discovery: `[tool.setuptools.packages.find]` with
-`include = ["packages*"]`. Automatic flat-layout discovery cannot work in this repository — the
-root holds `prompts`, `artifacts`, `migrations`, `metric_definitions`, `docs`, and `tests`, and
-setuptools refuses to guess. It additionally picked up the gitignored `var/` directory in a local
-checkout, so the failure was not even reproducible across environments.
-
-`packages/` is the only importable tree: it and every subpackage carries `__init__.py`, and
-every import in the codebase has the form `packages.<name>`. No package-data configuration is
-needed because `packages/` contains zero non-`.py` files; prompts, metric definitions, and
-migrations are loaded from the repository by path rather than as package resources.
-
-Runtime dependencies are `ruamel.yaml`, `pydantic`, `httpx`, `sqlalchemy`, `alembic`, and
-`psycopg[binary]`. The last three were omitted until the first CI run: the package-discovery
-failure masked the fact that an install without them cannot import `packages.persistence`.
+Why each, once, in `docs/adr/ADR-0017`.
 
 ---
 
-## 1. System context
-
-```
-        SEC EDGAR                          Model provider
-   www.sec.gov  data.sec.gov                (Bedrock or mock)
-   efts.sec.gov  DERA datasets                    |
-            |                                     |
-            v                                     v
-   +--------------------------------------------------------------+
-   |                          FinTek                              |
-   |                                                              |
-   |  ingestion  ->  parsing  ->  facts + footnotes  ->  serving   |
-   |                                    |                          |
-   |                              summarization                    |
-   |                                    |                          |
-   |                              Deep Analysis                    |
-   +--------------------------------------------------------------+
-            |
-            v
-        Investor dashboard
-```
-
-FinTek reads from SEC and from a model provider. It writes nothing back to either. The only
-outbound side effect is a model invocation, which is metered and audited.
-
----
-
-## 2. Implementation status by component
+# 2. Implementation status by component
 
 | Component | Package | Status |
 |---|---|---|
 | SEC identity normalization | `sec_identity` | IMPLEMENTED |
-| Configuration and User-Agent validation | `configuration` | IMPLEMENTED |
+| Configuration and User-Agent validation | `configuration` | IMPLEMENTED, not yet wired to a caller |
 | Rate limiting and throttle classification | `sec_client` | IMPLEMENTED |
 | SEC HTTP client | `sec_client` | IMPLEMENTED |
 | Object storage and hashing | `storage` | IMPLEMENTED (filesystem); S3 PLANNED |
-| Structured logging and correlation | `observability` | IMPLEMENTED |
-| DERA discovery and mirror ledger | `dera_notes` | IMPLEMENTED |
-| DERA bulk download | `dera_notes` + `sec_client` | IMPLEMENTED and EXECUTED (78/78 packages) |
-| DERA TSV load, normalization, validation, reconciliation | `dera_notes` | IMPLEMENTED and EXECUTED (2,845 facts, 4 filings) |
-| PostgreSQL control-plane schema | `persistence` | IMPLEMENTED (24 tables) |
-| Database URL resolution, identity comparison, engine construction | `persistence` | IMPLEMENTED |
-| Destructive-test database isolation | `persistence` + `tests/conftest.py` | IMPLEMENTED |
-| AWS identity and secret-management policy | governance + `tests/architecture` | IMPLEMENTED as governance; no AWS code exists |
-| Alembic migration | `migrations` | IMPLEMENTED and APPLIED; `0001_initial` sealed, `0002_table_ownership` added Sprint 4 |
-| LLM gateway, boundary, YAML, audit | `llm_gateway` | IMPLEMENTED |
-| Filing discovery | `filing_discovery` | IMPLEMENTED (Sprint 3) |
-| Filing acquisition, inline-XBRL era | `filing_acquisition` | IMPLEMENTED (Sprint 3) |
-| Footnote extraction: inventory, candidates, headings | `footnote_extractor` | IMPLEMENTED (Sprint 4) |
-| Canonicalization stages 1-5, audit, completeness | `footnote_canonicalizer` | IMPLEMENTED (Sprint 4); stages 6-11 PLANNED |
-| Footnote table structure and cell provenance | `table_parser` | IMPLEMENTED (Sprint 4) |
-| Table-to-footnote ownership via tagged spans and the presentation linkbase | `footnote_canonicalizer` | IMPLEMENTED (Sprint 4); 0 unresolved on 4 filings |
-| Accession document inventory and classification | `filing_acquisition` | IMPLEMENTED (Sprint 4.1); 55 filed documents, 0 ambiguous |
-| Era-neutral parser registry and block discovery | `filing_parser` | IMPLEMENTED (Sprint 4.1); inline-XBRL and pre-2001 plain text |
-| Canonical filing-content hierarchy and taxonomy | `filing_content` | IMPLEMENTED (Sprint 4.1) |
-| Source-block coverage ledger | `filing_content` | IMPLEMENTED (Sprint 4.1); 2,878 blocks, 0 unresolved |
-| Layered completeness | `filing_content` | IMPLEMENTED (Sprint 4.1) |
-| Incorporation-by-reference detection | `filing_content` | IMPLEMENTED (Sprint 4.1) |
-| Complete-filing persistence and backfill | `filing_content` | IMPLEMENTED and EXECUTED (Sprint 4.1); 3,165 rows, idempotent |
+| Structured logging, redaction, correlation | `observability` | IMPLEMENTED, not yet wired to a caller |
+| Filing discovery and master-index reconciliation | `filing_discovery` | IMPLEMENTED |
+| Filing acquisition, inline-XBRL era only | `filing_acquisition` | IMPLEMENTED |
+| LLM content boundary, YAML 1.2, budget, audit | `llm_gateway` | IMPLEMENTED against a mock |
+| AWS identity and secret policy | governance + `tests/architecture` | IMPLEMENTED as governance; NO AWS CODE EXISTS |
+| Filed-document lister, non-classifying | — | PLANNED, Phase 2 |
+| Real provider adapter | `llm_gateway/providers/` | PLANNED, Phase 2 |
+| Parsed / image / summary / chat artifacts | — | PLANNED, Phases 2 and 3 |
+| Persistence, approval gate, Redis cache | — | PLANNED, Phase 4 |
+| Parser-review UI | — | PLANNED, Phase 2 |
 
-Reserved package names. **These directories do not exist.** Sprint 1 created them containing only
-a docstring, which reserved names up to twenty sprints ahead of their code and caused two
-architecture tests to pass while scanning nothing. They were removed by the alignment review
-(ADR-0015); each is created in the sprint that writes its first module. `tests/architecture`
-enforces that no package is an empty stub.
+Reserved package names. **These directories do not exist.** Sprint 1 created eighteen packages
+containing only a docstring, which reserved names twenty sprints ahead of their code and made two
+architecture tests pass while scanning nothing. Each is created in the change that writes its first
+module, and an architecture test rejects an empty stub.
 
-| Reserved name | Planned path | Sprint |
+| Reserved name | Planned path | Phase |
 |---|---|---|
-| Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 5 |  <!-- constrained by docs/security/aws-identity-and-secrets.md -->
-| Summarization pipeline | `packages/summarization` | 5 |
-| Validation pipeline | `packages/validation` | 5 |
-| Fiscal period logic | `packages/fiscal` | 6 |
-| XBRL processing | `packages/xbrl` | 6 |
-| Fact lake | `packages/fact_lake` | 6 |
-| Metric resolution | `packages/financial_metrics` | 6 |
-| API | `apps/api` | 6 |
-| Web dashboard | `apps/web` | 6 |
-| Retrieval | `packages/retrieval` | 7 |
+| Bedrock provider adapter | `packages/llm_gateway/providers/bedrock.py` | 2 |
+| Filed-document lister | `packages/filing_acquisition/documents.py` | 2 |
+| Source-set assembly and compatibility | `packages/source_transport` | 2 |
+| Coverage validation of model output | `packages/coverage_validation` | 2 |
+| Four-role model catalog and router | `packages/model_catalog` | 2 |
+| Orchestrator: parent runs and child jobs | `packages/orchestrator` | 2 |
+| API | `apps/api` | 2 |
+| Web dashboard | `apps/web` | 2 |
+| Artifact persistence and approval | `packages/artifact_store` | 4 |
 | Deep Analysis | `packages/deep_analysis` | 7 |
-| Issuer registry | `packages/issuer_registry` | Stage 2, W-1 |
-| Worker and scheduler | `apps/worker`, `apps/scheduler` | Stage 2, W-7 |
 
 ---
 
-## 3. Implemented components in detail
+# 3. Implemented components in detail
 
 ### 3.1 `packages/sec_identity` — IMPLEMENTED
 
-RESPONSIBILITY. The single home for CIK normalization, accession normalization, and SEC URL
-construction. No other package may reimplement these.
-
-INPUTS. Raw CIK values in any of four forms, accession numbers in either form, filing metadata.
-
-OUTPUTS. Normalized identifiers and fully-formed SEC URLs.
+RESPONSIBILITY. The single home for CIK normalization, accession normalization and SEC URL
+construction. No other package may reimplement these; an architecture test enforces it.
 
 PUBLIC INTERFACE. `parse_cik`, `cik_padded`, `cik_archive`, `cik_submissions_stem`,
 `parse_accession`, `accession_dashed`, `accession_undashed`, `accession_filer_prefix`,
 `is_valid_accession`, `submissions_url`, `submissions_shard_url`, `filing_folder_url`,
-`primary_document_url`, `complete_submission_url`, `filing_xbrl_zip_url`,
-`filing_index_json_url`, `extracted_instance_url`, `quarterly_index_url`,
-`company_tickers_exchange_url`.
+`primary_document_url`, `complete_submission_url`, `filing_xbrl_zip_url`, `filing_index_json_url`,
+`extracted_instance_url`, `quarterly_index_url`, `company_tickers_exchange_url`.
 
-DEPENDENCIES. Standard library only.
-
-PROHIBITED DEPENDENCIES. Everything. This package is a leaf.
-
-DATA OWNED. None; it is pure computation.
+DEPENDENCIES. Standard library only. This package is a leaf and must stay one.
 
 INVARIANTS.
 - `data.sec.gov` receives the ten-digit padded CIK; `www.sec.gov/Archives` receives the unpadded
-  integer.
-- The dashed accession is canonical; the undashed form is used only as a folder segment.
-- The accession prefix is never used as the issuer CIK.
-- An empty primary-document name never produces a URL.
+  integer. The wrong form costs a 301 or a 404 against a single-digit-per-second budget.
+- The dashed accession is canonical; the undashed form is a folder segment only.
+- **The accession prefix is the FILING AGENT's CIK and is never the issuer.** 361 of 613 corpus
+  filings carry an agent prefix; using it as identity produces 361 false mismatches.
+- An empty primary-document name never produces a URL. SEC answers the resulting bare folder URL
+  with HTTP 200 and a directory listing, which is a silent corruption rather than an error.
 
-FAILURE MODES. `InvalidCikError`, `InvalidAccessionError`, `MissingPrimaryDocumentError`. All are
-permanent; none is retryable.
+SEMANTIC BOUNDARY. None of it reads a filing. Every function is a regex or a format string over an
+identifier SEC assigned.
 
-RETRY BEHAVIOR. None. Malformed input does not become valid on retry.
+TESTS. 15 in `tests/unit/test_sec_identity.py`, including the filing-agent prefix trap and the
+empty pre-2001 primary document.
 
-SECURITY. Rejects boolean input, which would otherwise pass as an integer CIK of 1.
-
-OBSERVABILITY. None required; failures surface as typed exceptions at the call site.
-
-SCALING. Pure functions, no state.
-
-UNIT TESTS. 16 in `tests/unit/test_sec_identity.py`, including the filing-agent prefix trap, the
-empty pre-2001 primary document, and both accession forms in one URL.
-
-INTEGRATION TESTS. Exercised transitively by every other package.
-
-### 3.2 `packages/configuration` — IMPLEMENTED
+### 3.2 `packages/configuration` — IMPLEMENTED, no non-test caller
 
 RESPONSIBILITY. Load and eagerly validate settings so a misconfiguration fails at startup rather
 than after generating traffic that will be blocked.
@@ -331,446 +211,297 @@ than after generating traffic that will be blocked.
 PUBLIC INTERFACE. `Settings.from_env`, `SecAccessSettings`, `StorageSettings`, `LlmSettings`,
 `validate_user_agent`, `is_valid_user_agent`, `DENYLIST_FRAGMENTS`.
 
-INVARIANTS.
-- A User-Agent must exist, must contain a contact email, and must not match a library default.
-- Global rate must be within `(0, 10]`.
-- Throttle cooldown must be at least 600 seconds.
+INVARIANTS. A User-Agent must exist, must contain a contact email, and must not match a library
+default. Global rate within `(0, 10]`. Throttle cooldown at least 600 seconds.
 
-FAILURE MODES. `InvalidUserAgentError` and `ValueError` at construction. Both are fatal at
-startup by design.
+KNOWN GAP. `LlmSettings` carries `standard_model_id` and `analysis_model_id`, a two-role shape that
+predates the four-role product. It is deliberately NOT replaced with a guessed four-role shape: the
+real catalog is built from verified capability discovery, which has not run.
 
-UNIT TESTS. 6 in `tests/unit/test_configuration.py`.
+TESTS. 6 in `tests/unit/test_configuration.py`.
 
-### 3.3 `packages/sec_client` — IMPLEMENTED (limiter and classifier Sprint 1; HTTP client Sprint 2)
+### 3.3 `packages/sec_client` — IMPLEMENTED
 
-RESPONSIBILITY. Pace all SEC traffic and classify refusals correctly.
+RESPONSIBILITY. Pace all SEC traffic, classify refusals correctly, and be the only component that
+issues an HTTP request to an SEC host.
 
-PUBLIC INTERFACE. `SecRateLimiters`, `TokenBucketLimiter`, `Clock`, `FakeClock`, `classify_403`,
-`raise_for_403`, `extract_reference_id`, `looks_like_directory_listing`, and the typed error
-hierarchy.
-
-DATA OWNED. Token-bucket state, throttle events, reference identifiers.
+PUBLIC INTERFACE. `SecHttpClient` with `get_text`, `get_bytes`, `head`, `download`; `FetchResult`;
+`SecRateLimiters`, `TokenBucketLimiter`, `Clock`, `FakeClock`; `classify_403`, `raise_for_403`,
+`extract_reference_id`, `looks_like_directory_listing`; and the typed error hierarchy.
 
 INVARIANTS.
 - `www.sec.gov` and `data.sec.gov` share one bucket, because the documented limit is aggregate.
-- `efts.sec.gov` has its own, slower bucket.
-- A rate-threshold 403 is retryable; an undeclared-automation 403 is not.
+  `efts.sec.gov` has its own slower bucket.
+- **A rate-threshold 403 triggers one full 600-second cooldown, never exponential backoff.**
+  Backoff starting at 1 second extends the block and is prohibited.
+- An undeclared-automation 403 is a configuration error: raise, never retry.
 - A directory listing is never treated as filing content.
+- A download writes to a temporary path and is renamed only after every assertion passes.
 
-FAILURE MODES AND RETRY. See the retry matrix in `docs/sec/access-policy.md`.
+CONTENT ASSERTIONS, all rejecting rather than storing: an HTML page where content was expected; a
+directory listing; wrong magic bytes for an expected ZIP; a body shorter than its declared
+Content-Length; a ZIP with no members; a ZIP whose member fails CRC.
 
 KNOWN DEFECT FIXED IN SPRINT 1. The token bucket compared `tokens >= 1.0` exactly. After sleeping
-the computed delay, refill could land a fraction below 1.0 in binary floating point, so the
-acquire loop spun forever on ever-smaller deltas. A nanotoken epsilon fixes it. This was found by
-the test suite hanging, not by review.
+the computed delay, refill could land a fraction below 1.0 in binary floating point, so the acquire
+loop spun forever on ever-smaller deltas. A nanotoken epsilon fixes it. Found by the suite hanging,
+not by review.
 
-SCALING. In-process today. A Redis-backed bucket is PLANNED and required before multi-process
-ingestion, because the limit is aggregate across machines.
+SCALING. In-process. Exactly one client may run at a time because the SEC limit is aggregate across
+machines. A shared limiter is required before multi-process ingestion.
 
-UNIT TESTS. 9 in `tests/unit/test_sec_client.py`, using an injectable fake clock so rate-limit
-tests are deterministic and complete in milliseconds.
+TESTS. 9 in `test_sec_client.py` using an injectable fake clock, 15 in `test_sec_http_client.py`
+using `httpx.MockTransport`, including one asserting the cooldown is a single 600-second pause
+rather than a backoff sequence.
+
+PROVEN IN PRODUCTION. Executed a 78-package, 27,228,877,737-byte mirror with zero failures and zero
+throttle events, and acquired the 613-filing research corpus with zero throttle events.
 
 ### 3.4 `packages/storage` — filesystem backend IMPLEMENTED; S3 PLANNED
 
-RESPONSIBILITY. Durable storage for raw filings, datasets, and exact model request and response
+RESPONSIBILITY. Durable storage for raw filings and, later, exact model request and response
 bodies, with content hashing.
 
 PUBLIC INTERFACE. `ObjectStore`, `FilesystemObjectStore`, `StoredObject`, `sha256_bytes`,
 `sha256_text`, `sha256_stream`, `sha256_file`.
 
-INVARIANTS.
-- An object key is relative and never escapes the store root.
-- Writes are atomic via a temporary file and replace, so a killed writer leaves no partial object
-  under the final key.
-- Every stored object records a SHA-256.
+INVARIANTS. An object key is relative and never escapes the store root. Writes are atomic via a
+temporary file and replace, so a killed writer leaves no partial object under the final key. Every
+stored object records a SHA-256.
 
 SECURITY. Path traversal and absolute keys are rejected rather than silently reinterpreted.
 
-UNIT TESTS. 6 in `tests/unit/test_storage.py`.
+TESTS. 6 in `tests/unit/test_storage.py`.
 
-### 3.5 `packages/observability` — IMPLEMENTED
+### 3.5 `packages/observability` — IMPLEMENTED, no non-test caller
 
-RESPONSIBILITY. Structured logging with correlation identifiers.
+RESPONSIBILITY. Structured logging with correlation identifiers and centralized field redaction.
 
-PUBLIC INTERFACE. `get_logger`, `log_event`, `configure_logging`, `correlation_scope`,
-`new_correlation_id`, `get_correlation_id`, `set_correlation_id`, `reset_correlation_id`,
-`REDACTED_FIELDS`.
+PUBLIC INTERFACE. `get_logger`, `log_event`, `configure_logging`, `StructuredFormatter`,
+`REDACTED_FIELDS`, `correlation_scope`, `new_correlation_id`, `get_correlation_id`,
+`set_correlation_id`, `reset_correlation_id`.
 
-INVARIANT. Filing text and model payload bodies are never logged. A fixed field set is redacted.
+SECURITY-INVARIANT. **Filing text and model-visible payload bodies are never logged.** They may be
+very large and may carry content a prompt-injection attempt placed inside a filing. Bodies go to
+object storage and are referenced by URI and hash. Redaction is centralized so a new logger cannot
+forget it. The AWS credential names are in the redaction set before any AWS integration exists, on
+purpose: a credential that reaches a log has already been disclosed, and a log is the one place
+nobody thinks to check.
 
-### 3.6 `packages/dera_notes` — IMPLEMENTED (mirror Sprint 1; fact load Sprint 3)
+TESTS. 12 in `tests/unit/test_observability.py`, new in this cleanup — the package previously had
+none at all. The redaction test is parametrized over EVERY entry in `REDACTED_FIELDS`, so adding a
+name without wiring it in cannot pass, and one test asserts an unlisted field IS emitted so the
+others cannot pass vacuously.
 
-RESPONSIBILITY. Discover, mirror, and record SEC DERA NOTES packages, and load one filing's facts
-from a mirrored package into the append-only fact lake.
+### 3.6 `packages/filing_discovery` — IMPLEMENTED
 
-MODULES, one responsibility each. Splitting them is not decoration: a single load script would put
-a transaction boundary, a CSV dialect, and a calendar derivation in one place, and the calendar
-derivation is where the only correctness defect of this sprint was found.
+RESPONSIBILITY. Which filings an issuer has, before anything is downloaded, and an independent
+reconciliation against the quarterly master index.
 
-| Module | Owns |
-|---|---|
-| `discovery` | scraping the authoritative listing |
-| `ledger` | the JSON mirror ledger; resumability |
-| `selection` | which package holds a filing; archive completeness; period ordering |
-| `tsv` | parsing, quoting DISABLED, streamed |
-| `dimensions` | `dimh` to axis and member, from `dim.tsv` |
-| `normalize` | row to domain values, including the derived period start |
-| `validate` | domain rules mirroring the database constraints |
-| `registration` | the `issuer` and `filing` rows the fact foreign keys require |
-| `loader` | one transaction: insert, load ledger, idempotency, advisory lock |
-| `reconcile` | nine checks against the source and the database |
-| `report` | plain text for a person |
-
-PUBLIC INTERFACE. `discover_packages`, `classify_filename`, `DeraPackage`, `PackageCadence`,
-`MirrorLedger`, `MirrorEntry`, `NOTES_LANDING_URL`, `locate_filing`, `SelectedPackage`,
-`register_filing`, `register_mirror_ledger`, `FilingContext`, `read_package`, `load_facts`,
-`LoadResult`, `reconcile`, `Reconciliation`, `full_report`.
+PUBLIC INTERFACE. `discover_filings`, `issuer_profile`, `DiscoveredFiling`, `classify_era`,
+`is_amendment`, `parse_master_index`, `reconcile_against_master`, `quarters_between`,
+`raise_if_incomplete`.
 
 INVARIANTS.
-- Filenames are scraped from the authoritative listing, never generated.
-- Empty discovery raises rather than returning an empty list.
-- Monthly packages are retained after quarterly consolidation.
-- `pending()` makes a run resumable; a completed run downloads nothing.
-- TSVs are parsed with `csv.QUOTE_NONE`. A double quote inside a DERA field is literal data;
-  QUOTE_MINIMAL would merge the fields on either side of it with no error raised.
-- The package holding a filing is found by reading `sub.tsv`, never by deriving a period from a
-  date. A filing belongs to the period it was SUBMITTED in.
-- The archive is re-hashed before every load. The download-time hash is not trusted.
-- A required member missing fails the load closed.
-- Numeric values are `Decimal`, never `float`.
-- Idempotency is by the DERA natural key `(adsh, tag, version, ddate, qtrs, uom, dimh, iprx,
-  coreg)`, recomputed from the package on every run. `dera_package.loaded_at` records what
-  happened and never authorises a skip.
-- Insertion, the load ledger update, and the row counts are one transaction. A failure leaves no
-  rows and an unmarked ledger.
-- Every row is written `validation_status = 'UNVALIDATED'` and `is_latest_selected = false`. The
-  validation pipeline is Sprint 5 and latest-selection is Sprint 6.
+- **The qualifying form set is a REQUIRED argument with no default**, matched on the EXACT filed
+  string with no normalization, no case folding and no amendment-suffix stripping. An empty set is
+  rejected rather than silently discovering nothing.
+- SEC-INVARIANT: `filings.recent` caps at 1,000 entries. Apple hits that cap exactly with 1,238
+  further filings in an overflow shard reaching back to 1994. Reading only `recent` returned 45 of
+  Apple's 134 qualifying filings when measured live.
+- A shard boundary can repeat an entry; deduplication is by accession.
+- Era classification is behavioural, not cosmetic: inline XBRL carries everything in one
+  `-xbrl.zip`; older XBRL needs the primary document separately; pre-2001 filings are PEM-armored
+  inside the complete submission and have no primary document name at all.
+- A malformed submissions payload raises. A shape change absorbed quietly is indistinguishable
+  from an issuer that filed nothing.
 
-KNOWN PROPERTY OF THE SOURCE. `ddate` is rounded to the nearest month end and `qtrs` is a whole
-number of quarters; DERA publishes the residuals as `datp` and `durp`. `period_start` is not
-published at all and is derived. Exact filed boundaries come from the XBRL instance in Sprint 6
-and supersede these rows through the append-only restatement path.
+DEFECT FIXED IN THIS CLEANUP. This package shipped `ANNUAL_FORMS = ("10-K", "10-K405", "10-KSB")`
+and `QUARTERLY_FORMS = ("10-Q", "10-QSB")` for four sprints. EDGAR files `10KSB` and `10QSB`
+unhyphenated, so that filter matched none of the small-business family and none of the transition
+family — while a committed contract adjudicating all 41 observed strings sat beside it. The
+reconciliation that existed to catch a discovery gap applied the same filter, so both sides agreed
+and reported a complete history. An architecture test now parses runtime source and fails if a form
+literal is written back into it. ADR-0017 section 8.
 
-SCOPE LIMIT. Per accession, not per package. `xbrl_fact` has foreign keys to `issuer` and
-`filing`, so loading a whole monthly package would first require registering thousands of issuers
-— Stage 2 phase W-1, out of scope by ADR-0015.
+TESTS. 18 in `tests/unit/test_filing_discovery.py`, reading the qualifying set out of
+`tests/fixtures/form_family.yaml` so code and contract cannot drift apart.
 
-TESTS. 105. Unit: `test_dera_notes` 7, `test_dera_tsv` 16, `test_dera_normalize` 25,
-`test_dera_validate` 18, `test_dera_selection` 16, `test_dera_report` 8. Integration:
-`test_dera_load` 13 against a live database, `test_dera_mirror` 2. The integration suite was proven
-non-vacuous by removing the idempotency guard and observing the rerun test fail with 8 rows where
-4 belong.
+### 3.7 `packages/filing_acquisition` — IMPLEMENTED, inline-XBRL era only
 
-EXECUTED. 2,845 facts across Apple's FY2025 10-K and three 10-Qs, from four packages, every load
-reconciled on nine checks including an exact numeric-total match against PostgreSQL's own `sum()`.
+RESPONSIBILITY. Download a filing's source objects and preserve them byte-for-byte with provenance.
 
-### 3.7 `packages/sec_client.client` — IMPLEMENTED (Sprint 2)
+PUBLIC INTERFACE. `acquire_filing`, `plan_inline_xbrl`, `AcquiredObject`, `AcquisitionResult`,
+`storage_key`, `SUPPORTED_ERAS`, and the typed error hierarchy.
 
-RESPONSIBILITY. The only component permitted to issue HTTP requests to an SEC host.
+INVARIANTS. Every acquired object records source URL, SHA-256, byte count and acquisition
+timestamp. Bytes are never transformed on the way in.
 
-PUBLIC INTERFACE. `SecHttpClient(user_agent, limiters, cooldown_seconds, ...)` with `get_text`,
-`head`, `download(url, destination, expect_zip)`, and `FetchResult`.
+KNOWN GAP, and it is a real one. `plan_inline_xbrl` acquires five objects — primary document, XBRL
+package, SEC-extracted instance, `FilingSummary.xml`, schema. **That is not the filed submission.**
+Apple's FY2025 10-K accession lists seventeen filed documents, including a description of
+securities, a subsidiaries list, an auditor consent, three officer certifications and two graphics.
+The module that listed them was deleted in this cleanup because it also CLASSIFIED them into a
+Regulation S-K role taxonomy and ruled that a courtesy PDF duplicated the primary document, which
+suppressed a filed source range on a semantic judgement. A non-classifying replacement is Phase 2a
+work and is named in the roadmap.
 
-INVARIANTS. Every request passes the shared limiter and carries the validated User-Agent. A
-rate-threshold 403 triggers a full 600-second cooldown, never exponential backoff. An
-undeclared-automation 403 raises immediately and is never retried. A download writes to a
-temporary path and is renamed only after every assertion passes.
+TESTS. 12 in `tests/unit/test_filing_acquisition.py`.
 
-CONTENT ASSERTIONS, all rejecting rather than storing: HTML page where content was expected,
-directory listing, wrong magic bytes for an expected ZIP, body shorter than its declared
-Content-Length, ZIP with no members, ZIP whose member fails CRC.
-
-FAILURE MODES. `SecRateLimitedError` retryable; `SecUndeclaredAutomationError` never;
-`SecNotFoundError` permanent; `DirectoryListingError` permanent; `SecTransientError` retryable
-with bounded backoff.
-
-SCALING. Single-process. The in-process limiter means exactly one client may run at a time,
-because the SEC limit is aggregate across machines. The Redis-backed limiter is required before
-multi-process ingestion and is BLOCKING for Stage 2 phase W-2.
-
-TESTS. 15 in `tests/unit/test_sec_http_client.py` using `httpx.MockTransport`, including a test
-asserting the cooldown is exactly one 600-second pause rather than a backoff sequence.
-
-PROVEN IN PRODUCTION. Executed the full DERA mirror: 78 packages, 27,228,877,737 bytes, zero
-failures, zero throttle events.
-
-### 3.8 `packages/persistence` — IMPLEMENTED (Sprint 2)
-
-RESPONSIBILITY. The PostgreSQL control-plane schema.
-
-SCOPE. 24 domain tables. In the live database: 23 check, 19 unique, 29 foreign-key and 25 primary-key constraints, and 37 explicit indexes (81 including constraint-backing). Issuer identity with temporal validity, filings and
-documents and sections and amendments, canonical footnotes with source blocks and tables, the
-append-only fact lake, metric definitions and derived values, versioned summaries, the ingest
-ledger, the DERA mirror ledger, Deep Analysis sessions and messages and memory, model invocation
-audit, prompt registry, and the dataset version pointer.
-
-PROHIBITED DEPENDENCIES. Pure-logic packages must never import this package. Dependency flows
-domain <- persistence.
-
-KEY ENFORCEMENT.
-- `xbrl_fact` carries a BEFORE UPDATE trigger rejecting any change to a filed value, unit, scale,
-  concept, or period. The guarantee holds against a direct SQL session, not only against
-  application code.
-- `listing` is unique on `(ticker, exchange, effective_start)`, never on ticker alone.
-- `footnote_summary` has a partial unique index giving exactly one active version per footnote.
-- `footnote_source_block.footnote_id` is nullable, with a partial index over orphans, so an
-  ungrouped block is a visible defect rather than a silent loss.
-- `llm_invocation` has a check constraint restricting content format to plain_text or yaml.
-
-MIGRATION. `migrations/versions/0001_initial_control_plane_schema.py`. Generated deterministically
-from the model metadata by `scripts/generate_initial_migration.py`, because Alembic autogenerate
-requires a live database and this environment has none.
-
-TESTS. 14 in `tests/unit/test_migrations.py`. Twelve structural tests run everywhere; two live
-tests SKIP with an explicit reason when no PostgreSQL is reachable, so a missing database never
-masquerades as a pass.
-
-### 3.9 `packages/llm_gateway` — IMPLEMENTED
+### 3.8 `packages/llm_gateway` — IMPLEMENTED against a mock
 
 RESPONSIBILITY. The only path from FinTek to a language model. Owns payload compilation, boundary
-validation, budget enforcement, provider invocation, response validation, safe parsing, cost
-calculation, and audit.
-
-FULL SPECIFICATION. `docs/llm/content-boundary.md`.
+validation in both directions, budget enforcement before spend, provider invocation, safe parsing,
+cost calculation and audit.
 
 PUBLIC INTERFACE. `LlmGateway`, `Budget`, `GatewayResult`, `InvocationRecord`, `compile_yaml`,
-`compile_plain_text`, `compile_footnote_summary_request`, `FootnoteSummaryRequest`,
-`SourceBlockPayload`, `TablePayload`, `validate_plain_text`, `validate_yaml_text`, `enforce`,
-`parse_yaml`, `require_mapping`, `require_string`, `to_yaml`, `estimate_tokens`,
-`SerializationComparison`, `PricingRegistry`, `ModelPricing`, `ModelCapabilities`,
-`reject_native_tools`, and the typed error hierarchy.
+`compile_plain_text`, `CompiledPayload`, `reject_native_tools`, `validate_plain_text`,
+`validate_yaml_text`, `enforce`, `BoundaryReport`, `ContentFormat`, `Violation`, `parse_yaml`,
+`require_mapping`, `require_string`, `to_yaml`, `estimate_tokens`, `PricingRegistry`,
+`ModelPricing`, `default_registry`, and the typed error hierarchy.
 
-PROHIBITED DEPENDENCIES. No provider SDK outside `providers/`. No application package.
+WHAT LEFT IN THIS CLEANUP. `FootnoteSummaryRequest`, `SourceBlockPayload`, `TablePayload` and
+`compile_footnote_summary_request` — a request contract built around canonical footnotes, which was
+the deleted parser's output shape. `ModelCapabilities` and `SerializationComparison`, both dead:
+zero callers, zero tests. Four footnote identifiers left the YAML quoting rule; the generic `id` and
+`number` keys already cover whatever labels a filing or a model produces. The mock provider's canned
+response was a `footnote-summary-v1.0.0` document with a fixed taxonomy of topics, accounting
+policies and risk categories, which quietly made the mock the de facto response schema; it is now a
+minimal well-formed YAML mapping that asserts no contract.
 
-INVARIANTS. The eight listed in `docs/llm/content-boundary.md`, of which the load-bearing ones
-are: model-visible content is plain text or one unfenced YAML 1.2 document; only the compiler
-produces it; exact bodies are preserved; budgets are checked before invocation; every identifier
-is quoted.
+**No request or response contract is declared.** No model has been invoked, so none is known.
 
-YAML PARSER, PINNED. ruamel.yaml 0.19.1, `YAML(typ="safe", pure=True)`, YAML 1.2 core schema,
-VersionedResolver, on Python 3.14.6. PyYAML is not used because it implements YAML 1.1.
+INVARIANTS.
+- Model-visible SYNTHETIC content is unmarked plain text or exactly one unfenced YAML 1.2 document.
+  Only the compiler produces it; the boundary validator is a backstop that catches bypasses.
+- ORIGINAL-SOURCE EXCEPTION: a preserved SEC artifact is admitted by PROVENANCE and sent intact in
+  whatever syntax SEC published, never rewritten into YAML and never routed through the compiler.
+- Native tool calling is refused. It requires JSON Schema definitions and yields JSON arguments,
+  both prohibited at the boundary.
+- Budgets are checked BEFORE invocation, never reconciled after.
+- Exact request and response bodies are preserved.
+- Every identifier is quoted.
+- No provider SDK outside `providers/`, enforced by an architecture test.
+
+DEFECT FIXED IN THIS CLEANUP. The pre-spend budget guard added `len(system_text) // 4` to a payload
+estimate computed at 3.8 characters per token — one guard, two different unverified ratios, and the
+system prompt under-counted. Under-counting is the unsafe direction for a check that runs before
+the money is spent. Both now use `estimate_tokens`.
+
+YAML PARSER, PINNED. ruamel.yaml, `YAML(typ="safe", pure=True)`, YAML 1.2 core schema. PyYAML is not
+used because it implements YAML 1.1.
 
 THREE VERIFIED FACTS THE DESIGN RESTS ON.
-- YAML 1.2 does not coerce `yes`, `no`, `on`, `off` to booleans; YAML 1.1 does. `ruamel.yaml` in
-  pure safe mode is used for exactly this reason.
+- YAML 1.2 does not coerce `yes`, `no`, `on`, `off` to booleans; YAML 1.1 does.
 - YAML 1.2 parses an unquoted `0000320193` as the integer `320193`, destroying a CIK. Identifiers
-  are always quoted, and `require_string` refuses an identifier that arrived unquoted.
+  are always quoted, and `require_string` refuses one that arrived unquoted.
 - Alias expansion was UNBOUNDED before Sprint 2. A five-line document expanded to 59,049 leaf
-  nodes. A pre-parse anchor and alias budget now rejects it, because a post-parse check runs after
-  the allocation has already happened.
+  nodes. A pre-parse anchor and alias budget rejects it, because a post-parse check runs after the
+  allocation has already happened.
 
-UNIT TESTS. 36 across boundary and parser suites.
+UNVERIFIED CONSTANT, disclosed. `max_output_tokens` defaults to 4096 in `gateway.invoke` and
+`providers/base`. It is a REQUEST cap chosen by the caller, not a claim about any model's real
+output limit — no model has been reached and no limit is known.
 
-### 3.10 `packages/filing_parser` — IMPLEMENTED (Sprint 4.1)
-
-RESPONSIBILITY. Era-neutral extraction of complete human-readable filing content. Parser selection
-by filing era and document kind, block discovery with byte offsets, meaning-preserving text
-normalization, and construction of the canonical content hierarchy from an ordered block stream.
-
-PUBLIC INTERFACE. `FilingSource`, `ParsedFiling`, `ParsedUnit`, `SourceBlock`, `BlockDisposition`,
-`HierarchyBuilder`, `ParserRegistry`, `default_registry`, `InlineXbrlParser`,
-`PlainTextSubmissionParser`, `scan_blocks`, `plain_text_blocks`, `normalize_block_text`,
-`strip_container`, `ERA_SPECIFIC_PROVENANCE`, `SUMMARY_TARGET_TYPES`.
-
-THE ERA-NEUTRAL CONTRACT. Required on every unit in every era: source document, source span, filed
-order, content kind, text or artifact reference, source hash, extraction method, parser version,
-confidence, coverage disposition. **Optional provenance**, present only where the era supplies it:
-role URI, TextBlock concept, renderer report, continuation id, `FilingSummary` report, XBRL
-context. An architecture test fails the build if one of the optional list becomes a required field,
-because that is precisely what would make a pre-2009 filing unrepresentable.
-
-INVARIANTS.
-- Parser selection is by era from the filing record, never by sniffing content. An unregistered era
-  raises rather than falling back — a modern parser handed a 1990s submission reads the
-  `IMS-HEADER` block as the document, confidently and wrongly.
-- A block key is `{document_tag}:{ordinal}` over an immutable filed document, never a runtime DOM
-  identity, so a rerun updates rather than reinserts.
-- A whole `<table>` is one block. Enumerating its cells would destroy the structure and inflate the
-  coverage denominator with fragments no reader treats as separate disclosures.
-- Hidden inline-XBRL regions are discovered and flagged, never emitted as visible prose.
-- An image without alt text is not assumed decorative.
-- A parent unit owns its children, not their blocks. Aggregate text is a derived view.
-- No model participates in any decision.
-
-MEASURED. Four FY2025 filings and one 1994 filing: 2,878 blocks, 238 content units, zero
-unresolved, zero double-assigned. Footnote total from the document body — 43 — independently
-reproduces the Sprint 4 renderer-inventory result.
-
-TESTS. 53 in `test_filing_parser.py` and `test_historical_filing_regression.py`, plus 40 in
-`test_filing_content_regression.py`.
-
-### 3.11 `packages/filing_content` — IMPLEMENTED (Sprint 4.1)
-
-RESPONSIBILITY. The canonical filing-content model: hierarchy paths and their validation, the
-source-block coverage ledger, layered completeness, incorporation-by-reference detection, and
-idempotent filing-scoped persistence.
-
-PUBLIC INTERFACE. `compute_paths`, `reconcile`, `evaluate`, `detect`, `resolve`, `persist`,
-`CoverageLedger`, `LayeredCompleteness`, `AcquisitionCompleteness`, `ReferenceSet`,
-`FilingContentWrite`, `DocumentRecord`, `PersistedCounts`, `coverage_report`,
-`completeness_report`, `advisory_lock_key`.
-
-INVARIANTS.
-- Coverage reconciles against DISCOVERED SOURCE MATERIAL, never against a count of sections.
-- Every human-visible block gets exactly one disposition. Five of the six count as accounted;
-  `UNRESOLVED` blocks completion and is never a reason to discard a block.
-- A block's owner is a single nullable column, so **double assignment is unrepresentable** rather
-  than merely tested for; a check constraint makes `ASSIGNED` equivalent to a non-NULL owner.
-- An exclusion must state its reason.
-- Footnotes are referenced by identifier, never copied. A footnote unit stores NULL text, enforced
-  by `footnote_unit_does_not_copy_text`.
-- `hierarchy_path` is derived from `(parent, sequence)` and rewritten in the same transaction. It
-  is stored because `(parent, sequence)` cannot be a unique constraint — a NULL parent never
-  conflicts — and because it turns a subtree read into a prefix scan.
-- One transaction and one transaction-scoped advisory lock per filing.
-- Every upsert has a conditional `WHERE`, so an unchanged row is not rewritten and its audit fields
-  keep answering "which run decided this".
-- Only judgements are stored on `filing`; every count is derived.
-
-LAYERED COMPLETENESS. Acquisition, submission content, disclosure, footnote, and summary. A filing
-can be `SUBMISSION_COMPLETE` and `DISCLOSURE_PARTIAL` at once — everything physically filed is
-accounted for while incorporated Items remain unprocessed. Collapsing the layers is prohibited.
-
-MEASURED. 3,165 rows written on the first backfill pass; **zero on an identical second pass**.
-
-TESTS. 27 in `test_filing_content.py`; 32 architecture tests in `test_complete_filing_coverage.py`.
-
-### 3.12 `packages/filing_acquisition.inventory` — IMPLEMENTED (Sprint 4.1)
-
-RESPONSIBILITY. The authoritative filed-document inventory and classification of every document in
-an accession.
-
-INVARIANTS.
-- Classification is by the **filer's declared type** from the accession index table, not by
-  filename. A filename heuristic remains only as a documented fallback for a row with no type.
-- The index document table lists what the ISSUER FILED; `index.json` lists the folder, which also
-  holds SEC's own viewer output. Measured on one 10-K: 16 filed against 93 folder files.
-- The complete submission `.txt` concatenates every other document and is never extracted.
-- A non-text file carrying a primary declared type is a courtesy rendering, inventoried but not
-  extracted.
-- An unclassifiable file is `UNKNOWN` and recorded as ambiguous, never guessed.
-
-MEASURED. 55 filed documents across four accessions, **zero ambiguous**.
-
-TESTS. 20 in `test_accession_inventory.py`.
+TESTS. 26 in `test_llm_boundary.py`, 16 in `test_yaml_parser.py`.
 
 ---
 
-## 4. Repository structure
+# 4. Repository structure
 
 ```
-apps/            api, worker, scheduler, web            PLANNED
-packages/        15 implemented libraries
-prompts/         versioned .txt and .yaml, never .md
-metric_definitions/  6 curated metric YAML files
-migrations/      IMPLEMENTED and APPLIED; 0001, 0002 SEALED, 0003 applied Sprint 4.1
-scripts/         mirror_dera.py, load_dera_partition.py, create_test_database.py,
-                 extract_filing_content.py
-tests/           unit, integration, architecture, fixtures
-docs/            architecture, sec, financial, footnotes, filings, llm, deep-analysis, api,
-                 data-dictionary, testing, operations, runbooks, adr, sprints, security
-infrastructure/  Terraform                              PLANNED
+packages/        8 runtime libraries, 40 modules
+prompts/         versioned .txt and .yaml, never .md — deep-analysis only
+tests/           unit, architecture, fixtures
+docs/            architecture, sec, llm, deep-analysis, api, data-dictionary, testing,
+                 operations, runbooks, adr, sprints, security
+var/             GITIGNORED. Preserved SEC objects, the 613-filing research corpus, the DERA
+                 mirror, and the offline corpus tools. Not part of the distribution.
+apps/            api, worker, web                          PLANNED
 ```
 
-## 5. Dependency direction
+**There is no `scripts/` directory and no `migrations/` directory.** Every script was an entry
+point for the deterministic parser, the application database or the DERA loader.
+
+## Build and packaging
+
+`[tool.setuptools.packages.find] include = ["packages*"]`. **The include pattern is the rule, not a
+list and not a count:** everything under `packages/` ships and nothing else does. Adding a runtime
+package needs no edit; moving code out of `packages/` removes it from the distribution
+automatically. Automatic flat-layout discovery cannot work here because the root holds non-Python
+top-level directories and picked up the gitignored `var/` locally, so the failure was not even
+reproducible across environments.
+
+Runtime dependencies are `ruamel.yaml` and `httpx`. **That is the whole list**, and both are
+imported by surviving source — verified by grep, not by memory. `sqlalchemy`, `alembic` and
+`psycopg[binary]` went with the persistence layer; `pydantic` was declared and never imported by a
+single module.
+
+## Validation suite
+
+**The Makefile is the single definition. CI invokes the same targets**, so local validation and
+GitHub Actions cannot drift apart.
 
 ```
-domain
-  ^
-parsers / facts / metrics / summaries
-  ^
-application services
-  ^
-api / worker / scheduler
+make check       fmt-check, lint, typecheck, test
+make coverage    tests with coverage and the 85 percent gate
+make test-no-skips   the suite, failing if any test skips
 ```
 
-Enforced by `tests/architecture/test_architecture.py`, which also asserts no generic `utils`
-module, no reimplemented CIK padding, no provider SDK outside the adapter, no Markdown prompt
-files, no prompt requesting a prohibited output format, and a public interface on every package.
-
-## 6. Storage architecture
-
-| Store | Owns | Status |
-|---|---|---|
-| Object storage | Raw filings, datasets, exact model bodies | IMPLEMENTED (filesystem) |
-| Parquet | Fact lake, serving datasets | PLANNED |
-| DuckDB | In-process query engine over Parquet | PLANNED |
-| PostgreSQL | All control-plane state including the ingest ledger and filing content | IMPLEMENTED and APPLIED (27 tables) |
-| Redis | Cache, rate buckets, locks, fan-out | PLANNED |
-
-SQLite is deliberately not used. See ADR-0004.
-
-The DuckDB decision is load-bearing: a reader cannot open a database file another process holds
-read-write, so the serving path reads immutable versioned Parquet through an in-memory connection
-and no file lock ever exists. See ADR-0002.
-
-## 7. Processing state machine — PLANNED
-
 ```
-DISCOVERED -> QUEUED -> DOWNLOADING -> DOWNLOADED -> PARSING -> PARSED
-  -> EXTRACTING_FACTS -> FACTS_EXTRACTED
-  -> EXTRACTING_SECTIONS -> SECTIONS_EXTRACTED
-  -> EXTRACTING_FOOTNOTES -> FOOTNOTES_EXTRACTED
-  -> GROUPING_FOOTNOTES -> FOOTNOTES_GROUPED
-  -> VALIDATING_FOOTNOTES -> FOOTNOTES_VALIDATED
-  -> SUMMARIZING -> SUMMARIES_GENERATED -> VALIDATING_SUMMARIES
-  -> CALCULATING_METRICS -> PUBLISHING -> COMPLETE
-
-Any state -> FAILED | PARTIAL | REQUIRES_REVIEW
-
-Forbidden: any transition directly to COMPLETE that skips VALIDATING_SUMMARIES.
-Forbidden: PARTIAL -> COMPLETE without re-entering SUMMARIZING.
+PY_PATHS     packages tests      format and lint
+MYPY_PATHS   packages            type check
 ```
 
-There is no `processed` boolean anywhere in the schema.
+`make migration-check` is gone with the migrations. `make db-*` is gone with the database. **The
+suite now has no environmental precondition at all** — no database, no network, no credentials — so
+`test-no-skips` is the same suite as `test`, and a skip has no legitimate cause.
 
-## 8. Security
+Not covered by `make check`, run before proposing a commit:
 
-Full threat model in `docs/deep-analysis/security.md`. Boundary controls implemented in Sprint 1;
-session and retrieval controls are Sprint 7.
+```
+pip-audit --skip-editable
+gitleaks git . --log-opts="--all --full-history" --redact --exit-code 1
+gitleaks dir . --redact --exit-code 1
+```
 
-Implemented today: User-Agent validation failing closed, path-traversal rejection, log redaction,
-model content-boundary enforcement in both directions, native tool-call refusal, budget
-enforcement before spend, and audit persistence of exact model bodies.
+Gitleaks is a pinned, checksum-verified CLI binary (8.30.1), not a GitHub Action, so the same
+command runs locally and in CI.
 
-## 9. Known defects and limitations
+---
 
-1. The rate limiter is in-process. Multi-process ingestion requires the Redis-backed bucket
-   because the SEC limit is aggregate across machines. BLOCKING for Stage 2 phase W-2. The Sprint 2 mirror
-   ran as a single process precisely because of this.
-2. Canonical grouping by role URI is verified on exactly one filing. Breadth validation across
-   25 issuers and four eras precedes scale-out. BLOCKING for Stage 2 phase W-3.
-3. Token estimation is a character-ratio heuristic, adequate for budget guards and relative
+# 5. Security
+
+Full threat model in `docs/deep-analysis/security.md`.
+
+Implemented today: User-Agent validation failing closed; path-traversal rejection; centralized log
+redaction covering model content, generic secrets and AWS credential names; model content-boundary
+enforcement in both directions; native tool-call refusal; budget enforcement before spend; and
+architecture tests that scan every tracked file for credential variables, explicit SDK credential
+arguments and credentials in URLs.
+
+Not implemented: authentication of any kind, and there is nothing to authenticate to.
+
+---
+
+# 6. Known defects and limitations
+
+1. The rate limiter is in-process. Multi-process ingestion needs a shared bucket because the SEC
+   limit is aggregate across machines.
+2. Token estimation is a character-ratio heuristic, adequate for budget guards and relative
    comparison, not for billing reconciliation.
-4. The provider catalog and pricing are unverified. BLOCKING for any cost commitment.
-5. Authentication is a local single-user implementation. BLOCKING for any public deployment.
-   See ADR-0014.
-6. `packages/sec_identity/accession.py` sits at 79 percent statement coverage, the lowest of the
-   implemented modules; the uncovered lines are error branches on malformed input.
-7. `packages/filing_content/persistence.py` sits at 49 percent statement coverage. The upsert
-   bodies are exercised end to end by the backfill against `fintek_test` and the application
-   database, and by the zero-write rerun, but not by an in-suite integration test. Adding one is
-   the highest-value coverage work outstanding.
-8. Complete-filing extraction is verified on **one issuer, five filings, two eras**: four
-   inline-XBRL FY2025 filings and one PEM-armored 1994 submission. The standalone-XBRL
-   (2009–2018) and HTML-without-XBRL (2001–2008) eras have no registered parser. BLOCKING for
-   Stage 2 phase W-2.
-9. Structural table parsing covers footnote tables only. Tables inside non-footnote content units
-   are captured as whole blocks with their text preserved, not decomposed into cells. Sufficient
-   for coverage; extended in Sprint 6 with the dashboard.
-10. Graphics are inventoried and classified but their content is not extracted. Both graphics in
-    the measured filings are non-data-bearing. A data-bearing graphic would become `UNRESOLVED`
-    and block completion rather than being silently passed, which is the intended behaviour.
-11. **Defect D-13, a correctness incident, is recorded here because the repository is the durable
-    memory.** A Sprint 4.1 test helper ran `alembic stamp base` against the APPLICATION database:
-    `migrations/env.py` resolved its target through `DATABASE_URL` and silently overrode the
-    `sqlalchemy.url` the helper had set. The application's `alembic_version` was emptied. No data
-    was lost, but only because the following `upgrade head` failed on tables that already existed —
-    against an empty database it would have migrated it. The root cause was two independent URL
-    resolutions with no defined precedence, not the missing revision check.
-    `packages.persistence.engine.migration_target_url()` is now the single resolver with an
-    explicit tested order, `assert_safe_destructive_target()` guards before Alembic is invoked, and
-    the preservation gate watches `alembic_version` as a backstop. 24 regression tests.
-12. No summary exists for any content unit. Summarization is Sprint 5, which remains suspended
-    until the Sprint 4.1 closeout is committed, pushed, and green. The `summary` completeness
-    layer therefore reads `NOT_STARTED` on every filing, correctly.
+3. The provider catalog and pricing are entirely unverified. BLOCKING for any cost commitment.
+4. Filing acquisition covers the inline-XBRL era only. The other five transport eras have no
+   acquisition path.
+5. The complete filed-document set of an accession cannot currently be listed. The module that did
+   it was deleted for classifying documents into a Regulation S-K role taxonomy; the replacement is
+   Phase 2a.
+6. There is no local numeric evidence. DERA was deleted; cross-checking model-returned numbers
+   against an independent source is reconsidered on measured need.
+7. `packages/configuration` and `packages/observability` have no non-test caller.
+8. `packages/sec_identity` exports several URL builders with no current caller —
+   `cik_submissions_stem`, `is_valid_accession`, `filing_index_json_url`,
+   `company_tickers_exchange_url`. They are retained, unlike the dead code removed from
+   `llm_gateway`, because each is a verified SEC endpoint format rather than a speculative
+   contract, and this package is the designated single home for exactly that.
+9. No authentication exists. BLOCKING for any exposure beyond loopback.

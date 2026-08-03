@@ -1,8 +1,16 @@
 # ADR-0011: Metric definitions are curated, version-controlled YAML
 
-STATUS: ACCEPTED
+STATUS: SUPERSEDED AS AN ACTIVE DECISION BY ADR-0017
 DATE: 2026-08-01
 SPRINT: 1
+
+> **Forward note, added 2026-08-03. Nothing below this note has been edited.**
+>
+> The curated definitions and the loader that read them are gone:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` deleted the numeric
+> pipeline, so there is no metric resolution in the active tree. The verified concept-drift
+> examples and the reasoning below stand as history, and are RECONSIDERED rather than assumed when
+> derived metrics are designed from measured model artifacts. The full retrospective is in ADR-0017.
 
 ## Context
 

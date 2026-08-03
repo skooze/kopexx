@@ -1,40 +1,54 @@
 # LLM Cost Model
 
 > **RE-FOUNDED 2026-08-02 ON MEASURED EVIDENCE.** A representative corpus of **112 SEC issuers and
-> 613 filings across six transport eras** was acquired and measured — dated Phase 1 evidence, not a
+> 613 filings across six transport eras** was acquired and measured — dated Phase 0 evidence, not a
 > permanent constant — and it refuted the assumptions the deterministic semantic parser rested on.
 > The product is an orchestrator-driven, model-first SEC filing product: the backend acquires,
 > preserves, transports, orchestrates and VALIDATES; a user-selected parsing model determines what
 > a filing means. The user selects four models independently — parsing, image, summary, and
-> analysis/chat. The current authorized input mode is `INTACT_SOURCE_ONLY`. The deterministic
-> content ontology, migration `0003` and the local application database are withdrawn. Sections
-> below that describe the withdrawn design are historical.
+> analysis/chat — and **only the parsing model is required**, so a run may cost nothing beyond one
+> parse. The current authorized input mode is `INTACT_SOURCE_ONLY`.
+>
+> **UPDATED 2026-08-03.** The deterministic content ontology and the local application database are
+> no longer merely withdrawn — the parser, the persistence layer and the migrations are DELETED.
+> **Every per-unit denominator this document once carried as MEASURED came from that parser**, on
+> one issuer, and is withdrawn with it.
 >
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
-> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
+> `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
 
 ---
 
-# CURRENT DIRECTION — AUTHORITATIVE. Everything below this section is historical.
+# CURRENT DIRECTION — AUTHORITATIVE
 
 **NO MODEL HAS BEEN INVOKED. NO PRICE IS KNOWN. EVERY PARAMETER IN THIS DOCUMENT IS A PLACEHOLDER.**
 
 No model price, context limit, or throughput figure in this repository has been verified against a
-provider. Prices are discovered live in Phase 1.5 and the first real cost measurement is Phase 2.
+provider. Prices are discovered live in Phase 1 and the first real cost measurement is Phase 2.
 Until then, no cost claim may be presented as known.
+
+**This document supplies symbols and formulas. It supplies no total, and it contains no measured
+figure of any kind.** The sections below the parameter table are working material, corrected
+2026-08-03 for ADR-0017; the narrative of the two withdrawn estimates is retained as history and is
+labelled as such where it appears.
 
 ## Cost is modelled per ROLE, not per footnote
 
 The four roles are priced and metered separately, because they use different models, run at
-different times, and are regenerated independently.
+different times, and are regenerated independently. **Only PARSING is required.** The other three
+selectors may be left blank, and a run that leaves them blank incurs exactly zero for them — no
+stage is invoked because it exists.
 
 ```
-PARSING          one invocation per filing per accepted parse. The dominant input cost:
+PARSING          one invocation per filing per parse attempt. The dominant input cost:
                  the complete relevant human-readable source set, sent intact.
-IMAGE            only when the parsing model is text-only. Zero when it is multimodal.
-SUMMARY          per summary artifact. REGENERATION DOES NOT REQUIRE REPARSING while the
-                 accepted parse is unchanged, so a resummarize costs summary tokens only.
-ANALYSIS/CHAT    per turn, metered against turn, token and session budgets.
+IMAGE            only when the parsing model is text-only AND an image model is selected.
+                 Zero when the parsing model is multimodal, and zero when the selector is blank.
+SUMMARY          per summary artifact, when a summary model is selected. REGENERATION DOES NOT
+                 REQUIRE REPARSING while the accepted parse is unchanged, so a resummarize costs
+                 summary tokens only.
+ANALYSIS/CHAT    per turn, metered against turn, token and session budgets, when selected.
 ```
 
 **NO FOOTNOTE-COUNT EXTRAPOLATION.** Estimating a complete filing's cost by multiplying a
@@ -57,10 +71,11 @@ reconciled afterwards.
 An incompatible filing/model pairing costs nothing, because it is refused before invocation.
 
 
-IMPLEMENTATION STATUS: PLANNED (measured in Sprint 5, which is an explicit go/no-go on unit economics)
+IMPLEMENTATION STATUS: PLANNED — first measured in Phase 2, which is an explicit go/no-go on unit
+economics
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
 
-## Why the previous estimate was withdrawn — twice
+## Why the previous estimate was withdrawn — twice. HISTORICAL.
 
 An earlier version of this architecture quoted roughly 8,500 US dollars for a full-corpus
 summarization backfill. That figure was computed on the wrong unit of work: it assumed 58
@@ -68,10 +83,15 @@ summarization jobs for Apple's FY2025 10-K, where the correct footnote count is 
 unit was wrong by a factor of about 4.5, so the figure was withdrawn.
 
 **It was then withdrawn a second time, in the other direction.** ADR-0016 corrected the product
-scope from footnote-only to complete filing coverage. The summarized surface of that same 10-K is
-not 13 units but **67 required summary units** — measured, not estimated — of which 13 are
-footnotes. Any total extrapolated from footnote counts understates the real figure by roughly a
+scope from footnote-only to complete filing coverage. The deterministic pipeline then counted the
+summarized surface of that same 10-K at **67 required summary units** rather than 13, of which 13
+were footnotes. Any total extrapolated from footnote counts understates the real figure by roughly a
 factor of five, for exactly the reason the first estimate overstated it: the wrong unit of work.
+
+Both figures — 13 and 67 — were produced by the deterministic parser that ADR-0017 deleted, on one
+issuer. **Neither is a parameter of this cost model.** They are retained here only because the
+lesson is about the UNIT OF WORK, and that lesson survives the code: a total extrapolated from the
+wrong denominator is confidently wrong in whichever direction the denominator is wrong.
 
 This document supplies the formulas. It does not supply a total, because the parameters that
 matter have not been measured yet and a number produced without them would repeat the same mistake
@@ -79,23 +99,26 @@ a third time.
 
 ## Parameters
 
-Symbols marked MEASURED are known. Symbols marked PLACEHOLDER must be measured before any cost
-commitment. A placeholder is written as a named symbol, never as an invented number.
+**EVERY SYMBOL BELOW IS A PLACEHOLDER.** Not one is a measured cost input, and no row may be read as
+a result. A placeholder is written as a named symbol, never as an invented number, and it is
+resolved by Phase 1 discovery or Phase 2 measurement — never by inference from another document.
+
+Where a row records a prior observation, that observation is dated context, not a value to compute
+with. The unit and block counts this table once carried as MEASURED came from the deleted
+deterministic parser on one issuer, so the whole per-unit denominator is now unknown: what a
+"content unit" even is will be determined by what a parsing model returns.
 
 | Symbol | Meaning | Status |
 |---|---|---|
-| `F` | Filings in the covered corpus | ESTIMATE 171,000, interval 86,000 to 257,000, n=15 |
-| `U_10K` | **Required summary units per 10-K** | MEASURED 67 on one filing; distribution PLACEHOLDER |
-| `U_10Q` | **Required summary units per 10-Q** | MEASURED 41, 41, 41 on three filings; distribution PLACEHOLDER |
-| `N_10K` | Canonical footnotes per 10-K | MEASURED 13 on one filing; distribution PLACEHOLDER |
-| `N_10Q` | Canonical footnotes per 10-Q | MEASURED 10 on three filings; distribution PLACEHOLDER |
-| `B_10K` | Human-readable source blocks per 10-K | MEASURED 983 on one filing |
-| `B_10Q` | Human-readable source blocks per 10-Q | MEASURED 544, 341, 324 |
-| `C_unit` | Leaf chunks per oversized unit | PLACEHOLDER |
+| `F` | Filings in the covered corpus | PLACEHOLDER. Prior estimate 171,000, interval 86,000 to 257,000, n=15 |
+| `U_filing` | Required summary units per filing | PLACEHOLDER. No current denominator exists |
+| `C_unit_count` | Leaf chunks per oversized unit | PLACEHOLDER |
+| `T_intact` | Input tokens for the intact source set of one filing | PLACEHOLDER. The dominant parsing cost |
 | `T_src` | Source tokens per content unit | PLACEHOLDER |
 | `T_tbl` | Table tokens per content unit | PLACEHOLDER |
-| `T_sys` | System prompt tokens | MEASURABLE now, roughly 900 |
-| `T_out` | Output tokens per summary | PLACEHOLDER, target 150 to 800 by complexity |
+| `T_sys` | System prompt tokens | PLACEHOLDER. Estimable from a written prompt; none is written |
+| `T_out` | Output tokens per summary | PLACEHOLDER |
+| `T_parse_out` | Output tokens for one parsed artifact | PLACEHOLDER |
 | `T_agg` | Output tokens per aggregate summary | PLACEHOLDER |
 | `R_retry` | Retry rate on validation failure | PLACEHOLDER |
 | `R_repair` | Repair-call rate | PLACEHOLDER |
@@ -104,10 +127,32 @@ commitment. A placeholder is written as a named symbol, never as an invented num
 | `D_batch` | Batch discount | PLACEHOLDER |
 | `D_flex` | Flex discount | PLACEHOLDER |
 
-The block and unit counts above are the Sprint 4.1 backfill measurements and are recorded in
-`docs/sprints/SPRINT-0004A.md`. They are the denominators the cost model was previously missing.
+The one input that is not guesswork is filing SIZE, which is a property of the preserved bytes
+rather than of any parse. Dated Phase 0 corpus evidence: 44 percent of primary documents exceed
+~200,000 estimated tokens and 12 percent exceed ~1,000,000, at 3.0 characters per token. **Those are
+character-ratio estimates, not provider tokenizer counts**, and `T_intact` is not settled until a
+provider counts it.
 
 ## Formulas
+
+**Parsing comes first and is priced per FILING, not per unit.** Under `INTACT_SOURCE_ONLY` the
+complete relevant human-readable source set goes to the parsing model in one invocation, so there is
+no unit decomposition on the input side and no chunking to model:
+
+```
+C_parse = (T_sys + T_intact) / 1e6 * P_in + T_parse_out / 1e6 * P_out
+C_parse_effective = C_parse * (1 + R_retry)
+
+An INCOMPATIBLE filing/model pairing costs 0. It is refused before invocation, not truncated
+into affordability.
+```
+
+`T_intact` is not a modelled quantity — it is the size of preserved bytes, checked against a
+discovered context limit before the call. A rerun of the same filing on the same model is a full
+`C_parse` again; parsing is not incremental.
+
+Everything below prices the OPTIONAL summary stage, whose unit decomposition depends on a parsed
+artifact no model has yet produced. **Read it as a shape, not as a plan.**
 
 Input tokens for one content unit, or one leaf chunk of one:
 
@@ -146,25 +191,25 @@ C_filing = sum over required units of C_effective(unit)
          ~ U_filing * C_effective
 ```
 
-Corpus backfill:
+Corpus backfill — **parsing is always in the total, summarization only when selected**:
 
 ```
-C_backfill = sum over filings of C_filing
-           ~ F * E[U_filing] * C_effective
+C_backfill = F * ( C_parse_effective + selected_summary_share * E[U_filing] * C_effective )
 ```
 
 ```
 DO NOT EXTRAPOLATE FILING COST FROM FOOTNOTE COUNTS.
 
-E[U_filing] is the required-summary-unit count, not the footnote count. On the one filing where
-both are measured they differ by a factor of about five. Using N where U belongs reproduces the
-withdrawn estimate's defect with a different sign.
+E[U_filing] is the required-summary-unit count, not the footnote count. Using a footnote count
+where U belongs reproduces the withdrawn estimate's defect with a different sign. There is at
+present NO measured value for either, so no total may be computed from this line.
 ```
 
 Monthly steady state:
 
 ```
-C_monthly = new_filings_per_month * E[N_footnotes] * C_effective
+C_monthly = new_filings_per_month
+            * ( C_parse_effective + selected_summary_share * E[U_filing] * C_effective )
 ```
 
 Deep Analysis, per session:
@@ -180,10 +225,11 @@ incremental evidence is retrieved.
 
 ## Prompt caching does not rescue the backfill
 
-Caching is a prefix match. Every one of roughly 170,000 filings is a different document, so only
-the system prompt is shared. The cacheable prefix is on the order of one percent of a typical
-request. **Cache savings are not modelled into the backfill budget.** Caching pays on multi-pass
-work over the same filing, which is Deep Analysis, not summarization.
+Caching is a prefix match. Every filing is a different document, so only the system prompt is
+shared, and under `INTACT_SOURCE_ONLY` the shared prefix is a vanishing fraction of a request whose
+bulk is the filing itself. **Cache savings are not modelled into the backfill budget.** Caching pays
+on multi-pass work over the same filing — Deep Dive, and repeated summary regeneration against one
+accepted parse.
 
 ## Batch packing
 
@@ -192,29 +238,23 @@ are packed **by measured bytes** with headroom, not by counting requests. Batch 
 and expiry is silent, so a watchdog re-queues expired requests rather than leaving a hole that
 looks like completion.
 
-## Serialization savings
+## Serialization savings — NOT MEASURED, NOT CLAIMED
 
-Recorded per benchmark fixture by the harness in `packages/llm_gateway/token_counter.py`:
+**No serialization saving figure exists.** The harness that recorded token counts across plain text,
+YAML, Markdown, JSON and XML was removed once ADR-0013 was decided;
+`packages/llm_gateway/token_counter.py` now offers a character-ratio estimate and nothing else. No
+percentage may be assumed in its place.
 
-```
-serialization_comparison:
-  plain_text_tokens: 0
-  yaml_tokens: 0
-  markdown_tokens: 0
-  json_tokens: 0
-  xml_tokens: 0
-  selected_format: yaml
-  selected_tokens: 0
-```
+The sources of saving are still real on the SYNTHETIC side: keys are not repeated per record as they
+are in JSON, prose is not escaped, and tag names are not repeated as they are in XML.
 
-Savings are computed from measurement, not from an assumed percentage. Sources of saving: keys are
-not repeated per record as they are in JSON; prose is not escaped; tag names are not repeated as
-they are in XML; raw HTML and XBRL never reach the model at all, which is the largest single
-saving and the one that would be invisible if only JSON and YAML were compared.
+**The saving that used to be described as the largest — raw HTML and XBRL never reaching the model —
+no longer applies to the parsing role and must not be counted.** Under `INTACT_SOURCE_ONLY` the
+original artifact goes to the parsing model in SEC's own syntax, markup included, by design. That is
+a cost the architecture accepts in exchange for not deciding in code what a filing means.
 
-The production path selects plain text or YAML regardless of the measurement, because the boundary
-is a correctness and security constraint. The measurement exists to quantify the benefit and to
-detect regression.
+The production path selects plain text or YAML for synthetic content regardless, because the
+boundary is a correctness and security constraint rather than an optimization.
 
 ## Cost accounting levels
 
@@ -222,37 +262,45 @@ Measured and published at every level, because a single per-filing number hides 
 is expensive:
 
 ```
-per source character            per serialized byte
+per source character            per preserved source byte
 per input token                 per output token
-per leaf chunk                  per canonical content unit
-per footnote                    per Part
-per Item                        per filing
-per incorporated referenced document
-per issuer history
+per parsed filing               per run, under one parent run ID
+per leaf chunk                  per summary unit
+per filing                      per issuer history
 ```
+
+Any finer breakdown — per Part, per Item, per footnote — is reported only in whatever terms the
+accepted parse actually uses. **The accounting must not impose a unit the parse did not produce.**
+Naming the levels in advance is how a universal filing taxonomy gets built by accident.
 
 And separated by **kind of spend**, because these have different growth curves and different
 optimizations:
 
 | Kind | What drives it |
 |---|---|
-| Extraction | Deterministic; no model cost at all. Recorded to show it is zero |
-| Initial summarization | Required units × tokens per unit |
-| Aggregate summarization | Parts, Items, and the filing root; grows with hierarchy depth |
+| Acquisition and preservation | No model cost at all. Recorded to show it is zero |
+| Parsing | One invocation per filing per parse attempt; dominated by intact source size |
+| Image analysis | Only when the parsing model is text-only and an image model is selected |
+| Initial summarization | Optional stage; summary units × tokens per unit |
+| Aggregate summarization | Grows with the depth of the hierarchy the parse returned |
 | Validation retry | `R_retry`, `R_repair` |
-| Deep Analysis | Sessions × turns; unrelated to backfill |
-| Reprocessing | Prompt version, model change, or parser change altering source text |
+| Deep Dive | Sessions × turns; unrelated to backfill |
+| Reprocessing | Prompt version, model change, or a new source hash |
 
 ## Required scenarios
 
-Once parameters are measured, publish: one typical 10-Q, one large 10-K, one issuer's full
-history, the top 100 issuers, the top 500 issuers, the full covered universe, monthly steady
-state, one Deep Analysis session, and one follow-up turn. Each with a sensitivity analysis over
-`T_src`, `T_out`, `C_unit` and `R_retry`, which are the parameters the total is most sensitive to.
+Once parameters are measured, publish: one typical 10-Q, one large 10-K, one issuer's full history,
+the top 100 issuers, the top 500 issuers, the full covered universe, monthly steady state, one Deep
+Dive session, and one follow-up turn. Each with a sensitivity analysis over `T_intact`, `T_out` and
+`R_retry`, which are the parameters the total is most sensitive to.
 
-**The go/no-go rests on complete filing processing**, not on the footnote subset. A unit economics
-verdict computed over 13 of 67 units would approve a program five times more expensive than the
-one it measured.
+Report a parser-only run separately from every combination that adds an optional stage. **A
+parser-only run is a complete, valid run**, it is the cheapest configuration the product offers, and
+a total that silently assumes all four models is not the total most runs will incur.
+
+**The go/no-go rests on complete filing processing.** A unit-economics verdict computed over a
+subset of a filing approves a program more expensive than the one it measured — which is the defect
+both withdrawn estimates shared.
 
 ## Spend is bounded by identity, not only by code
 
@@ -263,9 +311,15 @@ refused by AWS rather than merely counted by Kopexx. See
 
 ## Non-negotiable
 
-Cost optimization must not reduce **filing coverage**, footnote coverage, or financial fidelity.
-Neither the complete-filing-coverage requirement nor the every-footnote requirement is a cost
-variable.
+Cost optimization must not reduce **source coverage** or financial fidelity. Every human-readable
+source range is represented in the accepted parsed artifact or explicitly marked unresolved, and
+every footnote the accepted parse identifies stays an independent node and an independent required
+summary target. Neither is a cost variable.
 
-If the measured economics are unaffordable, the response is a decision about which issuers or
-which periods to process — never a decision to summarize part of a filing and call it complete.
+`INTACT_SOURCE_ONLY` is not a cost variable either. Truncation, semantic slicing, mechanical
+multipart and visible-content projection are prohibited, and a lower token bill is not authorization
+for any of them.
+
+If the measured economics are unaffordable, the response is a decision about which issuers or which
+periods to process, or which optional stages to run — never a decision to send part of a filing and
+call the result complete.

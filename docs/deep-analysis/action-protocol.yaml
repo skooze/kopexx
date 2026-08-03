@@ -1,6 +1,14 @@
 # Deep Analysis retrieval action protocol.
 #
-# IMPLEMENTATION STATUS: PLANNED (Sprint 7)
+# IMPLEMENTATION STATUS: PLANNED (Phase 7). Nothing here is implemented and no store exists to
+# retrieve from.
+#
+# UPDATED 2026-08-03 (ADR-0017). The operations were restated over the ACCEPTED PARSED ARTIFACT
+# and the preserved original source. get_authorized_footnote became get_authorized_node, because
+# a canonical footnote was a row of a deleted table and the backend no longer decides what a
+# footnote is. get_authorized_fact and get_authorized_metric were REMOVED with the fact lake and
+# derived metrics; numbers now come from the parse and are proved against the preserved bytes.
+# Authoritative: docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md
 #
 # Native model tool calling is prohibited (ADR-0013) because it requires JSON Schema tool
 # definitions and produces JSON tool arguments. Retrieval is therefore either
@@ -8,8 +16,8 @@
 #
 # THE ENFORCEMENT RULE, which is what makes this safe:
 #
-#   The server IGNORES any cik, ticker, accession, footnote_id, or date range the model supplies
-#   for the purpose of widening scope. Scope is loaded from the session record. A model-supplied
+#   The server IGNORES any cik, ticker, accession, node_id, or date range the model supplies for
+#   the purpose of widening scope. Scope is loaded from the session record. A model-supplied
 #   identifier is treated as a REQUEST TO SELECT FROM the authorized set, never as a request to
 #   extend it. An identifier outside the allowlist is a logged scope violation.
 
@@ -48,69 +56,56 @@ operations:
       - period filter is clamped to session.date_start and session.date_end
     outputs:
       matches:
-        - footnote_id, accession, period_end, title, score, snippet
+        - node_id, accession, period_end, label, score, snippet
+      # label is whatever the accepted parse called the node, or null. It is the parse's own
+      # filing-native label, never a value from a backend taxonomy.
     errors:
       - SCOPE_VIOLATION      the request named an entity outside the session
       - LIMIT_EXCEEDED       retrieval rounds exhausted
     audit_fields: [session_id, operation, query, filter_set, candidate_count, selected_ids, scores, latency_ms]
 
-  get_authorized_footnote:
-    description: Retrieve one canonical footnote with its source blocks.
+  get_authorized_node:
+    description: >-
+      Retrieve one node of an accepted parsed artifact, with the source references it cites.
+      A node is whatever the parsing model identified. The server does not interpret it.
     inputs:
-      footnote_id: {type: string, required: true}
+      node_id: {type: string, required: true}
+      include_children: {type: boolean, required: false, default: false}
       include_tables: {type: boolean, required: false, default: true}
     server_enforced:
-      - footnote_id must resolve to a footnote whose filing is in session.allowed_accessions
-      - when session.scope_type is FOOTNOTE, footnote_id must be in session.allowed_footnote_ids
+      - node_id must resolve to a node of a parsed artifact whose filing is in
+        session.allowed_accessions
+      - when session.scope_type is NODE, node_id must be in session.allowed_node_ids
     outputs:
-      footnote: {id, number, title, accession, period_end}
-      source_blocks: [{id, type, text}]
-      tables: [{id, title, unit, columns, rows}]
+      node: {id, parent_id, order, label, content_type, accession, period_end}
+      text: <the node text as the parse produced it>
+      source_references: [{source_id, document, byte_start, byte_end, resolved}]
+      tables: [{id, label, columns, rows}]
     errors: [SCOPE_VIOLATION, NOT_FOUND]
 
   get_authorized_table:
-    description: Retrieve one footnote table in structured form.
+    description: Retrieve one table from an accepted parsed artifact, in structured form.
     inputs:
       table_id: {type: string, required: true}
     server_enforced:
-      - the table's footnote must be within session scope
+      - the table's parsed artifact must be within session scope
     outputs:
-      table: {id, title, unit, scale, columns, rows, period_labels}
+      table: {id, label, unit, scale, columns, rows, period_labels, source_references}
+      # unit and scale are carried only when the parse supplied them. The backend never infers a
+      # unit from magnitude, and numeric cell text is the string the filer wrote.
     errors: [SCOPE_VIOLATION, NOT_FOUND]
 
-  get_authorized_fact:
-    description: Retrieve filed facts for one metric and period range.
-    inputs:
-      metric: {type: string, required: true}
-      period_start: {type: date, required: false}
-      period_end: {type: date, required: false}
-    server_enforced:
-      - cik from session; period clamped to session range
-    outputs:
-      observations: [{fact_id, concept, value, unit, period_start, period_end, accession, filed}]
-    errors: [SCOPE_VIOLATION, NOT_FOUND, UNKNOWN_METRIC]
-
-  get_authorized_metric:
-    description: Retrieve a deterministically derived metric series.
-    inputs:
-      metric: {type: string, required: true}
-      period_start: {type: date, required: false}
-      period_end: {type: date, required: false}
-    server_enforced:
-      - cik from session; period clamped to session range
-    outputs:
-      series: [{period_end, value, unit, formula_version, input_fact_ids, comparability_status, derived}]
-    errors: [SCOPE_VIOLATION, UNKNOWN_METRIC]
-
   get_authorized_source_excerpt:
-    description: Retrieve verbatim text from an authorized source block.
+    description: Retrieve verbatim text from a preserved original source range.
     inputs:
       source_id: {type: string, required: true}
       max_characters: {type: integer, required: false, default: 8000, server_max: 20000}
     server_enforced:
-      - the source block's filing must be in session.allowed_accessions
+      - the source range's filing must be in session.allowed_accessions
     outputs:
-      source: {id, accession, source_type, text}
+      source: {id, accession, document, byte_start, byte_end, text}
+      # This is the only rung that returns filed bytes rather than a model product, which is why
+      # a material claim must reach it.
     errors: [SCOPE_VIOLATION, NOT_FOUND]
 
 prohibited_operations:
@@ -123,8 +118,9 @@ prohibited_operations:
   - get_issuer_by_ticker
 
 tests:
+  # PLANNED. None of these exists yet.
   - test_tool_rejects_accession_outside_allowlist
-  - test_tool_rejects_footnote_outside_footnote_scope
+  - test_tool_rejects_node_outside_node_scope
   - test_model_proposed_cik_is_ignored
   - test_maximum_results_is_clamped_server_side
   - test_retrieval_rounds_are_bounded

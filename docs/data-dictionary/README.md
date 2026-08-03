@@ -10,17 +10,23 @@
 > content ontology, migration `0003` and the local application database are withdrawn. Sections
 > below that describe the withdrawn design are historical.
 >
+> **UPDATED 2026-08-03 — the withdrawal is now complete (ADR-0017).** `packages/persistence`, the
+> 24-table ORM schema, revisions `0001_initial` and `0002_table_ownership`, and the DERA fact
+> loader were DELETED from the active tree. **No application database exists and nothing in this
+> file describes a table, column, index, constraint or migration that exists anywhere.**
+> Authoritative: `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+>
 > **NO MODEL HAS BEEN INVOKED AND AWS IS NOT CONFIGURED.** Authoritative:
 > `docs/adr/ADR-0016-corpus-first-model-first-architecture.md` and `roadmap.md`.
 
 ---
 
-# ARCHITECTURAL VOCABULARY — AUTHORITATIVE. Everything below this section is historical.
+# ARCHITECTURAL VOCABULARY — AUTHORITATIVE. This section, and only this section, is current.
 
-**THIS IS NOT A SCHEMA.** No table definition here is current, and the final persistence
-representation is **DEFERRED to Phase 8**, after real parsed artifacts from real models over
-materially different corpus samples exist. Designing tables before seeing model output is exactly
-what produced the withdrawn migration `0003`.
+**THIS IS NOT A SCHEMA.** No table definition here is current, and the persistence representation
+is **DEFERRED to Phase 4**, after real parsed artifacts from real models over materially different
+corpus samples exist. Designing tables before seeing model output is exactly what produced the
+withdrawn migration `0003`.
 
 **Rigid semantic categories are removed from the mandatory vocabulary.** There is no required
 content-unit type, no required hierarchy, and no enum of filing sections. Terms like MD&A, Item 7,
@@ -35,8 +41,8 @@ optional derived indexes or search facets. They are not vocabulary the system re
 | **Filing** | One submission. Identity is `(CIK, accession)` — never the accession alone, because co-registration puts one submission under two filer CIKs. |
 | **Source artifact** | An original SEC document, preserved byte-for-byte with its SHA-256 and provenance. Authoritative. Never replaced by anything derived. |
 | **Processing job** | One authorized unit of work over an entity, a timeframe and four model selections. Durable and resumable. |
-| **Model role** | One of exactly four: parsing, image, summary, analysis/chat. |
-| **Model selection** | The user's explicit choice of a model for one role on one job. No role inherits another's. |
+| **Model role** | One of exactly four: parsing, image, summary, analysis/chat. **Only parsing is required**; the other three may be left blank and the run is still complete. |
+| **Model selection** | The user's explicit choice of a model for one role on one job. No role inherits another's, and an unselected role is never silently filled. |
 | **Model invocation** | One call to one provider. Records tokens, cost, latency, prompt version, model id, and the object-storage URIs of the exact request and response bodies. |
 | **Artifact** | Anything a model produced that the system keeps. Never confused with the source. |
 | **Artifact version** | Artifacts are superseded, never overwritten. |
@@ -66,19 +72,30 @@ Every financial-statement footnote **the accepted parse identifies** remains an 
 and an independent required summary target. That is a completeness guarantee about not merging
 content away. It is not a taxonomy, and the backend does not decide what a footnote is.
 
+---
 
-IMPLEMENTATION STATUS: IMPLEMENTED (Sprint 2; table-ownership columns Sprint 4; complete filing
-content Sprint 4.1).
+# HISTORICAL — describes the withdrawn application schema, which was DELETED on 2026-08-03. No table below exists.
 
-27 domain tables. Models in `packages/persistence/models.py`. Migrations: `0001_initial` (SEALED),
-`0002_table_ownership` (SEALED), and `0003_filing_content`, which added the complete filing-content
-model described below.
+Everything from here to the end of the file is a **record of a design that was withdrawn**. It is
+kept, not deleted, so the reasoning survives and is not re-derived — the mistake ADR-0016 and
+ADR-0017 exist to stop repeating. Every table, column, constraint, index, migration, enum, status
+value and file path below was deleted with `packages/persistence`, `migrations/` and
+`packages/dera_notes` (ADR-0017). None of it exists, none of it is planned in this shape, and no
+path named below is in the active tree.
+
+IMPLEMENTATION STATUS: SUPERSEDED (by ADR-0017; the schema described below was deleted on
+2026-08-03). Previously recorded as IMPLEMENTED in Sprint 2, with table-ownership columns in
+Sprint 4.
+
+24 domain tables were defined in `packages/persistence/models.py` with migrations `0001_initial`
+and `0002_table_ownership`. A third revision, `0003_filing_content`, was designed and described
+below but never committed.
 
 ---
 
 ## Complete filing content — migration `0003` (Sprint 4.1)
 
-Decision: ADR-0016. WITHDRAWN — see the vocabulary section below. Retained here only as the
+Decision: ADR-0016. WITHDRAWN — see the vocabulary section above. Retained here only as the
 record of what migration `0003` would have encoded; it was never committed.
 
 ### `filing_content_unit`

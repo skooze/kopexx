@@ -1,6 +1,12 @@
 # Deep Analysis conversation memory.
 #
-# IMPLEMENTATION STATUS: PLANNED (Sprint 7)
+# IMPLEMENTATION STATUS: PLANNED (Phase 7). Nothing here is implemented and no session has ever
+# been created.
+#
+# UPDATED 2026-08-03 (ADR-0017). The example citations were rewritten: input_fact_ids named the
+# deleted fact lake, and source ids now name a preserved original source range or a node of an
+# accepted parsed artifact. Nothing else changed; the invariant below is unaffected by which
+# store the citations resolve against.
 #
 # Unlimited history is not resent. Each turn assembles:
 #
@@ -21,13 +27,15 @@ memory:
     - operating cash flow quality
 
   established_findings:
-    # Only findings that carried a resolvable citation when they were made.
+    # Only findings that carried a resolvable citation when they were made. A citation resolves to
+    # a preserved original source range, or to a node of an accepted parsed artifact that itself
+    # cites one. A node with no resolvable source reference does not establish anything.
     - finding: >-
         Operating cash flow declined between fiscal 2024 and fiscal 2025 primarily because of
         working-capital movements rather than a change in profitability.
       source_ids:
-        - "ocf-note-2025-para-3"
-        - "fact-ocf-fy2025"
+        - "src-0000320193-25-000079-0001-18422-19755"
+        - "node-0000320193-25-000079-0417"
       established_at_turn: 2
       confidence: high
 
@@ -53,9 +61,11 @@ memory:
       explanation: >-
         Total debt at the latest period end minus total debt at the earliest period end in scope,
         divided by the earliest value.
-      input_fact_ids:
-        - "fact-total-debt-fy2021"
-        - "fact-total-debt-fy2025"
+      input_source_ids:
+        # Every input names where the number was read from, so the arithmetic is reproducible
+        # against the filed bytes rather than against a derived store.
+        - "src-0000320193-21-000105-0001-51204-51388"
+        - "src-0000320193-25-000079-0001-49881-50077"
 
 compaction:
   # Memory is bounded. When it exceeds the configured token budget it is compacted, never

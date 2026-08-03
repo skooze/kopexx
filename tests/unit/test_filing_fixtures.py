@@ -1,11 +1,21 @@
-"""Tests over the committed filing fixtures.
+"""Integrity of the committed original-SEC-source fixtures.
 
-These run entirely offline from files in tests/fixtures/filings/, which were extracted from four
-real Apple filings retrieved in Sprint 3. The manifest pins each source URL and SHA-256, so the
-fixtures are traceable to specific filed documents without committing the documents themselves.
+These run entirely offline. Everything under `tests/fixtures/filings/` is ORIGINAL SEC SOURCE —
+four inline-XBRL primary documents, one pre-2001 complete submission, and four `FilingSummary.xml`
+renderer artifacts — pinned by the manifest to a source URL, a SHA-256 and a byte count. Nothing
+derived is committed there any more.
 
-This is also where the item-disclosure exclusion list is exercised against real data rather than
-against an invented example.
+WHAT THIS FILE USED TO ALSO DO. It carried nine tests that reimplemented canonicalization stage 2
+inline and asserted a semantic conclusion about Apple: that 16 `menucat='Notes'` candidates minus 3
+Regulation S-K item disclosures leaves 13 canonical footnotes. Those tests, their
+`report-inventory.yaml` inputs, and the `item_disclosure_exclusions.yaml` taxonomy they consulted
+were deleted with the deterministic parser. The backend does not decide which disclosures are
+footnotes; the selected parsing model does.
+
+WHAT THIS FILE NOW DOES THAT IT DID NOT BEFORE. It hash-verifies EVERY committed source object, not
+only the four `FilingSummary.xml` files. The four primary documents are 3.9 MiB of the fixture tree
+and had no verification of their own — the manifest recorded their hashes and no test ever compared
+them. Preserved source that nothing checks is preserved source that can rot silently.
 """
 
 from __future__ import annotations
@@ -18,10 +28,15 @@ from ruamel.yaml import YAML
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "filings"
-EXCLUSIONS = REPO_ROOT / "metric_definitions" / "item_disclosure_exclusions.yaml"
 
 TEN_K = "0000320193-25-000079"
 TEN_QS = ("0000320193-25-000008", "0000320193-25-000057", "0000320193-25-000073")
+PRE_2001 = "0000320193-94-000016"
+
+# Roles whose bytes are committed. The XBRL package, the SEC-extracted instance and the schema are
+# pinned by the manifest but deliberately NOT committed: they are large machine evidence and live
+# in the gitignored object store.
+COMMITTED_ROLES = frozenset({"primary_document", "complete_submission"})
 
 
 def _yaml(path: Path) -> dict:
@@ -33,32 +48,9 @@ def manifest() -> dict:
     return _yaml(FIXTURES / "manifest.yaml")
 
 
-@pytest.fixture(scope="module")
-def exclusions() -> dict:
-    return _yaml(EXCLUSIONS)
-
-
-def _inventory(accession: str) -> list[dict]:
-    return _yaml(FIXTURES / accession / "report-inventory.yaml")["reports"]
-
-
-def _notes_candidates(accession: str) -> list[dict]:
-    return [r for r in _inventory(accession) if r["menu_category"] == "Notes"]
-
-
-def _is_excluded(report: dict, exclusions: dict) -> bool:
-    """Stage 2 of canonicalization, applied to one candidate.
-
-    Deliberately small and explicit here. Sprint 4 moves this into the canonicalizer; this test
-    then becomes the regression check that the move preserved the result.
-    """
-    title = (report["short_name"] or "").strip().lower()
-    role = report["role"] or ""
-    if any(entry["match"].lower() in title for entry in exclusions["excluded_titles"]):
-        return True
-    return any(
-        entry["fragment"].lower() in role.lower() for entry in exclusions["excluded_role_fragments"]
-    )
+def _committed_path(filing: dict, obj: dict) -> Path:
+    """Where a manifest object's bytes live on disk, by SEC's own filename."""
+    return FIXTURES / filing["accession"] / obj["url"].rsplit("/", 1)[-1]
 
 
 # --- manifest integrity ----------------------------------------------------------------------
@@ -67,15 +59,13 @@ def _is_excluded(report: dict, exclusions: dict) -> bool:
 def test_manifest_covers_every_fixture_filing(manifest: dict) -> None:
     """Every accession directory on disk is described by the manifest, and vice versa.
 
-    This used to assert equality against a hardcoded set of the four inline-XBRL accessions, which
-    made adding a fixture from any other era fail for the one reason that is not a defect. Deriving
-    the expected set from the fixture tree is strictly stronger: it also catches a fixture
-    committed WITHOUT a manifest entry, which the hardcoded form could never see.
+    Derived from the fixture tree rather than compared against a hardcoded set, so it also catches
+    a fixture committed WITHOUT a manifest entry.
     """
     accessions = {f["accession"] for f in manifest["filings"]}
     on_disk = {p.name for p in FIXTURES.iterdir() if p.is_dir()}
     assert accessions == on_disk, "manifest and fixture tree disagree"
-    assert {TEN_K, *TEN_QS} <= accessions, "the four inline-XBRL fixtures must remain"
+    assert {TEN_K, *TEN_QS, PRE_2001} <= accessions, "the five source fixtures must remain"
 
 
 def test_manifest_pins_a_source_url_and_hash_for_every_object(manifest: dict) -> None:
@@ -88,13 +78,34 @@ def test_manifest_pins_a_source_url_and_hash_for_every_object(manifest: dict) ->
             assert obj["size_bytes"] > 0
 
 
-def test_committed_filing_summary_matches_its_recorded_hash(manifest: dict) -> None:
-    """The extracted fixture is the same bytes the manifest recorded.
+def test_every_committed_source_object_matches_its_recorded_hash(manifest: dict) -> None:
+    """SOURCE-PRESERVATION: the committed bytes are the bytes SEC served.
 
-    A `FilingSummary.xml` is a renderer artifact that exists only from the XBRL era onward. A
-    pre-2001 submission has none, so the manifest records no hash for one. The check is therefore
-    driven by whether the manifest DECLARES a hash — and the absence of a declaration is itself
-    asserted against the tree, so a filing cannot quietly lose its recorded hash and pass.
+    Covers the four inline-XBRL primary documents and the 1994 complete submission. The count is
+    asserted so a fixture cannot quietly stop being verified by being renamed out of the check.
+    """
+    from packages.storage import sha256_bytes
+
+    checked = 0
+    for filing in manifest["filings"]:
+        for obj in filing["objects"]:
+            if obj["role"] not in COMMITTED_ROLES:
+                continue
+            path = _committed_path(filing, obj)
+            assert path.exists(), f"{filing['accession']}: {obj['role']} is pinned but absent"
+            raw = path.read_bytes()
+            assert sha256_bytes(raw) == obj["sha256"], f"{path.name} does not match the manifest"
+            assert len(raw) == obj["size_bytes"], f"{path.name} byte count differs"
+            checked += 1
+    assert checked == 5, f"expected 5 committed source objects, verified {checked}"
+
+
+def test_committed_filing_summary_matches_its_recorded_hash(manifest: dict) -> None:
+    """The renderer artifact is the same bytes the manifest recorded.
+
+    A `FilingSummary.xml` exists only from the XBRL era onward. A pre-2001 submission has none, so
+    the manifest records no hash for one — and the ABSENCE of a declaration is itself asserted
+    against the tree, so a filing cannot quietly lose its recorded hash and pass.
     """
     from packages.storage import sha256_bytes
 
@@ -112,11 +123,26 @@ def test_committed_filing_summary_matches_its_recorded_hash(manifest: dict) -> N
     assert checked == 4, "the four inline-XBRL fixtures must each still be hash-checked"
 
 
-def test_fixture_tree_stays_small() -> None:
-    """The strategy is extracted fixtures, not committed filings.
+def test_no_derived_parser_output_remains_in_the_fixture_tree() -> None:
+    """The deterministic parser's outputs were deleted; only original SEC source is committed.
 
-    Sprint 3 set a 25 MB target and a 40 MB ceiling. Blowing past it means someone committed a
-    raw document, which belongs in object storage instead.
+    `report-inventory.yaml` was a re-encoding of the renderer's report list and the documented
+    input to canonicalization stage 1. `table-ownership.json` was the table-to-footnote ownership
+    census. Both are backend decisions about what a filing means, and neither may return.
+    """
+    derived = sorted(
+        str(p.relative_to(REPO_ROOT))
+        for p in FIXTURES.rglob("*")
+        if p.is_file() and p.name in {"report-inventory.yaml", "table-ownership.json"}
+    )
+    assert not derived, f"derived parser output committed as a fixture: {derived}"
+
+
+def test_fixture_tree_stays_small() -> None:
+    """The strategy is a small pinned source set, not a filing archive.
+
+    Blowing past the ceiling means someone committed an XBRL package or an extracted instance,
+    which belongs in object storage instead.
     """
     total = sum(p.stat().st_size for p in FIXTURES.rglob("*") if p.is_file())
     assert total < 25 * 1024 * 1024, f"fixture tree is {total:,} bytes"
@@ -129,115 +155,14 @@ def test_fixtures_need_no_network() -> None:
             assert path.read_bytes(), f"{path} is empty"
 
 
-# --- the verified structure of Apple's FY2025 10-K ---------------------------------------------
+def test_the_pre_2001_submission_declares_why_it_has_no_primary_document(manifest: dict) -> None:
+    """HISTORICAL-FORMAT: an entire era exposes no individually addressable documents.
 
-
-def test_ten_k_has_seventy_one_renderer_reports() -> None:
-    """The number that started the 13-not-58 correction.
-
-    58 was a count of XBRL TextBlock facts. 71 is the renderer's report count. Neither is the
-    footnote count. Recorded here against the real filing so the distinction cannot drift back.
+    EDGAR does not serve the filed components of a pre-2001 submission as separate objects. The
+    complete submission text file IS the artifact, and every exhibit lives inside it. A pipeline
+    whose input contract assumes a per-document URL is blind to 125 filings of the research corpus.
     """
-    assert len(_inventory(TEN_K)) == 71
-
-
-def test_one_of_the_seventy_one_reports_is_a_navigation_entry() -> None:
-    """Measured in Sprint 3 against the acquired filing, refining the recorded 71.
-
-    The renderer appends an "All Reports" entry of ReportType Book. It carries no menu category,
-    no role URI, and no file. It is the renderer's own table of contents, not a report from the
-    filing. Counting it as one would put every downstream total off by one.
-    """
-    inventory = _inventory(TEN_K)
-    uncategorized = [r for r in inventory if not r["menu_category"]]
-    assert len(uncategorized) == 1
-    assert uncategorized[0]["short_name"] == "All Reports"
-    assert uncategorized[0]["role"] == ""
-    assert uncategorized[0]["file_name"] == ""
-
-
-def test_ten_k_menu_categories_match_the_recorded_distribution() -> None:
-    """70 real reports, categorized. The 71st is the navigation entry above."""
-    counts: dict[str, int] = {}
-    for report in _inventory(TEN_K):
-        if not report["menu_category"]:
-            continue
-        counts[report["menu_category"]] = counts.get(report["menu_category"], 0) + 1
-    assert counts == {
-        "Cover": 2,
-        "Statements": 6,
-        "Notes": 16,
-        "Policies": 1,
-        "Tables": 12,
-        "Details": 33,
-    }
-    assert sum(counts.values()) == 70
-
-
-def test_notes_category_is_a_superset_of_the_footnotes() -> None:
-    """menucat='Notes' over-includes. It is a candidate set, not an answer."""
-    assert len(_notes_candidates(TEN_K)) == 16
-
-
-# --- the item-disclosure exclusion list, against real candidates --------------------------------
-
-
-def test_exclusion_list_removes_exactly_the_three_item_disclosures(exclusions: dict) -> None:
-    """16 candidates minus 3 item disclosures leaves the 13 canonical footnotes."""
-    candidates = _notes_candidates(TEN_K)
-    excluded = [r for r in candidates if _is_excluded(r, exclusions)]
-    remaining = [r for r in candidates if not _is_excluded(r, exclusions)]
-
-    assert len(excluded) == 3, f"excluded {[r['short_name'] for r in excluded]}"
-    assert len(remaining) == 13, f"remaining {len(remaining)}"
-
-    names = {r["short_name"] for r in excluded}
-    assert names == {
-        "Insider Trading Arrangements",
-        "Insider Trading Policies and Procedures",
-        "Cybersecurity Risk Management and Strategy Disclosure",
-    }
-
-
-def test_no_real_footnote_is_excluded(exclusions: dict) -> None:
-    """The every-footnote requirement fails if the exclusion list is too greedy."""
-    remaining = [r for r in _notes_candidates(TEN_K) if not _is_excluded(r, exclusions)]
-    titles = {r["short_name"] for r in remaining}
-    for expected in (
-        "Revenue",
-        "Income Taxes",
-        "Debt",
-        "Leases",
-        "Segment Information and Geographic Data",
-    ):
-        assert expected in titles, f"{expected} was wrongly excluded"
-
-
-def test_unknown_namespace_flags_for_review_rather_than_defaulting(exclusions: dict) -> None:
-    """Neither silent default is acceptable.
-
-    Silently including an unknown disclosure inflates the note count and spends model budget on a
-    non-footnote. Silently excluding it drops a real footnote and breaks the every-footnote
-    requirement.
-    """
-    policy = exclusions["unknown_namespace_policy"]
-    assert policy["action"] == "flag_for_review"
-    assert policy["review_state"] == "REQUIRES_REVIEW"
-
-
-def test_exclusion_list_declares_its_expected_apple_result(exclusions: dict) -> None:
-    """The list carries its own verification target, so drift is detectable."""
-    expected = next(e for e in exclusions["expected_results"] if e["accession"] == TEN_K)
-    assert expected["candidates_menucat_notes"] == 16
-    assert expected["excluded"] == 3
-    assert expected["canonical_footnotes"] == 13
-
-
-@pytest.mark.parametrize("accession", TEN_QS)
-def test_quarterly_filings_also_carry_notes_candidates(accession: str, exclusions: dict) -> None:
-    """A 10-Q has fewer notes than a 10-K but is not empty, and the exclusions still apply."""
-    candidates = _notes_candidates(accession)
-    assert candidates, f"{accession} yielded no Notes candidates"
-    remaining = [r for r in candidates if not _is_excluded(r, exclusions)]
-    assert remaining, f"{accession} had every candidate excluded"
-    assert len(remaining) <= len(candidates)
+    filing = next(f for f in manifest["filings"] if f["accession"] == PRE_2001)
+    roles = {o["role"] for o in filing["objects"]}
+    assert roles == {"complete_submission"}, f"unexpected roles for a pre-2001 filing: {roles}"
+    assert "filing_summary_sha256" not in filing

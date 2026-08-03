@@ -10,6 +10,14 @@ COMMITTED as `468d0f2` and pushed to `origin/main` on 2026-08-02, each step sepa
 A post-closeout hardening correction follows the sprint body; it changed no Sprint 4 behaviour and
 no measured result below.
 
+> **Second forward note, added 2026-08-03. Nothing below either note has been edited.** The
+> demotion described in the 2026-08-02 note went one step further. `packages/footnote_extractor`,
+> `packages/footnote_canonicalizer`, `packages/table_parser`, migration `0002_table_ownership` and
+> their tests were DELETED from the active tree on 2026-08-03; the fixtures and preserved objects
+> this sprint measured against survive. No measurement below is disputed — the Apple oracle is not
+> retained as code. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`.
+
 > **Forward note, added 2026-08-02 at the opening of Sprint 4.1. Nothing below this note has been
 > edited.**
 >

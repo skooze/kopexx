@@ -1,7 +1,12 @@
 # Trust Boundaries and Security Architecture
 
-IMPLEMENTATION STATUS: boundary and input controls IMPLEMENTED; identity, network, and
-infrastructure controls PLANNED
+IMPLEMENTATION STATUS: the LLM content boundary and SEC input controls are IMPLEMENTED; identity,
+network, and infrastructure controls are PLANNED
+
+> **UPDATED 2026-08-03.** The fact lake and the curated metric definitions that used to sit on the
+> trusted side were deleted with the deterministic parser (ADR-0017), and there is no application
+> database. What remains trusted is smaller and simpler: bytes this system preserved and verified,
+> and files it wrote itself.
 
 ## Boundaries
 
@@ -10,13 +15,13 @@ infrastructure controls PLANNED
 |  UNTRUSTED                                                   |
 |    browser requests                                          |
 |    SEC filing content                                        |
-|    model responses                                           |
+|    model responses, including every parsed artifact          |
 +--------------------------------------------------------------+
                           |  validation at every crossing
 +--------------------------------------------------------------+
 |  TRUSTED                                                     |
-|    session records, fact lake, curated metric definitions,   |
-|    prompt files, configuration                               |
+|    preserved source bytes with a verified SHA-256            |
+|    prompt files, configuration, session records              |
 +--------------------------------------------------------------+
 ```
 
@@ -24,32 +29,45 @@ Filing content is the boundary most often mistaken for trusted. It arrives from 
 authentic, but authenticity is not trustworthiness: a filing is written by the company and can
 contain anything, including text shaped like instructions to a language model.
 
+**A parsed artifact is on the untrusted side and stays there.** It is a model response. Approval by
+a human reviewer makes it REUSABLE; it does not make it evidence. Anything that must be proved is
+proved against the preserved bytes.
+
 ## Controls by boundary
 
-### Browser to API
+### Browser to API — PLANNED
 
 Schema validation rejecting unknown fields rather than ignoring them. Authentication and session
 ownership on every request. Per-principal rate limits and request size limits. Output encoding.
-Parameterized queries throughout.
+Parameterized queries throughout. Localhost-only operation until authentication exists; no
+unauthenticated exposure beyond loopback, and no browser-to-provider path ever.
 
-### SEC to FinTek — IMPLEMENTED in part
+### SEC to Kopexx — IMPLEMENTED in part
 
 Declared User-Agent, validated at startup. Content assertions before persistence: a directory
 listing is never stored as a filing. Every object hashed. Archives are streamed, never expanded
 blindly, so a zip bomb cannot exhaust inodes or disk.
 
-### FinTek to model — IMPLEMENTED
+### Kopexx to model — IMPLEMENTED
 
-Content boundary enforced in both directions. Only the compiler produces model-visible content.
-Only the provider adapter imports a provider SDK. Native tool calling refused. Budgets enforced
-before invocation. Exact bodies persisted.
+Content boundary enforced in both directions. Only the compiler produces model-visible synthetic
+content. A preserved SEC artifact is the one exception: it is admitted by PROVENANCE — bytes
+identical to a stored artifact whose SHA-256 is recorded — sent intact, and never rewritten. Only
+the provider adapter imports a provider SDK. Native tool calling refused. Budgets enforced before
+invocation. Exact bodies recorded.
 
-### Model to FinTek — IMPLEMENTED
+### Model to Kopexx — IMPLEMENTED in part
 
-Response validated at the boundary before parsing. Hardened YAML parser with limits on size,
-depth, collection size, scalar length, and document count, rejecting duplicate keys and custom
-tags. Citations validated against supplied evidence. Numeric claims reconciled against facts
-before display.
+Response validated at the boundary before parsing. Hardened YAML parser with limits on size, depth,
+collection size, scalar length, and document count, rejecting duplicate keys and custom tags. **The
+original-source exception is one-directional and does not apply here:** a response is synthetic
+content whichever way it travels.
+
+PLANNED, and the control the whole architecture rests on: coverage, citation and numeric validation
+**against the preserved source bytes**. Every cited offset must resolve into the stored original and
+every reported figure must appear there verbatim. Uncertainty produces PARTIAL or REVIEW_REQUIRED,
+never a false complete. It is never validated against a second parse — that reinstates a
+deterministic interpretation as authority (`rules.md` section 21 rule 15).
 
 ## Prompt injection
 
@@ -61,6 +79,12 @@ in the prompt, so a model persuaded to want something out of scope still cannot 
 
 In a secrets manager, never in the repository. The structured logger redacts a fixed field set.
 `BoundaryViolationError` carries origin and violation names but never content.
+
+**AWS identity is not a secret this system holds.** Kopexx never creates, accepts, persists, logs or
+transports a raw AWS credential; the SDK resolves short-lived identity through a federated provider,
+a workload role or an OIDC-assumed role. A secrets manager holds workload secrets that IAM cannot
+replace, and it is not where AWS identity lives. Mandatory rule: `rules.md` section 3. Full design:
+`docs/security/aws-identity-and-secrets.md`.
 
 ## IAM — PLANNED
 

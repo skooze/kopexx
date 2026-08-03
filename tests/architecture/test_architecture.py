@@ -7,6 +7,7 @@ that is never imported by the test suite.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -83,6 +84,51 @@ def test_bedrock_client_not_imported_outside_provider() -> None:
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{number}")
     assert not offenders, (
         "provider SDK imported outside packages/llm_gateway/providers: " + ", ".join(offenders)
+    )
+
+
+def test_no_runtime_package_hardcodes_a_filing_form_allowlist() -> None:
+    """PRODUCT-DIRECTION-INVARIANT: qualifying-family logic is supplied, never guessed in code.
+
+    `packages/filing_discovery` shipped `ANNUAL_FORMS = ("10-K", "10-K405", "10-KSB")` and
+    `QUARTERLY_FORMS = ("10-Q", "10-QSB")` for four sprints, matching on the part before `/A`.
+    EDGAR's real submission types are UNHYPHENATED — `10KSB`, `10QSB`, `10KSB40`, `10KT405` — so
+    that filter matched none of the small-business family and none of the transition family, while
+    a committed contract adjudicating all 41 observed strings sat beside it in the repository. The
+    reconciliation that existed to catch a discovery gap applied the same filter to the master
+    index, so both sides agreed perfectly and reported a complete history that was missing roughly
+    190,000 filings' worth of form coverage.
+
+    The qualifying set is now a REQUIRED argument with no default. This guard fails if a literal
+    form string is written back into runtime source.
+    """
+    # Parsed rather than grepped, so only STRING LITERALS THE CODE EVALUATES are inspected.
+    # A comment or a docstring naming a form is fine and is how the history above stays readable;
+    # a tuple or set of them the interpreter can match against is the defect. A line-based scan
+    # cannot tell those apart and would fail on this test's own explanation.
+    form_literal = re.compile(r"^(10-?K|10-?Q)(SB|T|405|SB40|T405)?(/A)?$", re.IGNORECASE)
+    offenders: list[str] = []
+    for path in _python_files(PACKAGES):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docstrings = {
+            node.body[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node not in docstrings
+                and form_literal.match(node.value.strip())
+            ):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {node.value!r}")
+    assert not offenders, (
+        "a filing-form allowlist is hardcoded in runtime source. Qualifying forms are supplied by "
+        f"the caller from the reviewed contract: {offenders}"
     )
 
 

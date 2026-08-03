@@ -1,9 +1,24 @@
-"""Discover every 10-K and 10-Q an issuer has filed.
+"""Discover every qualifying filing an issuer has filed.
 
 SEC-INVARIANT: `filings.recent` in the submissions payload is capped at 1,000 entries. Apple hits
 that cap exactly, with 1,238 further filings in an overflow shard reaching back to 1994. Reading
 only `recent` silently truncates history to the last few years, and the truncation looks
 identical to a company that simply has not filed much.
+
+THE QUALIFYING FORM SET IS SUPPLIED BY THE CALLER AND HAS NO DEFAULT. This module used to carry
+`ANNUAL_FORMS = ("10-K", "10-K405", "10-KSB")` and `QUARTERLY_FORMS = ("10-Q", "10-QSB")` and match
+on the part before the `/A`. That is precisely the guessed hyphenated allowlist ADR-0016 section
+6.6 records as producing a confident, precise and completely inverted conclusion: EDGAR's real
+submission types are UNHYPHENATED — `10KSB` (36,912 filings), `10QSB` (120,120, the fourth most
+common form in the entire family), `10KSB40`, `10KT405` — and none of them matches. The guess also
+dropped the whole transition family. The reviewed contract in `tests/fixtures/form_family.yaml`
+adjudicates 41 observed strings into 22 included and 19 excluded, and its header states the rule
+this module now obeys: qualifying logic is GENERATED from that inventory, never hardcoded.
+
+MATCHING IS ON THE EXACT FILED STRING. No normalization, no case folding, no stripping of an
+amendment suffix. `10-K` and `10-K/A` are two entries in the contract because SEC files them as two
+strings, and an unreviewed candidate therefore fails the gate instead of being silently admitted by
+a prefix rule.
 """
 
 from __future__ import annotations
@@ -22,20 +37,8 @@ from packages.sec_identity import (
 
 from .errors import SubmissionsShapeError
 
-# Forms that constitute the covered corpus. 10-K405 is a historical annual-report variant used
-# through 2002; Apple filed two. Excluding it would leave a two-year hole in the annual series
-# that no later check would notice.
-ANNUAL_FORMS = ("10-K", "10-K405", "10-KSB")
-QUARTERLY_FORMS = ("10-Q", "10-QSB")
-
 # The parallel-array keys we require. SEC returns column arrays, not row objects.
 _REQUIRED_KEYS = ("accessionNumber", "filingDate", "form")
-
-
-def is_covered_form(form: str) -> bool:
-    """True for a 10-K or 10-Q in any of its variants, including amendments."""
-    base = form.split("/")[0].strip().upper()
-    return base in ANNUAL_FORMS or base in QUARTERLY_FORMS
 
 
 def is_amendment(form: str) -> bool:
@@ -79,10 +82,6 @@ class DiscoveredFiling:
     def is_amendment(self) -> bool:
         return is_amendment(self.form)
 
-    @property
-    def is_annual(self) -> bool:
-        return self.form.split("/")[0].strip().upper() in ANNUAL_FORMS
-
     def as_record(self) -> dict[str, object]:
         """A flat record for logging and manifests."""
         return {
@@ -112,8 +111,10 @@ def _column(block: dict, key: str, index: int) -> object:
     return values[index]
 
 
-def _rows(block: dict, cik: str, source: str) -> Iterator[DiscoveredFiling]:
-    """Turn one parallel-array block into filings, keeping only covered forms."""
+def _rows(
+    block: dict, cik: str, source: str, qualifying_forms: frozenset[str]
+) -> Iterator[DiscoveredFiling]:
+    """Turn one parallel-array block into filings, keeping only exactly-qualifying forms."""
     missing = [k for k in _REQUIRED_KEYS if k not in block]
     if missing:
         raise SubmissionsShapeError(
@@ -121,7 +122,7 @@ def _rows(block: dict, cik: str, source: str) -> Iterator[DiscoveredFiling]:
         )
 
     for index, form in enumerate(block["form"]):
-        if not is_covered_form(str(form)):
+        if str(form) not in qualifying_forms:
             continue
         filing_date = _parse_date(str(_column(block, "filingDate", index) or ""))
         if filing_date is None:
@@ -149,12 +150,25 @@ def _rows(block: dict, cik: str, source: str) -> Iterator[DiscoveredFiling]:
         )
 
 
-def discover_filings(client, cik: str | int) -> list[DiscoveredFiling]:
-    """Every covered filing for one issuer, newest first.
+def discover_filings(
+    client, cik: str | int, *, qualifying_forms: frozenset[str]
+) -> list[DiscoveredFiling]:
+    """Every qualifying filing for one issuer, newest first.
 
     Reads `filings.recent`, then every overflow shard named in `filings.files`. Deduplicates by
     accession, because a shard boundary can repeat an entry.
+
+    `qualifying_forms` is REQUIRED and holds the EXACT filed form strings from the reviewed
+    form-family contract. There is deliberately no default: a default is how a guessed allowlist
+    survives review, and this module shipped one for four sprints while a committed contract said
+    the opposite. An empty set is rejected rather than silently discovering nothing.
     """
+    if not qualifying_forms:
+        raise SubmissionsShapeError(
+            "qualifying_forms is empty; discovery would return nothing and report success. "
+            "Supply the exact filed form strings from the reviewed form-family contract."
+        )
+
     padded = cik_padded(cik)
     payload = json.loads(client.get_text(submissions_url(padded)))
 
@@ -163,7 +177,7 @@ def discover_filings(client, cik: str | int) -> list[DiscoveredFiling]:
         raise SubmissionsShapeError(f"submissions payload for CIK {padded} has no filings.recent")
 
     found: dict[str, DiscoveredFiling] = {}
-    for filing in _rows(filings_block["recent"], padded, "recent"):
+    for filing in _rows(filings_block["recent"], padded, "recent", qualifying_forms):
         found[filing.accession] = filing
 
     for shard in filings_block.get("files") or []:
@@ -171,7 +185,7 @@ def discover_filings(client, cik: str | int) -> list[DiscoveredFiling]:
         if not name:
             continue
         shard_payload = json.loads(client.get_text(submissions_shard_url(name)))
-        for filing in _rows(shard_payload, padded, name):
+        for filing in _rows(shard_payload, padded, name, qualifying_forms):
             found.setdefault(filing.accession, filing)
 
     return sorted(found.values(), key=lambda f: (f.filing_date, f.accession), reverse=True)
