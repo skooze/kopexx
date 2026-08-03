@@ -67,22 +67,75 @@ def database_reachable() -> bool:
 
 
 @pytest.fixture
-def database_engine() -> Iterator[object]:
-    """An engine against the live control plane, or a skip when none is reachable.
+def integration_database_url() -> str:
+    """A URL proven disposable and distinct from BOTH other databases, or a hard failure.
 
-    NON-DESTRUCTIVE USE ONLY. This is the application database and it holds real loaded facts.
-    A test using it must leave the row counts exactly as it found them; the session gate below
-    fails the run if any test does not.
+    WHY THIS REPLACED `database_engine`. The persistence integration suites used to run against
+    the APPLICATION database through `create_database_engine()`. They write rows, so every run
+    depended on a database holding real facts being present and on each test cleaning up after
+    itself perfectly. When that database was dropped, 37 collection errors and one failure
+    appeared — not because anything under test broke, but because a test suite had been pointed at
+    production-shaped data all along.
 
-    A fixture rather than a module-level `skipif` so the probe runs at test time and so every
-    suite that needs a database resolves its URL through exactly one place.
+    Deliberately NOT a skip when the variable is unset. A skip is how an integration suite
+    silently stops running; this is the same reasoning as `test_database_url` above.
     """
-    if not database_reachable():
-        pytest.skip("no reachable PostgreSQL; this test exercises the live control plane")
+    from packages.persistence.engine import (
+        UnsafeTestDatabaseError,
+        assert_integration_disposable,
+    )
+    from packages.persistence.engine import integration_test_database_url as configured
 
-    from packages.persistence.engine import create_database_engine
+    url = configured()
 
-    engine = create_database_engine()
+    if url is None and not database_reachable():
+        pytest.skip(
+            "no reachable PostgreSQL and no INTEGRATION_TEST_DATABASE_URL; nothing to test against"
+        )
+
+    try:
+        return assert_integration_disposable(url)
+    except UnsafeTestDatabaseError as error:
+        pytest.fail(str(error))
+
+
+@pytest.fixture
+def integration_engine(integration_database_url: str) -> Iterator[object]:
+    """A working, migrated connection to the disposable integration database.
+
+    Fails rather than skips when the server is up but the database is missing or unmigrated, for
+    the same reason `disposable_engine` does: a setup error with a one-line fix must not be able to
+    masquerade as a passing suite.
+    """
+    from sqlalchemy import create_engine, text
+
+    if not _reachable(integration_database_url):
+        pytest.skip("no reachable PostgreSQL; this test exercises a live schema")
+
+    engine = create_engine(integration_database_url)
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+            migrated = connection.execute(text("SELECT to_regclass('public.filing')")).scalar()
+    except Exception as error:  # noqa: BLE001 - the reason is reported, not swallowed
+        engine.dispose()
+        from packages.persistence.engine import parse_identity
+
+        target = parse_identity(integration_database_url)
+        pytest.fail(
+            f"the server is up but the integration database {target.endpoint} is unusable: "
+            f"{type(error).__name__}. Create it with `make db-create-integration` and migrate it "
+            f"with `make db-upgrade-integration`, or see docs/runbooks/test-database.md."
+        )
+
+    if migrated is None:
+        engine.dispose()
+        pytest.fail(
+            "the integration database exists but has no schema. Run "
+            "`make db-upgrade-integration`. This fails rather than skips because an unmigrated "
+            "target is a setup error, not an environment that cannot run the test."
+        )
+
     try:
         yield engine
     finally:
@@ -179,7 +232,19 @@ _baseline: dict[str, int] | None = None
 
 
 def _application_counts() -> dict[str, int] | None:
-    """Row counts in the application database, or None when it cannot be read."""
+    """Row counts in the application database, plus its migration revision, or None if unreadable.
+
+    THE REVISION IS WATCHED BECAUSE ROW COUNTS ALONE MISSED A REAL INCIDENT. A Sprint 4.1 test
+    helper redirected alembic by setting `sqlalchemy.url` on the Config — but `migrations/env.py`
+    resolves its target through `packages.persistence.engine.database_url()`, which reads
+    DATABASE_URL and overrides that option. The helper therefore ran `alembic stamp base` against
+    the APPLICATION database. Not one row moved, so this gate stayed green while the application's
+    `alembic_version` was silently emptied, and the schema and its recorded revision disagreed.
+
+    A revision string is not a row count, so it is folded in as a pseudo-entry rather than given a
+    second gate: one comparison, one failure message, no way to add a watched property and forget
+    to check it.
+    """
     if not database_reachable():
         return None
     try:
@@ -196,13 +261,21 @@ def _application_counts() -> dict[str, int] | None:
                         text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
                     )
                 }
-                return {
+                counts: dict[str, int] = {
                     table: connection.execute(
                         text(f"SELECT count(*) FROM {table}")  # noqa: S608 - fixed identifiers
                     ).scalar_one()
                     for table in APPLICATION_TABLES
                     if table in present
                 }
+                if "alembic_version" in present:
+                    revision = connection.execute(
+                        text("SELECT version_num FROM alembic_version")
+                    ).scalar()
+                    # Hashed to an int so the whole baseline stays one comparable mapping. The
+                    # value is opaque; what matters is that it does not change during a suite.
+                    counts["alembic_version:" + str(revision)] = 1
+                return counts
         finally:
             engine.dispose()
     except Exception:

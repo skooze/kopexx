@@ -65,9 +65,17 @@ def _is_excluded(report: dict, exclusions: dict) -> bool:
 
 
 def test_manifest_covers_every_fixture_filing(manifest: dict) -> None:
+    """Every accession directory on disk is described by the manifest, and vice versa.
+
+    This used to assert equality against a hardcoded set of the four inline-XBRL accessions, which
+    made adding a fixture from any other era fail for the one reason that is not a defect. Deriving
+    the expected set from the fixture tree is strictly stronger: it also catches a fixture
+    committed WITHOUT a manifest entry, which the hardcoded form could never see.
+    """
     accessions = {f["accession"] for f in manifest["filings"]}
-    assert accessions == {TEN_K, *TEN_QS}
-    assert len(manifest["filings"]) == 4, "one 10-K and three 10-Qs"
+    on_disk = {p.name for p in FIXTURES.iterdir() if p.is_dir()}
+    assert accessions == on_disk, "manifest and fixture tree disagree"
+    assert {TEN_K, *TEN_QS} <= accessions, "the four inline-XBRL fixtures must remain"
 
 
 def test_manifest_pins_a_source_url_and_hash_for_every_object(manifest: dict) -> None:
@@ -81,12 +89,27 @@ def test_manifest_pins_a_source_url_and_hash_for_every_object(manifest: dict) ->
 
 
 def test_committed_filing_summary_matches_its_recorded_hash(manifest: dict) -> None:
-    """The extracted fixture is the same bytes the manifest recorded."""
+    """The extracted fixture is the same bytes the manifest recorded.
+
+    A `FilingSummary.xml` is a renderer artifact that exists only from the XBRL era onward. A
+    pre-2001 submission has none, so the manifest records no hash for one. The check is therefore
+    driven by whether the manifest DECLARES a hash — and the absence of a declaration is itself
+    asserted against the tree, so a filing cannot quietly lose its recorded hash and pass.
+    """
     from packages.storage import sha256_bytes
 
+    checked = 0
     for filing in manifest["filings"]:
         path = FIXTURES / filing["accession"] / "filing-summary.xml"
-        assert sha256_bytes(path.read_bytes()) == filing["filing_summary_sha256"]
+        recorded = filing.get("filing_summary_sha256")
+        if recorded is None:
+            assert not path.exists(), (
+                f"{filing['accession']} has a filing-summary.xml on disk but records no hash"
+            )
+            continue
+        assert sha256_bytes(path.read_bytes()) == recorded
+        checked += 1
+    assert checked == 4, "the four inline-XBRL fixtures must each still be hash-checked"
 
 
 def test_fixture_tree_stays_small() -> None:

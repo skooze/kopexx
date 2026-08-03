@@ -26,15 +26,21 @@ MYPY_PATHS := packages scripts migrations
 # suite a second time. Gitignored.
 TEST_LOG := .pytest-last-run.log
 
+# Every implemented package. A package absent from this list is not measured, so its coverage
+# gap is invisible and the 85% gate passes without it — which is the same vacuity trap as an
+# architecture test scanning an empty directory. Add a package here in the sprint that creates it.
 COV_PACKAGES := --cov=packages.sec_identity --cov=packages.configuration \
                 --cov=packages.sec_client --cov=packages.storage \
                 --cov=packages.llm_gateway --cov=packages.dera_notes \
                 --cov=packages.observability --cov=packages.footnote_extractor \
-                --cov=packages.footnote_canonicalizer --cov=packages.table_parser
+                --cov=packages.footnote_canonicalizer --cov=packages.table_parser \
+                --cov=packages.filing_acquisition --cov=packages.filing_discovery \
+                --cov=packages.persistence
 
 .PHONY: help install fmt fmt-check lint typecheck test test-unit test-integration \
         test-architecture test-security test-no-skips coverage migration-check db-upgrade \
-        db-create-test db-upgrade-test db-verify-isolation test-summary \
+        db-create-test db-upgrade-test db-create-integration db-upgrade-integration \
+        db-verify-isolation test-summary \
         check up down clean
 
 help:
@@ -50,7 +56,9 @@ help:
 	@echo "db-upgrade       apply migrations to the application database (DATABASE_URL)"
 	@echo "db-create-test   create the disposable database for destructive tests"
 	@echo "db-upgrade-test  apply migrations to the disposable test database"
-	@echo "db-verify-isolation  prove the destructive target is not the application database"
+	@echo "db-create-integration   create the disposable database for persistence tests"
+	@echo "db-upgrade-integration  apply migrations to the disposable integration database"
+	@echo "db-verify-isolation     prove every configured database identity is distinct"
 	@echo "up / down        local stack"
 	@echo ""
 	@echo "CI runs these same targets. Do not duplicate the commands in the workflow."
@@ -119,6 +127,16 @@ db-upgrade-test:
 
 # Fails if the destructive target is not provably a separate, disposable, test-designated
 # database. Run BEFORE the suite so a misconfiguration is caught before anything drops a table.
+# Migrations are applied through FINTEK_ALEMBIC_URL, the invocation-specific override that
+# migrations/env.py reads AHEAD of DATABASE_URL. Setting DATABASE_URL here instead would work
+# by coincidence and would put the integration URL in the variable the application reads.
+db-create-integration:
+	$(PYTHON) scripts/create_test_database.py --target integration
+
+db-upgrade-integration:
+	FINTEK_ALEMBIC_URL="$$($(PYTHON) scripts/create_test_database.py --target integration --print-url)" \
+		$(ALEMBIC) upgrade head
+
 db-verify-isolation:
 	@$(PYTHON) scripts/create_test_database.py --verify
 

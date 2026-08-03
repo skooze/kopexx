@@ -1,0 +1,104 @@
+# Corpus identity contract cases. SMALL AND DURABLE BY DESIGN.
+#
+# This is NOT an entity database and NOT the entity catalog. It is the minimum evidence
+# needed to keep a set of identity rules proven, each of which was established from real
+# EDGAR data and each of which a previous version of this project got wrong.
+#
+# Every CIK and accession is QUOTED. YAML 1.2 parses an unquoted 0000320193 as the
+# integer 320193 and destroys the leading zeros that make it a CIK.
+
+# RULE 1  CIK is the stable issuer identity. A sampling label is intent, never authority.
+# RULE 2  Two issuers whose CIKs differ are two issuers, however similar their names look.
+# RULE 3  One accession may legitimately appear under more than one CIK (co-registration).
+# RULE 4  Filing identity is (CIK, accession). The accession alone is not an identity.
+# RULE 5  The accession PREFIX is the filing agent's CIK and never identifies the issuer.
+
+issuers:
+  - cik: "0001736946"
+    authoritative_name: "Arlo Technologies, Inc."
+    sic: "7381"
+    sic_description: "Services-Detective, Guard & Armored Car Services"
+    sampling_label_original: "Astera Labs"
+    identity_source: "EDGAR submissions API"
+    earliest_qualifying: "2018-08-27"
+    note: "sampled with the intent label 'Astera Labs'; EDGAR says otherwise"
+  - cik: "0001736297"
+    authoritative_name: "Astera Labs, Inc."
+    sic: "3674"
+    sic_description: "Semiconductors & Related Devices"
+    sampling_label_original: "named-CIK verification"
+    identity_source: "EDGAR submissions API"
+    earliest_qualifying: "2024-05-08"
+    note: "the real Astera Labs, confirmed from EDGAR"
+  - cik: "0001652044"
+    authoritative_name: "Alphabet Inc."
+    sic: "7370"
+    sic_description: "Services-Computer Programming, Data Processing, Etc."
+    sampling_label_original: "Alphabet"
+    identity_source: "EDGAR submissions API"
+    earliest_qualifying: "2015-10-29"
+    note: "co-registrant on a joint 10-K/A"
+  - cik: "0001288776"
+    authoritative_name: "GOOGLE INC."
+    sic: "7370"
+    sic_description: "Services-Computer Programming, Data Processing, Etc."
+    sampling_label_original: "Google (pre-Alphabet)"
+    identity_source: "EDGAR submissions API"
+    earliest_qualifying: "2004-08-16"
+    note: "the other co-registrant on the same accession"
+  - cik: "0000320193"
+    authoritative_name: "Apple Inc."
+    sic: "3571"
+    sic_description: "Electronic Computers"
+    sampling_label_original: "Apple"
+    identity_source: "EDGAR submissions API"
+    earliest_qualifying: "1994-01-26"
+    note: "long-history issuer with recorded former names"
+
+# The co-registered submission: ONE accession, IDENTICAL bytes, TWO filer CIKs.
+# A uniqueness rule keyed on the accession alone rejects this valid SEC data.
+co_registration:
+  accession: "0001193125-16-520367"
+  form_as_filed: "10-K/A"
+  sha256: "f74262703ff479537d2107188b06f0bb54e3cfaede7b740d21ba69c47ca8a090"
+  filed_jointly_by:
+    - "0001288776"
+    - "0001652044"
+
+# Filings whose accession PREFIX is a filing agent's CIK, not the issuer's. Ownership is
+# resolved from the SEC archive path, never from the prefix.
+agent_prefixed_filings:
+  - cik: "0000320193"
+    accession: "0001104659-05-058421"
+    accession_prefix: "0001104659"
+    archive_path_cik: "320193"
+  - cik: "0000320193"
+    accession: "0001104659-05-003520"
+    accession_prefix: "0001104659"
+    archive_path_cik: "320193"
+  - cik: "0000320193"
+    accession: "0001193125-10-012091"
+    accession_prefix: "0001193125"
+    archive_path_cik: "320193"
+  - cik: "0000320193"
+    accession: "0001193125-10-012085"
+    accession_prefix: "0001193125"
+    archive_path_cik: "320193"
+  - cik: "0000789019"
+    accession: "0000950109-94-000252"
+    accession_prefix: "0000950109"
+    archive_path_cik: "789019"
+  - cik: "0000789019"
+    accession: "0000891020-94-000175"
+    accession_prefix: "0000891020"
+    archive_path_cik: "789019"
+
+# Filings whose accession prefix DOES equal the issuer CIK, so a prefix-based check
+# would pass by luck. Both cases must be present or the rule proves nothing.
+self_prefixed_filings:
+  - cik: "0000320193"
+    accession: "0000320193-94-000002"
+  - cik: "0000320193"
+    accession: "0000320193-94-000016"
+  - cik: "0000320193"
+    accession: "0000320193-96-000023"

@@ -314,7 +314,10 @@ class Filing(Base, TimestampMixin):
         _enum_check(
             "reconciliation_status", RECONCILIATION_STATUSES, "reconciliation_status_is_known"
         ),
-        _enum_check("era", FILING_ERAS + (None,) if False else FILING_ERAS, "era_is_known"),
+        # NULL is permitted: era is unknown until discovery classifies the filing. A CHECK is not
+        # violated by NULL, so no explicit allowance is needed — an earlier version of this line
+        # carried a dead `if False` branch attempting one.
+        _enum_check("era", FILING_ERAS, "era_is_known"),
         Index("ix_filing_issuer_form_period", "issuer_id", "form", "report_date"),
         Index("ix_filing_processing_state", "processing_state"),
         Index("ix_filing_amends", "amends_filing_id"),

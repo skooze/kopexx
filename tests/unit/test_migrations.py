@@ -28,7 +28,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from packages.persistence.engine import database_url as _database_url  # noqa: E402
 
-MIGRATION = REPO_ROOT / "migrations" / "versions" / "0001_initial_control_plane_schema.py"
+MIGRATIONS_DIR = REPO_ROOT / "migrations" / "versions"
+MIGRATION = MIGRATIONS_DIR / "0001_initial_control_plane_schema.py"
 # The interpreter that runs alembic in a subprocess. The project virtualenv when there is one,
 # and the interpreter running the tests otherwise.
 #
@@ -53,7 +54,20 @@ VENV_PY = (
 
 
 def _migration_source() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    """The concatenated source of EVERY revision, not just the initial one.
+
+    This used to read `0001_initial` alone. That was correct while `0001` was the only revision
+    and silently stopped covering anything added afterwards: a table created in `0003` looked
+    absent from "the migration", and — worse — a table `0003` created but never dropped would have
+    passed the downgrade-completeness check unnoticed.
+
+    It is the same defect the `migration-check` recipe already had once, in a different place: a
+    hardcoded start that quietly stops covering every migration added after it. Deriving the file
+    list means a future `0004` is covered without editing this line.
+    """
+    return "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS_DIR.glob("[0-9]*.py"))
+    )
 
 
 def _model_table_names() -> set[str]:
@@ -90,15 +104,36 @@ def test_migration_drops_every_table_it_creates() -> None:
 
 
 def test_downgrade_drops_in_reverse_dependency_order() -> None:
-    """Dropping a parent before its children fails on the foreign key."""
-    source = _migration_source()
-    created = re.findall(r'op\.create_table\(\s*"([^"]+)"', source)
-    dropped = re.findall(r'op\.drop_table\("([^"]+)"\)', source)
-    assert dropped == list(reversed(created)), "drop order must be the reverse of create order"
+    """Dropping a parent before its children fails on the foreign key.
+
+    Checked PER REVISION. The ordering invariant holds inside one migration's upgrade/downgrade
+    pair; it does not hold across concatenated revisions, where `0003`'s drops correctly precede
+    `0001`'s in file order while `0001`'s creates precede `0003`'s. Comparing the concatenation
+    against a single global reversal would fail on a correct pair of migrations.
+    """
+    checked = 0
+    for path in sorted(MIGRATIONS_DIR.glob("[0-9]*.py")):
+        source = path.read_text(encoding="utf-8")
+        created = re.findall(r'op\.create_table\(\s*"([^"]+)"', source)
+        dropped = re.findall(r'op\.drop_table\("([^"]+)"\)', source)
+        if not created and not dropped:
+            continue
+        assert dropped == list(reversed(created)), (
+            f"{path.name}: drop order must be the reverse of create order; "
+            f"created {created}, dropped {dropped}"
+        )
+        checked += 1
+    assert checked, "no revision creates a table, so this guard enforced nothing"
 
 
 def test_migration_declares_no_down_revision() -> None:
-    assert re.search(r"^down_revision\s*=\s*None", _migration_source(), re.M)
+    """Exactly one revision is the root of the chain."""
+    roots = [
+        path.name
+        for path in sorted(MIGRATIONS_DIR.glob("[0-9]*.py"))
+        if re.search(r"^down_revision\s*=\s*None", path.read_text(encoding="utf-8"), re.M)
+    ]
+    assert roots == [MIGRATION.name], f"expected one root revision, found {roots}"
 
 
 def test_fact_table_has_append_only_trigger() -> None:
@@ -309,9 +344,16 @@ def test_migration_check_names_no_revision_id() -> None:
 
 
 def test_migration_check_downgrade_starts_at_the_current_head() -> None:
-    """The range the Makefile uses must resolve to the head alembic reports right now."""
+    """The range the Makefile uses must resolve to the head alembic reports right now.
+
+    The head is DERIVED, not asserted against a literal. An earlier version named
+    `0002_table_ownership`, so adding `0003` failed this test for the only reason that is not a
+    defect — the schema moved — and the obvious repair is to bump the literal, which puts the same
+    trap back one revision later. What actually matters is that `head:base` and `<head>:base`
+    generate identical SQL, and that holds whatever the head happens to be.
+    """
     head = _script_directory().get_current_head()
-    assert head == "0002_table_ownership", "head moved; the expectations below need re-measuring"
+    assert head == _all_revisions()[0], "head must be the newest revision alembic knows about"
 
     from_head = _alembic("downgrade", "head:base", "--sql")
     from_explicit = _alembic("downgrade", f"{head}:base", "--sql")

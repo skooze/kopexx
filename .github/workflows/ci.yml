@@ -18,8 +18,13 @@ jobs:
   quality:
     runs-on: ubuntu-latest
 
-    # A live control plane. Without it the migration and DERA load tests SKIP, and a suite that
+    # A live PostgreSQL. Without it the migration and persistence tests SKIP, and a suite that
     # skips its only database tests reports green while proving nothing about the schema.
+    #
+    # NO APPLICATION DATABASE IS EVER CREATED HERE. The server hosts two DISPOSABLE databases and
+    # nothing else. `fintek` — the name the application uses — is never created and never
+    # connected to, so no CI step can write to a database shaped like production. The service
+    # container must create something, so it creates the migration test target directly.
     #
     # DISPOSABLE CI-ONLY CREDENTIAL. The password below is a fixed, obviously non-production value
     # that exists for the lifetime of one Actions job. It is written here in the open deliberately:
@@ -43,29 +48,38 @@ jobs:
         env:
           POSTGRES_USER: fintek
           POSTGRES_PASSWORD: ci-disposable-not-a-secret
-          POSTGRES_DB: fintek
+          POSTGRES_DB: fintek_test
         ports:
           - 5432:5432
         # The health check authenticates rather than merely probing the port: PGPASSWORD makes
         # pg_isready complete a real connection, so the job waits for a server that will actually
         # accept the credential the tests use, not one that is merely listening.
         options: >-
-          --health-cmd "PGPASSWORD=ci-disposable-not-a-secret pg_isready -U fintek -d fintek"
+          --health-cmd "PGPASSWORD=ci-disposable-not-a-secret pg_isready -U fintek -d fintek_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
-    # TWO DATABASES ON ONE SERVER. The application database holds what the loader writes; the test
-    # database is what the destructive migration round-trip drops and rebuilds. They must never be
-    # the same, and tests/unit/test_database_isolation.py proves the pair is safe rather than
-    # trusting these two lines.
+    # TWO DISPOSABLE DATABASES ON ONE SERVER, AND NO APPLICATION DATABASE.
+    #
+    #   fintek_test               the destructive migration round trip drops and rebuilds it
+    #   fintek_integration_test   the persistence suites load, query and clean it
+    #
+    # They must be distinct from each other, because `downgrade base` in the first would delete
+    # the schema the second is loading into. `make db-verify-isolation` proves every identity
+    # before any test runs, and tests/architecture/test_ci_workflow.py proves these lines say so.
+    #
+    # DATABASE_URL IS DELIBERATELY UNSET. Nothing in CI may reach an application database, so the
+    # variable that names one is absent rather than pointed somewhere harmless — an unset variable
+    # cannot be quietly reused, and any code that falls back to a default is caught here rather
+    # than in a deployment.
     #
     # These URLs carry the disposable credential above. No step echoes them: `make` targets read
     # them from the environment, and the one command that reports on them —
     # `make db-verify-isolation` — prints only host, port, and database name, never the URL.
     env:
-      DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek
       TEST_DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek_test
+      INTEGRATION_TEST_DATABASE_URL: postgresql+psycopg://fintek:ci-disposable-not-a-secret@localhost:5432/fintek_integration_test
 
     # OFFICIAL ACTIONS ARE PINNED TO A REVIEWED MAJOR TAG, matching how every other dependency in
     # this repository is handled. The third-party scanner in the security job is stricter — a fixed
@@ -105,21 +119,29 @@ jobs:
       - name: Type check
         run: make typecheck
 
-      # The disposable database the destructive migration tests target. Created explicitly rather
-      # than relying on the service container's POSTGRES_DB, which creates exactly one.
-      - name: Create the disposable test database
+      # Idempotent: the service container already created this one, so the target confirms it
+      # rather than creating it. Kept explicit so the workflow does not depend on POSTGRES_DB
+      # continuing to name the same database.
+      - name: Create the disposable migration-test database
         run: make db-create-test
 
-      # The application schema the loader tests write against. Also the first proof in CI that the
-      # migration applies to a real server, which offline DDL generation cannot establish.
-      - name: Apply migrations
-        run: make db-upgrade
+      # The second disposable database. The service container creates exactly one, so this is the
+      # step that brings the integration target into existence.
+      - name: Create the disposable integration-test database
+        run: make db-create-integration
 
-      # Fails the job if DATABASE_URL and TEST_DATABASE_URL resolve to the same database, before
-      # any test has a chance to drop anything. Compares parsed host, port, socket, and database
-      # name — not the configured strings, which can spell one database two ways.
-      - name: Prove the destructive target is not the application database
+      # Fails the job if any two configured databases resolve to the same one, or if either
+      # disposable target IS the application database — before any test can write or drop
+      # anything. Compares parsed host, port, socket, and database name, not the configured
+      # strings, which can spell one database two ways.
+      - name: Prove every database identity is distinct
         run: make db-verify-isolation
+
+      # The schema the persistence suites write against, and the first proof in CI that the
+      # migration applies to a real server, which offline DDL generation cannot establish.
+      # Routed through FINTEK_ALEMBIC_URL, never through DATABASE_URL.
+      - name: Apply migrations to the integration database
+        run: make db-upgrade-integration
 
       - name: Unit tests
         run: make test-unit
@@ -127,14 +149,10 @@ jobs:
       - name: Integration tests
         run: make test-integration
 
-      # ANTI-VACUITY GATE. A database is running, so the tests that require one must RUN. If any
-      # test skips here, the reason is printed and the job fails, because a skip in this
-      # environment means a guard silently stopped being enforced.
-      #
-      # The same run also enforces the application-preservation gate in tests/conftest.py: the
-      # suite must leave the application database's issuer, filing, and xbrl_fact counts exactly
-      # as it found them, whether the change came from a dropped table or a stray fixture row.
-      - name: Database tests must not skip, and application data must survive
+      # ANTI-VACUITY GATE. Both disposable databases are running, so the tests that require one
+      # must RUN. If any test skips here, the reason is printed and the job fails, because a skip
+      # in this environment means a guard silently stopped being enforced.
+      - name: Database tests must not skip
         run: make test-no-skips
 
       # Exact counts on one line. "330 passed" is what a reviewer needs, and finding it should not

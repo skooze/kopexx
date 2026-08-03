@@ -3,8 +3,9 @@
 Builds a synthetic filing rather than depending on the preserved Apple objects, so the suite runs
 on a fresh clone with no `var/`. The shapes are the ones the real filings produce.
 
-NON-DESTRUCTIVE. Uses the application database and removes exactly what it created. The session
-gate in conftest fails the run if the row counts do not return to where they started.
+Runs against the DISPOSABLE integration database, never the application one. It still removes
+exactly what it created, because a suite that relies on its target being thrown away cannot prove
+idempotency — the whole point of the assertions below is that a second run changes nothing.
 """
 
 from __future__ import annotations
@@ -79,9 +80,9 @@ def build_result(*, orphan: bool = False):
 
 
 @pytest.fixture
-def filing(database_engine):
+def filing(integration_engine):
     """An issuer and filing for the canonical footnotes to attach to, removed afterwards."""
-    engine = database_engine
+    engine = integration_engine
     with engine.begin() as connection:
         issuer_id = connection.execute(
             text(
@@ -317,10 +318,10 @@ def test_an_orphan_is_persisted_with_a_null_parent_not_omitted(filing) -> None:
     assert row[2]["reason"]
 
 
-def test_a_missing_filing_row_fails_before_anything_is_written(database_engine) -> None:
+def test_a_missing_filing_row_fails_before_anything_is_written(integration_engine) -> None:
     result, headings = build_result()
     with pytest.raises(PersistenceError, match="no filing row"):
-        persist(database_engine, result, evaluate(result), {})
+        persist(integration_engine, result, evaluate(result), {})
 
 
 def test_a_failed_run_leaves_nothing_behind(filing, monkeypatch) -> None:

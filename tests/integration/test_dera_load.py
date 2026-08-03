@@ -86,13 +86,13 @@ def ledger(package: Path) -> MirrorLedger:
 
 
 @pytest.fixture
-def loaded(database_engine, package: Path, ledger: MirrorLedger):  # type: ignore[no-untyped-def]
+def loaded(integration_engine, package: Path, ledger: MirrorLedger):  # type: ignore[no-untyped-def]
     """Register, load, and clean up afterwards.
 
     Cleanup deletes rather than rolls back, because the loader owns its own transaction: a test
     that wrapped it in an outer transaction would not be testing the real commit boundary.
     """
-    engine = database_engine
+    engine = integration_engine
     root = package.parent.parent
     register_mirror_ledger(engine, ledger, root)
     selected = locate_filing(ACCESSION, package_root=root, ledger=ledger)
@@ -190,7 +190,7 @@ def test_facts_are_written_unvalidated_because_nothing_has_validated_them(loaded
 
 
 def test_a_missing_filing_row_fails_before_any_fact_is_written(
-    database_engine, package: Path, ledger: MirrorLedger
+    integration_engine, package: Path, ledger: MirrorLedger
 ) -> None:  # type: ignore[no-untyped-def]
     """xbrl_fact has foreign keys to filing and issuer. Acquisition must precede the fact load."""
     from packages.dera_notes.registration import RegistrationError
@@ -198,7 +198,7 @@ def test_a_missing_filing_row_fails_before_any_fact_is_written(
     root = package.parent.parent
     selected = locate_filing(ACCESSION, package_root=root, ledger=ledger)
     with pytest.raises(RegistrationError, match="does not list"):
-        register_filing(database_engine, selected.path, "0000000000-99-999999")
+        register_filing(integration_engine, selected.path, "0000000000-99-999999")
 
 
 def test_a_package_whose_bytes_changed_since_mirroring_is_refused(

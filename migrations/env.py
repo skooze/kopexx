@@ -25,7 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from packages.persistence import Base  # noqa: E402
-from packages.persistence.engine import database_url  # noqa: E402
+from packages.persistence.engine import migration_target_url  # noqa: E402
 
 config = context.config
 
@@ -36,7 +36,20 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return database_url()
+    """The migration target, from the single authoritative resolver.
+
+    DEFECT D-13. This used to call `database_url()` directly, which reads DATABASE_URL. A caller
+    that set `sqlalchemy.url` on the Alembic `Config` was therefore silently overridden, and a
+    test helper's `stamp base` reached the application database. `migration_target_url()` gives
+    an explicitly supplied target precedence over DATABASE_URL, which is the correction.
+
+    An explicit `sqlalchemy.url` on the Config is honoured when present, so the ordinary
+    `alembic -x` and Config paths behave as a reader expects.
+    """
+    configured = config.get_main_option("sqlalchemy.url", None)
+    if configured:
+        return configured
+    return migration_target_url()
 
 
 def run_migrations_offline() -> None:

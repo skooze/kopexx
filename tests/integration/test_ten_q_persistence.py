@@ -117,9 +117,9 @@ def _digest(engine, accession: str) -> str:
 
 
 @pytest.fixture
-def quarterly_filings(database_engine):
+def quarterly_filings(integration_engine):
     """One issuer and three filing rows for the quarterly results to attach to."""
-    engine = database_engine
+    engine = integration_engine
     with engine.begin() as connection:
         issuer_id = connection.execute(
             text(

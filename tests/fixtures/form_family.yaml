@@ -1,0 +1,506 @@
+# Reviewed SEC 10-K / 10-Q form-family inventory.
+#
+# DERIVED FROM AN EXHAUSTIVE SCAN of every time-eligible EDGAR quarterly master index,
+# 1993Q1 through 2026Q3 -- 135 quarters, zero unavailable. The SEC had also pre-created a
+# 2026Q4 directory whose index was a 236-byte header-only stub with zero data rows.
+#
+# THIS IS THE SOURCE OF TRUTH for which forms qualify. Qualifying logic is generated from
+# this file, never from a hardcoded guess. A guessed allowlist searching for '10-KSB' and
+# '10-QSB' could not match EDGAR's real strings '10KSB' and '10QSB', and so reported a
+# family of roughly 190,000 filings as effectively absent.
+#
+# EXACT FILED STRINGS. Capitalisation, punctuation, spacing, hyphenation and amendment
+# suffixes are preserved verbatim. Every identifier is QUOTED: YAML 1.2 parses an unquoted
+# 0000320193 as the integer 320193 and destroys the leading zeros that make it a CIK.
+#
+# The full research corpus stays outside Git. This fixture is the durable summary.
+
+scan:
+  first_quarter: "1993Q1"
+  last_time_eligible_quarter: "2026Q3"
+  time_eligible_quarters_scanned: 135
+  quarters_unavailable: 0
+  pre_created_future_directory: "2026Q4"
+  pre_created_future_directory_data_rows: 0
+  distinct_ten_family_strings: 41
+
+# Forms that plausibly LOOK like family members but do not occur in any scanned quarter.
+# Recorded so a future guess cannot silently reintroduce them.
+nonexistent_guessed_variants:
+  - "10KSB405"
+  - "10KSB405/A"
+
+forms:
+  - form: "10-Q"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "standard"
+    is_amendment: false
+    sec_description: "Quarterly report [Sections 13 or 15(d)]"
+    first_observed: "1993-08-13"
+    last_observed: "2026-07-31"
+    observed_count: 713734
+    representative_cik: "0000060512"
+    representative_accession: "0000060512-94-000005"
+  - form: "10-K"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "standard"
+    is_amendment: false
+    sec_description: "Annual report [Section 13 and 15(d), not S-K Item 405]"
+    first_observed: "1993-11-29"
+    last_observed: "2026-07-31"
+    observed_count: 238751
+    representative_cik: "0000029082"
+    representative_accession: "0000950131-94-000021"
+  - form: "10QSB"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "small_business"
+    is_amendment: false
+    sec_description: "Optional form for quarterly and transition reports of small business issuers"
+    first_observed: "1994-05-09"
+    last_observed: "2008-10-31"
+    observed_count: 120120
+    representative_cik: "0000048272"
+    representative_accession: "0000048272-94-000002"
+  - form: "10-K/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "standard"
+    is_amendment: true
+    sec_description: "Annual report [Section 13 and 15(d), not S-K Item 405]"
+    first_observed: "1993-10-07"
+    last_observed: "2026-07-31"
+    observed_count: 48051
+    representative_cik: "0000017206"
+    representative_accession: "0000017206-94-000007"
+  - form: "10-Q/A"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "standard"
+    is_amendment: true
+    sec_description: "Quarterly report [Sections 13 or 15(d)]"
+    first_observed: "1994-01-04"
+    last_observed: "2026-07-29"
+    observed_count: 47287
+    representative_cik: "0000105096"
+    representative_accession: "0000950152-94-000225"
+  - form: "10KSB"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "small_business"
+    is_amendment: false
+    sec_description: "Optional form for annual and transition reports of small business issuers [Section 13 or 15(d), not S-B Item 405]"
+    first_observed: "1994-03-29"
+    last_observed: "2009-03-16"
+    observed_count: 36912
+    representative_cik: "0000726738"
+    representative_accession: "0000950132-94-000109"
+  - form: "10-K405"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "item_405"
+    is_amendment: false
+    sec_description: "Annual report [Sections 13 and 15(d), S-K Item 405]"
+    first_observed: "1994-03-25"
+    last_observed: "2002-04-05"
+    observed_count: 21277
+    representative_cik: "0000108703"
+    representative_accession: "0000950135-94-000220"
+  - form: "10QSB/A"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "small_business"
+    is_amendment: true
+    sec_description: "Optional form for quarterly and transition reports of small business issuers"
+    first_observed: "1994-12-30"
+    last_observed: "2008-10-31"
+    observed_count: 17117
+    representative_cik: "0000826495"
+    representative_accession: "0000826495-94-000004"
+  - form: "10KSB/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "small_business"
+    is_amendment: true
+    sec_description: "Optional form for annual and transition reports of small business issuers [Section 13 or 15(d), not S-B Item 405]"
+    first_observed: "1995-03-09"
+    last_observed: "2009-03-16"
+    observed_count: 11909
+    representative_cik: "0000729237"
+    representative_accession: "0000729237-95-000009"
+  - form: "10KSB40"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "small_business"
+    is_amendment: false
+    sec_description: "Annual Report Form for Small Businesses that also have a Positive Response to Item 405"
+    first_observed: "1995-03-30"
+    last_observed: "2002-04-05"
+    observed_count: 3441
+    representative_cik: "0000066849"
+    representative_accession: "0000899243-95-000131"
+  - form: "10-K405/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "item_405"
+    is_amendment: true
+    sec_description: "Annual report [Sections 13 and 15(d), S-K Item 405]"
+    first_observed: "1994-09-20"
+    last_observed: "2002-04-08"
+    observed_count: 3349
+    representative_cik: "0000105634"
+    representative_accession: "0000950130-94-001354"
+  - form: "10KSB40/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "small_business"
+    is_amendment: true
+    sec_description: "Annual Report Form for Small Businesses that also have a Positive Response to Item 405"
+    first_observed: "1995-05-18"
+    last_observed: "2002-04-02"
+    observed_count: 625
+    representative_cik: "0000811040"
+    representative_accession: "0000950144-95-001488"
+  - form: "10-KT"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "transition"
+    is_amendment: false
+    sec_description: "Transition reports [Rule 13a-10 or 15d-10]"
+    first_observed: "1994-04-15"
+    last_observed: "2026-06-29"
+    observed_count: 610
+    representative_cik: "0000030697"
+    representative_accession: "0000950117-94-000085"
+  - form: "10-QT"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "transition"
+    is_amendment: false
+    sec_description: "Transition reports [Rule 13a-10 or 15d-10]"
+    first_observed: "1994-05-04"
+    last_observed: "2025-09-10"
+    observed_count: 247
+    representative_cik: "0000314808"
+    representative_accession: "0000314808-94-000027"
+  - form: "10-KT/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "transition"
+    is_amendment: true
+    sec_description: "Transition reports [Rule 13a-10 or 15d-10]"
+    first_observed: "1995-06-29"
+    last_observed: "2026-04-30"
+    observed_count: 141
+    representative_cik: "0000816159"
+    representative_accession: "0000932384-95-000052"
+  - form: "10KT405"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "transition"
+    is_amendment: false
+    sec_description: "Transition reports pursuant to Rule 13a-10 or 15d-10, Initial Filing"
+    first_observed: "1995-02-28"
+    last_observed: "2002-04-03"
+    observed_count: 86
+    representative_cik: "0000728586"
+    representative_accession: "0000950130-95-000365"
+  - form: "10-QT/A"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "transition"
+    is_amendment: true
+    sec_description: "Transition reports [Rule 13a-10 or 15d-10]"
+    first_observed: "1994-04-26"
+    last_observed: "2024-07-25"
+    observed_count: 37
+    representative_cik: "0000043287"
+    representative_accession: "0000950124-94-000819"
+  - form: "10KT405/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "transition"
+    is_amendment: true
+    sec_description: "Transition reports pursuant to Rule 13a-10 or 15d-10, Initial Filing"
+    first_observed: "1995-04-05"
+    last_observed: "2001-03-02"
+    observed_count: 17
+    representative_cik: "0000806085"
+    representative_accession: "0000950109-95-001155"
+  - form: "10-QSB"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "small_business"
+    is_amendment: false
+    sec_description: "SEC Accession No. 0001142488-01-500009 Filing Date 2001-11-14 Accepted 2001-11-14 15"
+    first_observed: "2001-11-14"
+    last_observed: "2002-05-16"
+    observed_count: 4
+    representative_cik: "0001142488"
+    representative_accession: "0001142488-01-500009"
+  - form: "10-KSB/A"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "small_business"
+    is_amendment: true
+    sec_description: "[Amend] SEC Accession No. 0001025894-02-000160 Filing Date 2002-03-01 Accepted 2002-03-01 16"
+    first_observed: "2002-03-01"
+    last_observed: "2002-06-04"
+    observed_count: 2
+    representative_cik: "0001059366"
+    representative_accession: "0001025894-02-000160"
+  - form: "10-QSB/A"
+    included: true
+    classification: "direct_quarterly_report"
+    period: "quarterly"
+    variant: "small_business"
+    is_amendment: true
+    sec_description: "[Amend] SEC Accession No. 0001142488-01-500010 Filing Date 2001-11-14 Accepted 2001-11-14 16"
+    first_observed: "2001-11-14"
+    last_observed: "2001-11-14"
+    observed_count: 1
+    representative_cik: "0001142488"
+    representative_accession: "0001142488-01-500010"
+  - form: "10-KSB"
+    included: true
+    classification: "direct_annual_report"
+    period: "annual"
+    variant: "small_business"
+    is_amendment: false
+    sec_description: "SEC Accession No. 0001025894-02-000146 Filing Date 2002-02-28 Accepted 2002-02-28 17"
+    first_observed: "2002-02-28"
+    last_observed: "2002-02-28"
+    observed_count: 1
+    representative_cik: "0001059366"
+    representative_accession: "0001025894-02-000146"
+  - form: "10-D"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Asset-Backed Issuer Distribution Report [Section 13 or 15(d) of the Securities Exchange Act of 1934]"
+    is_amendment: false
+    sec_description: "Asset-Backed Issuer Distribution Report [Section 13 or 15(d) of the Securities Exchange Act of 1934]"
+    first_observed: "2005-06-27"
+    last_observed: "2026-07-31"
+    observed_count: 140244
+    representative_cik: "0001305629"
+    representative_accession: "0001104659-05-029751"
+  - form: "NT 10-Q"
+    included: false
+    exclusion_class: "late_filing_notification"
+    exclusion_reason: "Notification of inability to timely file Form 10-Q or 10-QSB"
+    is_amendment: false
+    sec_description: "Notification of inability to timely file Form 10-Q or 10-QSB"
+    first_observed: "1994-01-14"
+    last_observed: "2026-07-30"
+    observed_count: 80054
+    representative_cik: "0000101281"
+    representative_accession: "0000912057-94-000478"
+  - form: "NT 10-K"
+    included: false
+    exclusion_class: "late_filing_notification"
+    exclusion_reason: "Notification of inability to timely file Form 10-K 405, 10-K, 10-KSB 405, 10-KSB, 10-KT, or 10-KT405"
+    is_amendment: false
+    sec_description: "Notification of inability to timely file Form 10-K 405, 10-K, 10-KSB 405, 10-KSB, 10-KT, or 10-KT405"
+    first_observed: "1994-03-29"
+    last_observed: "2026-07-30"
+    observed_count: 48337
+    representative_cik: "0000106455"
+    representative_accession: "0000106455-94-000002"
+  - form: "10SB12G/A"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities for small business [Section 12(g)]"
+    is_amendment: true
+    sec_description: "Registration of securities for small business [Section 12(g)]"
+    first_observed: "1996-05-02"
+    last_observed: "2008-02-04"
+    observed_count: 5523
+    representative_cik: "0001005974"
+    representative_accession: "0001005974-96-000002"
+  - form: "10-12G/A"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities [Section 12(g)]"
+    is_amendment: true
+    sec_description: "Registration of securities [Section 12(g)]"
+    first_observed: "1994-05-27"
+    last_observed: "2026-07-30"
+    observed_count: 5392
+    representative_cik: "0000922255"
+    representative_accession: "0000950109-94-000913"
+  - form: "10SB12G"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities for small business [Section 12(g)]"
+    is_amendment: false
+    sec_description: "Registration of securities for small business [Section 12(g)]"
+    first_observed: "1996-05-02"
+    last_observed: "2008-02-01"
+    observed_count: 4105
+    representative_cik: "0001010779"
+    representative_accession: "0000912057-96-009053"
+  - form: "10-D/A"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Asset-Backed Issuer Distribution Report [Section 13 or 15(d) of the Securities Exchange Act of 1934]"
+    is_amendment: true
+    sec_description: "Asset-Backed Issuer Distribution Report [Section 13 or 15(d) of the Securities Exchange Act of 1934]"
+    first_observed: "2006-01-17"
+    last_observed: "2026-07-31"
+    observed_count: 3351
+    representative_cik: "0001305629"
+    representative_accession: "0001305629-06-000003"
+  - form: "10-12G"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities [Section 12(g)]"
+    is_amendment: false
+    sec_description: "Registration of securities [Section 12(g)]"
+    first_observed: "1994-05-04"
+    last_observed: "2026-07-31"
+    observed_count: 3052
+    representative_cik: "0000922255"
+    representative_accession: "0000950109-94-000771"
+  - form: "10-12B/A"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities [Section 12(b)]"
+    is_amendment: true
+    sec_description: "Registration of securities [Section 12(b)]"
+    first_observed: "1994-01-27"
+    last_observed: "2026-07-24"
+    observed_count: 1768
+    representative_cik: "0000846660"
+    representative_accession: "0000950124-94-000188"
+  - form: "10-C"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Change of number of shares outstanding or change of issuer name"
+    is_amendment: false
+    sec_description: "Change of number of shares outstanding or change of issuer name"
+    first_observed: "1994-01-04"
+    last_observed: "1997-08-21"
+    observed_count: 1303
+    representative_cik: "0000109380"
+    representative_accession: "0000890613-94-000008"
+  - form: "10-12B"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities [Section 12(b)]"
+    is_amendment: false
+    sec_description: "Registration of securities [Section 12(b)]"
+    first_observed: "1994-02-11"
+    last_observed: "2026-07-30"
+    observed_count: 778
+    representative_cik: "0000736469"
+    representative_accession: "0000736469-94-000001"
+  - form: "NT 10-K/A"
+    included: false
+    exclusion_class: "late_filing_notification"
+    exclusion_reason: "Notification of inability to timely file Form 10-K 405, 10-K, 10-KSB 405, 10-KSB, 10-KT, or 10-KT405"
+    is_amendment: true
+    sec_description: "Notification of inability to timely file Form 10-K 405, 10-K, 10-KSB 405, 10-KSB, 10-KT, or 10-KT405"
+    first_observed: "1994-07-29"
+    last_observed: "2026-04-13"
+    observed_count: 767
+    representative_cik: "0000044482"
+    representative_accession: "0000950112-94-001999"
+  - form: "NT 10-Q/A"
+    included: false
+    exclusion_class: "late_filing_notification"
+    exclusion_reason: "Notification of inability to timely file Form 10-Q or 10-QSB"
+    is_amendment: true
+    sec_description: "Notification of inability to timely file Form 10-Q or 10-QSB"
+    first_observed: "1994-01-19"
+    last_observed: "2026-05-14"
+    observed_count: 699
+    representative_cik: "0000022872"
+    representative_accession: "0000950124-94-000160"
+  - form: "10SB12B/A"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities for small business [Section 12(b)]"
+    is_amendment: true
+    sec_description: "Registration of securities for small business [Section 12(b)]"
+    first_observed: "1996-10-02"
+    last_observed: "2007-09-28"
+    observed_count: 124
+    representative_cik: "0001016546"
+    representative_accession: "0000912057-96-029962"
+  - form: "10SB12B"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Registration of securities for small business [Section 12(b)]"
+    is_amendment: false
+    sec_description: "Registration of securities for small business [Section 12(b)]"
+    first_observed: "1996-05-10"
+    last_observed: "2008-01-09"
+    observed_count: 119
+    representative_cik: "0000764861"
+    representative_accession: "0000950124-96-002042"
+  - form: "10-C/A"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Change of number of shares outstanding or change of issuer name"
+    is_amendment: true
+    sec_description: "Change of number of shares outstanding or change of issuer name"
+    first_observed: "1994-04-07"
+    last_observed: "1997-05-22"
+    observed_count: 25
+    representative_cik: "0000311100"
+    representative_accession: "0000311100-94-000012"
+  - form: "NT 10-D"
+    included: false
+    exclusion_class: "late_filing_notification"
+    exclusion_reason: "Notification of inability to timely file Form 10-D"
+    is_amendment: false
+    sec_description: "Notification of inability to timely file Form 10-D"
+    first_observed: "2006-04-12"
+    last_observed: "2022-12-09"
+    observed_count: 10
+    representative_cik: "0001346246"
+    representative_accession: "0001162318-06-000630"
+  - form: "NT 10-D/A"
+    included: false
+    exclusion_class: "late_filing_notification"
+    exclusion_reason: "Notification of inability to timely file Form 10-D"
+    is_amendment: true
+    sec_description: "Notification of inability to timely file Form 10-D"
+    first_observed: "2009-03-04"
+    last_observed: "2009-03-04"
+    observed_count: 1
+    representative_cik: "0001394660"
+    representative_accession: "0000903423-09-000196"
+  - form: "10-M"
+    included: false
+    exclusion_class: "registration_or_other"
+    exclusion_reason: "Irrevocable appointment of agent by individual nonresident broker or dealer"
+    is_amendment: false
+    sec_description: "Irrevocable appointment of agent by individual nonresident broker or dealer"
+    first_observed: "2022-05-13"
+    last_observed: "2022-05-13"
+    observed_count: 1
+    representative_cik: "0001892040"
+    representative_accession: "9999999997-22-003033"

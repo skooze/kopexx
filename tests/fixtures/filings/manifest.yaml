@@ -4,8 +4,27 @@
 # retrieved. The extracted fixtures beside this file are derived from exactly these
 # bytes. Re-fetch and compare with: python scripts/build_fixtures.py --verify
 #
-# The raw objects themselves are NOT committed: they are 8.4 MiB for four filings and
-# SEC hosts them authoritatively. They live in var/objects/, which is gitignored.
+# WHAT IS COMMITTED, AND WHAT CHANGED IN SPRINT 4.1.
+#
+# Sprint 3 committed only derived fixtures — the FilingSummary, the report inventory, the
+# table-ownership census — and no raw object, because at 8.4 MiB for four filings the
+# payloads were large and SEC hosts them authoritatively.
+#
+# Sprint 4.1 commits the four PRIMARY DOCUMENTS as well, and nothing else. The reason is
+# that complete-filing extraction cannot be regression-tested without the document body.
+# The coverage ledger's whole purpose is to reconcile against the source material that was
+# actually discovered; a ledger checked against a derived census would be checked against
+# the extractor's own output, which is the vacuity trap this repository has already been
+# bitten by twice — eighteen empty packages that made architecture tests pass while
+# scanning nothing, and a migration range that reported green while generating no SQL.
+#
+# The cost is small: 3.9 MiB raw, roughly 264 KiB after git's zlib compression, against a
+# 512 KiB pack. Every one of the four hashes below was verified byte-for-byte against the
+# committed copy.
+#
+# Still NOT committed: the XBRL packages, extracted instances, and schemas. They are
+# machine evidence, they are large, and no test reads them from the repository.
+# They live in var/objects/, which is gitignored.
 filings:
   - accession: "0000320193-25-000079"
     cik: "0000320193"
@@ -115,3 +134,16 @@ filings:
         size_bytes: 35427
     filing_summary_sha256: "f087d0ffa4b5d06c2f9530864f211d7d3f7b7ffb0d77fb196eaec5a62cc2b326"
     report_count: 45
+  - accession: "0000320193-94-000016"
+    cik: "0000320193"
+    form: "10-K"
+    era: "pem_armored"
+    # PRE-2001 SUBMISSION. There is no primary document and no XBRL. EDGAR does not expose the
+    # individual filed documents of this era as separate objects: the complete submission text
+    # file IS the artifact, and every exhibit it contains lives inside it. Recorded here so the
+    # fixture is hash-verified by the manifest rather than only by a database row.
+    objects:
+      - role: "complete_submission"
+        url: "https://www.sec.gov/Archives/edgar/data/320193/000032019394000016/0000320193-94-000016.txt"
+        sha256: "6da0a5e72359f60ec25cba91adb4c4fdd31ac54d3f7fa2205dc06838b2b38cdb"
+        size_bytes: 240556

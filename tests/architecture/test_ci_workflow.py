@@ -13,6 +13,7 @@ GitHub retires it, the affected steps stop working and the whole suite goes with
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from ruamel.yaml import YAML
@@ -136,22 +137,102 @@ def test_the_workflow_keeps_least_privilege_permissions(workflow: dict) -> None:
         assert "permissions" not in job or job["permissions"] == {"contents": "read"}
 
 
-def test_the_quality_job_keeps_its_database_and_isolation_gate(workflow: dict) -> None:
-    """The gate that stopped the destructive suite reaching the application database.
+def _database_name(url: str) -> str:
+    return urlparse(url.replace("postgresql+psycopg", "postgresql")).path.lstrip("/")
 
-    An action bump must not be the edit that removes it, and the two URLs must stay distinct.
+
+def test_the_quality_job_creates_both_disposable_databases(workflow: dict) -> None:
+    """Two disposable targets, each created explicitly.
+
+    An action bump must not be the edit that removes either one, and a suite whose database is
+    never created fails obscurely at collection rather than saying what is missing.
     """
     quality = workflow["jobs"]["quality"]
     assert "postgres" in quality["services"]
 
     commands = [str(step.get("run", "")) for step in quality["steps"]]
-    assert any("make db-create-test" in c for c in commands)
-    assert any("make db-verify-isolation" in c for c in commands)
+    assert any("make db-create-test" in c for c in commands), "migration target never created"
+    assert any("make db-create-integration" in c for c in commands), (
+        "integration target never created"
+    )
 
-    application = quality["env"]["DATABASE_URL"]
-    disposable = quality["env"]["TEST_DATABASE_URL"]
-    assert application != disposable
-    assert disposable.endswith("/fintek_test")
+
+def test_the_two_disposable_databases_are_distinct(workflow: dict) -> None:
+    """Sharing one target would make the two suites destroy each other.
+
+    The migration round trip runs `downgrade base`. Pointed at the database a persistence test is
+    loading into, it deletes the schema mid-suite — and which suite wins depends on ordering, so
+    the result is intermittent rather than reliably red.
+    """
+    env = workflow["jobs"]["quality"]["env"]
+    migration = _database_name(env["TEST_DATABASE_URL"])
+    integration = _database_name(env["INTEGRATION_TEST_DATABASE_URL"])
+
+    assert migration == "fintek_test"
+    assert integration == "fintek_integration_test"
+    assert migration != integration
+    assert env["TEST_DATABASE_URL"] != env["INTEGRATION_TEST_DATABASE_URL"]
+
+
+def test_ordinary_ci_never_creates_or_uses_an_application_database(workflow: dict) -> None:
+    """No CI step may touch a database named like the application's.
+
+    Checked three ways because any one of them alone is escapable: the service container must not
+    create it, no configured URL may name it, and no step may migrate it. `fintek_test` and
+    `fintek_integration_test` are NOT matches — the comparison is on the parsed database name, not
+    on a substring, so a prefix test cannot produce a false alarm or a false pass.
+    """
+    quality = workflow["jobs"]["quality"]
+
+    assert quality["services"]["postgres"]["env"]["POSTGRES_DB"] != "fintek"
+
+    assert "DATABASE_URL" not in quality["env"], (
+        "DATABASE_URL names the application database and must be absent from ordinary CI"
+    )
+    for variable, url in quality["env"].items():
+        if "postgres" in str(url):
+            assert _database_name(str(url)) != "fintek", (
+                f"{variable} names the application database"
+            )
+
+    commands = [str(step.get("run", "")) for step in quality["steps"]]
+    assert not any("make db-upgrade\n" in c or c.strip() == "make db-upgrade" for c in commands), (
+        "`make db-upgrade` migrates DATABASE_URL, which ordinary CI must never have"
+    )
+
+
+def test_database_identities_are_verified_before_any_test_runs(workflow: dict) -> None:
+    """Order matters. Verifying after the suite proves nothing that has not already happened."""
+    steps = workflow["jobs"]["quality"]["steps"]
+    commands = [str(step.get("run", "")) for step in steps]
+
+    verify = next(i for i, c in enumerate(commands) if "make db-verify-isolation" in c)
+    first_test = next(
+        i
+        for i, c in enumerate(commands)
+        if any(t in c for t in ("make test-unit", "make test-integration", "make test-no-skips"))
+    )
+    assert verify < first_test, "identities are verified only after tests have already run"
+
+    migrate = next(i for i, c in enumerate(commands) if "make db-upgrade-integration" in c)
+    assert verify < migrate, "a migration runs before the target's identity is proven"
+    assert migrate < first_test, "the integration suite runs before its schema exists"
+
+
+def test_each_suite_receives_its_own_database_target(workflow: dict) -> None:
+    """The migration suite gets the migration target; the persistence suites get theirs.
+
+    Both are supplied as job-level environment variables read by one resolver, so local and CI
+    behaviour cannot diverge: there is no CI-only path that resolves a database differently.
+    """
+    env = workflow["jobs"]["quality"]["env"]
+    assert set(env) == {"TEST_DATABASE_URL", "INTEGRATION_TEST_DATABASE_URL"}, (
+        f"unexpected database configuration in ordinary CI: {sorted(env)}"
+    )
+
+    commands = [str(step.get("run", "")) for step in workflow["jobs"]["quality"]["steps"]]
+    assert any("make test-integration" in c for c in commands)
+    assert any("make test-unit" in c for c in commands)
 
 
 def test_the_workflow_runs_the_makefile_rather_than_its_own_commands(workflow: dict) -> None:
