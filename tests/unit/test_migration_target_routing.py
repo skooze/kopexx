@@ -95,16 +95,103 @@ def test_the_test_target_selector_never_falls_back_to_the_application_database()
             migration_target_url()
 
 
-def test_the_test_target_selector_resolves_from_the_env_file_when_configured_there() -> None:
-    """The repository configures `TEST_DATABASE_URL` in `.env`, and that is a legitimate source."""
+def test_the_test_target_selector_resolves_from_the_env_file_when_configured_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An `.env` file is a legitimate configuration source, and the resolver must honour it.
+
+    HERMETIC, AND IT HAD TO BECOME SO. This test previously removed TEST_DATABASE_URL from the
+    environment and then relied on the DEVELOPER'S OWN `.env` to supply it. That file is
+    gitignored, so it exists on every workstation and on no CI runner: the test passed locally
+    and could only ever fail in CI, which is exactly what it did on 062baafc. A test that depends
+    on an untracked file is not testing the resolver, it is testing the machine.
+
+    It now writes its own `.env` under `tmp_path` and points the resolver's REPO_ROOT at it. That
+    is the narrowest seam available and it keeps the maximum amount of production behaviour under
+    test: the real `_from_env_file` parser, the real `test_database_url()`, and the real
+    `migration_target_url()` precedence chain all run. Nothing is stubbed out. The real `.env` is
+    neither read nor referenced.
+    """
+    import packages.persistence.engine as engine_module
+
+    # A credential-bearing fixture URL, so this also proves the credential never escapes. The
+    # password is a literal invented here and protects nothing.
+    fixture_password = "fixture-only-not-a-secret"  # noqa: S105 - a test literal, not a secret
+    env_target = f"postgresql+psycopg://fintek:{fixture_password}@localhost:5432/fintek_test"
+
+    # Only the entry under test, plus one unrelated line to prove the parser selects by key
+    # rather than by position.
+    (tmp_path / ".env").write_text(
+        f"STORAGE_BACKEND=local\nTEST_DATABASE_URL={env_target}\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(engine_module, "REPO_ROOT", tmp_path)
+
     with mock.patch.dict(
         os.environ, {"DATABASE_URL": APPLICATION, "FINTEK_ALEMBIC_TEST_TARGET": "1"}, clear=False
     ):
         os.environ.pop(ALEMBIC_TARGET_ENV, None)
         os.environ.pop("TEST_DATABASE_URL", None)
         resolved = migration_target_url()
-        assert parse_identity(resolved) != parse_identity(APPLICATION)
-        assert "test" in parse_identity(resolved).database
+
+    assert resolved == env_target, "the .env value was not the resolved target"
+    identity = parse_identity(resolved)
+    assert identity.database == "fintek_test"
+    assert identity != parse_identity(APPLICATION), "the application target was selected"
+
+    # The credential is in the URL and must not be in anything a human or a log ever sees.
+    assert fixture_password not in identity.endpoint
+    with pytest.raises(UnsafeTestDatabaseError) as refusal:
+        assert_disposable(f"postgresql://fintek:{fixture_password}@localhost:5432/fintek")
+    assert fixture_password not in str(refusal.value)
+
+
+def test_the_env_file_is_only_consulted_when_the_variable_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented precedence, proven with BOTH sources present and disagreeing.
+
+    The pair of tests above each supply one source. Neither can detect a resolver that reads the
+    file first, because with only one source present both orders give the same answer.
+    """
+    import packages.persistence.engine as engine_module
+
+    from_file = "postgresql+psycopg://fintek@localhost:5432/fintek_file_test"
+    (tmp_path / ".env").write_text(f"TEST_DATABASE_URL={from_file}\n", encoding="utf-8")
+    monkeypatch.setattr(engine_module, "REPO_ROOT", tmp_path)
+
+    with mock.patch.dict(
+        os.environ,
+        {
+            "DATABASE_URL": APPLICATION,
+            "TEST_DATABASE_URL": DISPOSABLE,
+            "FINTEK_ALEMBIC_TEST_TARGET": "1",
+        },
+        clear=False,
+    ):
+        os.environ.pop(ALEMBIC_TARGET_ENV, None)
+        assert migration_target_url() == DISPOSABLE, "the .env file overrode the environment"
+
+
+def test_a_missing_variable_and_a_missing_env_file_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A genuinely unconfigured host, simulated without stubbing the parser out.
+
+    The sibling test above suppresses `_from_env_file` entirely. This one lets the real parser run
+    against a directory that has no `.env` at all, which is what a fresh CI checkout actually is.
+    """
+    import packages.persistence.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "REPO_ROOT", tmp_path)
+    assert not (tmp_path / ".env").exists(), "the fixture directory must have no .env"
+
+    with mock.patch.dict(
+        os.environ, {"DATABASE_URL": APPLICATION, "FINTEK_ALEMBIC_TEST_TARGET": "1"}, clear=False
+    ):
+        os.environ.pop(ALEMBIC_TARGET_ENV, None)
+        os.environ.pop("TEST_DATABASE_URL", None)
+        with pytest.raises(UnsafeTestDatabaseError, match="Refusing to fall back"):
+            migration_target_url()
 
 
 def test_the_ordinary_path_still_resolves_to_the_application_database() -> None:
@@ -189,6 +276,23 @@ def test_a_production_token_is_rejected_even_beside_a_test_token() -> None:
     with (
         mock.patch.dict(os.environ, {"DATABASE_URL": APPLICATION}, clear=False),
         pytest.raises(UnsafeTestDatabaseError, match="production"),
+    ):
+        assert_safe_destructive_target(url, "downgrade base")
+
+
+@pytest.mark.parametrize("name", ["postgres", "template0", "template1"])
+def test_a_cluster_database_is_rejected(name: str) -> None:
+    """A system database belongs to the server, not to this project.
+
+    It would also slip past the test-designation rule for a different reason than a normal
+    mistake does: `postgres` is where a maintenance connection legitimately goes, so a URL
+    naming it looks plausible. Dropping tables in it, or in a template every future database is
+    cloned from, damages the cluster rather than one project.
+    """
+    url = f"postgresql+psycopg://fintek@localhost:5432/{name}"
+    with (
+        mock.patch.dict(os.environ, {"DATABASE_URL": APPLICATION}, clear=False),
+        pytest.raises(UnsafeTestDatabaseError, match="cluster database"),
     ):
         assert_safe_destructive_target(url, "downgrade base")
 
