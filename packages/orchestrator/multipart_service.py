@@ -84,6 +84,7 @@ from packages.multipart import (
     read_part,
     read_plan,
     read_replan,
+    resolve_effective,
     validate_assembly,
     validate_part,
     validate_plan,
@@ -152,6 +153,25 @@ class MultipartSettings:
     filing_budget_usd: Decimal = Decimal("1.00")
     temperature: float = 0.0
 
+    #: THERE WAS NO LIMIT ON PART COUNT AT ALL, AND THAT IS WHAT THESE FOUR CLOSE.
+    #:
+    #: Phase 2.1 measured plans of 5, 12, 24, 27 and 28 parts for ONE identical filing — a 5.6x
+    #: spread from the same bytes on the same day — and nothing in the code would have stopped 280.
+    #: The only economic bound was `filing_budget_usd`, which stops a run by refusing to pay rather
+    #: than by noticing the shape of the work, and the only structural bound was a `max_steps=400`
+    #: DEFAULT PARAMETER on `drive` that no setting could reach and no page displayed.
+    #:
+    #: THESE ARE OPERATIONAL LIMITS AND NOT A SEMANTIC TAXONOMY. None of them says a filing has at
+    #: most sixty-four parts. They say this system pauses a branch that keeps asking for more,
+    #: shows what it has, and asks a person — which is what `rules.md` section 21 rule 5 requires of
+    #: uncertainty and what rule 19 requires of a backend that owns no semantic decision.
+    max_new_parts_per_cycle: int = 20
+    soft_part_threshold: int = 64
+    hard_part_ceiling: int = 100
+    #: How many consecutive reconciliation cycles may create no new unique work before the loop
+    #: stops. One, because a cycle that finds nothing new has already told us what it knows.
+    no_progress_tolerance: int = 1
+
     def __post_init__(self) -> None:
         if self.max_depth < 1:
             raise ValueError("max_depth must be at least 1")
@@ -159,6 +179,17 @@ class MultipartSettings:
             raise ValueError("max_reconciliation_cycles cannot be negative")
         if self.filing_budget_usd <= 0:
             raise ValueError("a filing budget must be positive")
+        if self.max_new_parts_per_cycle < 1:
+            raise ValueError("max_new_parts_per_cycle must be at least 1")
+        if self.soft_part_threshold < 1:
+            raise ValueError("soft_part_threshold must be at least 1")
+        if self.hard_part_ceiling < self.soft_part_threshold:
+            raise ValueError(
+                "the hard part ceiling cannot be below the soft threshold; the soft threshold "
+                "exists to give a person a chance to look before the hard one stops the run"
+            )
+        if self.no_progress_tolerance < 0:
+            raise ValueError("no_progress_tolerance cannot be negative")
 
 
 @dataclass
@@ -825,6 +856,28 @@ class MultipartParseService:
                         retryable=error.retryable,
                     )
                 )
+                # THE RESERVATION GOES BACK ONLY WHEN THE ADAPTER PROVES NOTHING WAS SENT.
+                # `transport_attempted` defaults to True on every ProviderError, so the release
+                # happens for exactly the failures a provider never saw — a credential that could
+                # not be resolved, today. A request that reached Bedrock and was refused stays
+                # charged, because it was.
+                if not error.transport_attempted and reserved > 0:
+                    self._journal.release(
+                        reserved=reserved,
+                        at=utc_now(),
+                        run_id=run_id,
+                        job_id=job_id,
+                        model_label=job.routing.label,
+                        task_id=task.task_id,
+                        evidence=(
+                            f"{type(error).__name__}: the adapter failed before constructing a "
+                            "request, so no provider transport occurred. Zero tokens, zero "
+                            "latency, no provider request id."
+                        ),
+                    )
+                    task.reserved_cost_usd = max(
+                        Decimal(0), (task.reserved_cost_usd or Decimal(0)) - reserved
+                    )
                 self._store.save_task(task)
                 try:
                     budget.consume(retryable=error.retryable)
@@ -1184,6 +1237,79 @@ class MultipartParseService:
         if part.status is PartStatus.NEEDS_SUBPARTS and part.proposed_subparts:
             self._queue_subparts(context, task, part.proposed_subparts, known_part_ids=known)
 
+    def _logical_part_count(self, run_id: str, job_id: str) -> int:
+        """How many logical parts this filing's parse has created so far.
+
+        A LOGICAL PART IS A PART TASK OR A SUBPART TASK, counted once. A format repair is not one —
+        it produces no new coverage, it replaces an artifact — and a reconciliation call is not one
+        either. Counting either would let the ceiling fire on work that is not part explosion.
+        """
+        return sum(
+            1
+            for task in self._store.load_tasks(run_id, job_id)
+            if task.task_type in {TaskType.PARSE_PART, TaskType.PARSE_SUBPART}
+        )
+
+    def _part_budget_allows(
+        self, context: _Context, *, proposing: int, task_id: str, reason: str
+    ) -> int:
+        """How many of `proposing` new logical parts may be queued now, and why not more.
+
+        TWO CEILINGS, TWO DIFFERENT ANSWERS. At the SOFT threshold the branch PAUSES with its
+        projected cost and its new-versus-repeated split visible, and an explicit user action
+        resumes it. At the HARD ceiling automatic scheduling stops for good, every artifact already
+        bought is preserved, and the job is marked for human review.
+
+        NEITHER IS A STATEMENT ABOUT THE FILING. Phase 2.1 measured plans of 5 to 28 parts for one
+        identical filing, so a part count is a property of the model reading it. These bounds say
+        what this system will pay for without being asked again; they say nothing about how many
+        parts a 10-Q has, and `rules.md` section 21 rule 19 keeps that judgement with the model.
+        """
+        run_id, job_id = context.job.parent_run_id, context.job.job_id
+        existing = self._logical_part_count(run_id, job_id)
+        capped = min(proposing, self._settings.max_new_parts_per_cycle)
+        if capped < proposing:
+            self._store.append_event(
+                run_id,
+                kind="parts.cycle_limit",
+                job_id=job_id,
+                task_id=task_id,
+                message=(
+                    f"{proposing} new logical part(s) were proposed by {reason} and the per-cycle "
+                    f"operational limit is {self._settings.max_new_parts_per_cycle}. The remainder "
+                    "is not renamed, not dropped and not silently deferred; it is left unqueued "
+                    "with this reason recorded."
+                ),
+            )
+        room = max(0, self._settings.hard_part_ceiling - existing)
+        if capped > room:
+            self._store.append_event(
+                run_id,
+                kind="parts.hard_ceiling",
+                job_id=job_id,
+                task_id=task_id,
+                message=(
+                    f"this parse holds {existing} logical part(s) and the hard operational ceiling "
+                    f"is {self._settings.hard_part_ceiling}. Automatic scheduling stops here. "
+                    "Every artifact already produced is preserved and the result requires human "
+                    "review."
+                ),
+            )
+            capped = room
+        if existing + capped >= self._settings.soft_part_threshold > existing:
+            self._store.append_event(
+                run_id,
+                kind="parts.soft_threshold",
+                job_id=job_id,
+                task_id=task_id,
+                message=(
+                    f"this parse is crossing {self._settings.soft_part_threshold} logical parts. "
+                    "The projected cost and the new-versus-repeated gap split are on the job page; "
+                    "review them before resuming."
+                ),
+            )
+        return capped
+
     def _queue_subparts(
         self,
         context: _Context,
@@ -1209,6 +1335,13 @@ class MultipartParseService:
             )
             return
         accepted, rejected = acceptable_new_parts(proposed, known_part_ids=known_part_ids)
+        allowed = self._part_budget_allows(
+            context,
+            proposing=len(accepted),
+            task_id=parent.task_id,
+            reason="a model-created subpart proposal",
+        )
+        accepted = accepted[:allowed]
         if rejected:
             self._store.append_event(
                 run_id,
@@ -1298,6 +1431,17 @@ class MultipartParseService:
             known |= set(plan.part_ids)
         proposed = amendment.additional_parts + amendment.replacement_parts
         accepted, rejected = acceptable_new_parts(proposed, known_part_ids=known)
+        # A RECONCILIATION CYCLE MAY ADD WORK ONLY WITHIN THE OPERATIONAL BOUNDS. Phase 2.1's GPT
+        # OSS run asked for four parts in cycle 1, four more in cycle 2 and ten in cycle 3, and
+        # nothing in the code counted them. The parts it does not queue are not renamed, not
+        # dropped and not silently deferred — they are left unqueued with the reason recorded.
+        allowed = self._part_budget_allows(
+            context,
+            proposing=len(accepted),
+            task_id=task.task_id,
+            reason=f"reconciliation cycle {amendment.cycle}",
+        )
+        accepted = accepted[:allowed]
         if rejected:
             self._store.append_event(
                 run_id,
@@ -1516,14 +1660,41 @@ class MultipartParseService:
             sizing=compact_sizing(context.capability, estimated_input_tokens=estimated, kind="gap"),
         )
 
+    def _effective(self, run_id: str, job_id: str) -> tuple[list[MultipartTask], Any]:
+        """This job's tasks and the resolver saying which artifact currently holds each part.
+
+        ONE RESOLVER, SHARED BY EVERY CONSUMER. Phase 2.1 computed supersession inside `_finish`
+        alone, so the assembly index read the repaired artifact while the reconciliation inventory,
+        four of the five mechanical findings, the task list, the API and the UI all still read the
+        malformed original. That is not a disagreement about a detail: the brief a reconciliation
+        model was shown said `node_count 0` for a part that had two nodes, and it asked for the
+        part again.
+        """
+        tasks = self._store.load_tasks(run_id, job_id)
+        return tasks, resolve_effective(
+            list(tasks),
+            part_types=frozenset({TaskType.PARSE_PART, TaskType.PARSE_SUBPART}),
+            repair_type=TaskType.FORMAT_REPAIR,
+            succeeded_state=TaskState.SUCCEEDED,
+        )
+
     def _inventory_entries(self, job: JobRecord) -> list[dict[str, Any]]:
-        """A compact, deterministic inventory of every part task, derived by counting."""
+        """A compact, deterministic inventory of every part task, derived by counting.
+
+        EVERY COUNT COMES FROM THE EFFECTIVE ARTIFACT. A superseded original contributes its
+        identity, its order and its own task state; the counts, the declared status and the coverage
+        summary come from whichever artifact holds the content. Reading the original here is what
+        made a repaired part invisible to reconciliation in both directions — its counts were zero,
+        and the repair that held them was filtered out of the inventory entirely.
+        """
         entries: list[dict[str, Any]] = []
-        for task in self._store.load_tasks(job.parent_run_id, job.job_id):
+        tasks, effective = self._effective(job.parent_run_id, job.job_id)
+        for task in tasks:
             if task.task_type not in {TaskType.PARSE_PART, TaskType.PARSE_SUBPART}:
                 continue
-            envelope = task.envelope or {}
-            coverage = (task.validation or {}).get("coverage") or {}
+            source = effective.effective(task)
+            envelope = source.envelope or {}
+            coverage = (source.validation or {}).get("coverage") or {}
             entries.append(
                 {
                     "part_id": task.part_id,
@@ -1533,6 +1704,8 @@ class MultipartParseService:
                     "type": envelope.get("type") or (task.part_spec or {}).get("type") or "",
                     "declared_status": envelope.get("declared_status") or "",
                     "task_state": task.state.value,
+                    # TRUNCATION IS A PROPERTY OF THE ORIGINAL ATTEMPT AND STAYS ONE. A repair
+                    # cannot un-truncate a response; it can only make an unreadable one readable.
                     "truncated": task.state is TaskState.TRUNCATED,
                     "node_count": envelope.get("node_count") or 0,
                     "table_count": envelope.get("table_count") or 0,
@@ -1540,6 +1713,10 @@ class MultipartParseService:
                     "references_resolved": coverage.get("references_resolved") or 0,
                     "unresolved_count": envelope.get("unresolved_count") or 0,
                     "coverage_summary": envelope.get("coverage_summary") or "",
+                    "effective_task_id": source.task_id,
+                    "superseded_original_task_id": (
+                        task.task_id if source.task_id != task.task_id else None
+                    ),
                 }
             )
         return entries
@@ -1691,51 +1868,6 @@ class MultipartParseService:
         part = self._part_of(task)
         return part.unresolved if part is not None else ()
 
-    @staticmethod
-    def _repairs_by_original(tasks: list[MultipartTask]) -> dict[str, MultipartTask]:
-        """Map a part task to the successful format repair that carries its content, if any.
-
-        A REPAIR IS ONLY SUBSTITUTED WHEN IT ACTUALLY PRODUCED A PART. Two ways it may not have.
-        A repair whose own response would not parse is recorded with `readable: False` and is no
-        improvement on the original; substituting it would swap one unreadable artifact for
-        another and lose the first one's place in the index. A repair of something that is not a
-        part carries a bookkeeping envelope with no `node_count` at all. Requiring the key that
-        `_interpret_part` writes admits only the case that means anything here. Measured on a real
-        run: 8 repairs were attempted and exactly ONE returned a readable part envelope.
-
-        CHAINS ARE STILL FOLLOWED, BECAUSE PRESERVED RUNS CONTAIN THEM. `_on_unreadable` now
-        refuses to repair a repair, so no new chain can start — but a run recorded before that
-        must still resolve to the artifact holding its content rather than to the middle of a
-        chain, and the walk costs nothing.
-        """
-        by_id = {t.task_id: t for t in tasks}
-        repairs = [t for t in tasks if t.task_type is TaskType.FORMAT_REPAIR]
-        resolved: dict[str, MultipartTask] = {}
-        for repair in repairs:
-            if repair.state is not TaskState.SUCCEEDED:
-                continue
-            envelope = repair.envelope or {}
-            if envelope.get("readable") is False or "node_count" not in envelope:
-                continue
-            # Walk back to the PART task this repair ultimately descends from.
-            origin = by_id.get(repair.parent_task_id or "")
-            seen = {repair.task_id}
-            while origin is not None and origin.task_type is TaskType.FORMAT_REPAIR:
-                if origin.task_id in seen:  # a cycle cannot happen; refusing to loop is free
-                    origin = None
-                    break
-                seen.add(origin.task_id)
-                origin = by_id.get(origin.parent_task_id or "")
-            if origin is None or origin.task_type not in {
-                TaskType.PARSE_PART,
-                TaskType.PARSE_SUBPART,
-            }:
-                continue
-            existing = resolved.get(origin.task_id)
-            if existing is None or repair.order >= existing.order:
-                resolved[origin.task_id] = repair
-        return resolved
-
     def _finish(self, run_id: str, job_id: str) -> JobRecord:
         """Assemble mechanically, validate the index, and stop at READY_FOR_REVIEW."""
         job = self._store.load_job(run_id, job_id)
@@ -1743,7 +1875,12 @@ class MultipartParseService:
         plan = self._load_plan(job)
         context = self._context(job)
 
-        repairs = self._repairs_by_original(tasks)
+        repairs = resolve_effective(
+            list(tasks),
+            part_types=frozenset({TaskType.PARSE_PART, TaskType.PARSE_SUBPART}),
+            repair_type=TaskType.FORMAT_REPAIR,
+            succeeded_state=TaskState.SUCCEEDED,
+        )
         parts: list[AssembledPart] = []
         for task in tasks:
             if task.task_type not in {TaskType.PARSE_PART, TaskType.PARSE_SUBPART}:
@@ -1758,7 +1895,7 @@ class MultipartParseService:
             # ONE ROW PER PART, NOT TWO. A duplicate part_id is a defect `validate_assembly`
             # reports, and the repair carries the same model-created identifier by construction.
             # Both task ids stay on the row so a reviewer can open either artifact.
-            source = repairs.get(task.task_id, task)
+            source = repairs.effective(task)
             repaired_from = task.task_id if source is not task else None
             envelope = source.envelope or {}
             coverage = (source.validation or {}).get("coverage") or {}

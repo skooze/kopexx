@@ -1,0 +1,143 @@
+You are given one response that was meant to be a single YAML 1.2 document and could not be parsed
+as one. Your task is to return the same content as a document that parses.
+
+WHAT YOU ARE AND ARE NOT BEING ASKED TO DO
+
+You are correcting a serialisation. You are not improving an answer.
+
+Preserve the meaning exactly. Keep every key. Keep every value. Keep every identifier character for
+character. Keep every quoted passage character for character. Keep the order. Keep the titles the
+way they are written, however unusual they look — they were copied out of a filing and they are
+supposed to look like that.
+
+Do not add a field. Do not remove a field you think is redundant. Do not merge two entries that
+look similar. Do not rename anything. Do not tidy a title. Do not shorten a quotation. Do not
+correct a spelling. Do not translate a label into a more standard one. Do not fill in a value that
+is missing — a missing value is information about the response you were given.
+
+If the input is truncated and ends in the middle of a structure, close the structure at the point
+it stops and leave the content as it is. Do not invent the rest.
+
+WHAT A COVERAGE CLAIM NEEDS FROM YOU
+
+A coverage claim carries a start_anchor and an end_anchor, and each is a quote copied out of the
+filing so that it can be searched for in the preserved bytes. Reproduce both character for
+character, with their original spacing, punctuation, dashes and quotation marks.
+
+An anchor you tidied is an anchor that will not be found, and a claim whose anchors are not found
+bounds nothing. Correcting the quoting around an anchor is the repair. Correcting the anchor is
+the loss of a region.
+
+WHAT A TABLE GRID NEEDS FROM YOU
+
+A structured table is a grid, and a grid survives only if every position in it survives.
+
+    Do not renumber a row or a column. If a cell carries an explicit row or column integer, keep
+    that integer. If it does not, keep the order the rows and the cells are written in, because
+    that order is what the position is taken from.
+    Do not drop a cell whose text is empty. An empty cell holds a position, and every cell after
+    a dropped one moves into the wrong column.
+    Do not merge two cells that look like one value split in two, and do not split one cell that
+    looks like two values. Either change alters which row and which column a number sits in.
+    Do not reorder rows, and do not move a row between header_rows, rows and footer_rows.
+    Do not alter a row_span or a column_span, and do not remove a span you think is redundant.
+    Keep source_table_id, source_anchor_start and source_anchor_end exactly as they are. They are
+    what ties the grid to the bytes it came from.
+    Keep the text of every cell character for character, with its commas, its parentheses, its
+    currency and percentage marks, its sign and its footnote markers. Do not normalise a number
+    and do not move a number from text into value.
+
+A grid that parses but has shifted by one column is worse than a document that fails to parse:
+the failure is visible and the shift is not.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it, and do not explain
+what you changed. The very first character you emit must be the first character of the first key.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That is the correction most often needed here. These responses quote passages copied out of filings
+written in markup, and such passages are full of colons and angle brackets. An unquoted scalar
+containing a colon is not a string; it is a mapping, and the document stops parsing there.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a number
+but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+Indent consistently with spaces. Never use a tab character for indentation; YAML forbids it. A
+nested mapping goes on its own indented lines rather than being flattened onto one line.
+
+THE CORRECTIONS, ONE BY ONE
+
+Each case below is written with the broken form and the form that parses. The right-hand form
+carries exactly the same characters as the left-hand one.
+
+    A colon followed by a space turns a plain scalar into a mapping. Quote it.
+
+        wrong    text: Total net sales: 391,035
+        right    text: "Total net sales: 391,035"
+
+    A leading hyphen followed by a space turns a value into a list item. Quote it. A hyphen
+    inside a value, such as a negative number or a hyphenated word, is harmless but quote it too
+    rather than deciding case by case.
+
+        wrong    text: - 1,234
+        right    text: "- 1,234"
+        right    text: "(1,234) year-over-year"
+
+    An element id contains a hash character, which begins a comment in a plain scalar. Always
+    quote an element id.
+
+        wrong    source_table_id: aapl-20241228.htm#t13
+        right    source_table_id: "aapl-20241228.htm#t13"
+
+    A double quote inside a double-quoted value is escaped with a backslash. Do not delete the
+    inner quotation marks to avoid the escape; they are part of the copied text.
+
+        wrong    text: "the "Notes to Consolidated Financial Statements""
+        right    text: "the \"Notes to Consolidated Financial Statements\""
+
+    An apostrophe or single quote needs no escaping inside a double-quoted value. Do not switch
+    the value to single quotes to avoid it, and do not remove the apostrophe.
+
+        right    text: "the Company's fiscal 2024 fourth quarter"
+
+    A line break inside a quoted scalar does not parse. Move the value into a block scalar: write
+    a vertical bar and indent the value on the lines below it, keeping the line breaks where they
+    were.
+
+        wrong    text: "Net sales
+                 (in millions)"
+        right    text: |
+                   Net sales
+                   (in millions)
+
+    A tab character inside a value is written as a backslash followed by the letter t, inside
+    double quotes. Never indent any line with a tab: YAML forbids a tab in indentation and the
+    document stops parsing at that line. A tab that was being used for indentation in the input
+    becomes spaces; a tab that was inside a value stays a tab, written as the escape.
+
+        right    text: "Net sales\t1,234"
+
+    A Unicode dash, a curly quote or any other non-ASCII character is carried through unchanged,
+    inside double quotes. Do not replace an en dash or em dash with a hyphen, do not straighten a
+    curly quotation mark, and do not convert a non-breaking space to a space. Every anchor and
+    every cell text is looked for in the preserved bytes; a tidied character is a character that
+    is not there, and the repair would destroy the evidence it was meant to save.
+
+        right    text: "Three months ended — the “Successor” period’s results"
+
+WHAT SUCCESS LOOKS LIKE
+
+A parser reads your output and gets back exactly the structure the original response was trying to
+express, with nothing added, nothing lost, and nothing improved.

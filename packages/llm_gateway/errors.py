@@ -42,12 +42,49 @@ class YamlParseError(LlmGatewayError):
 
 
 class ProviderError(LlmGatewayError):
-    """A model provider failed."""
+    """A model provider failed.
 
-    def __init__(self, message: str, *, retryable: bool, provider: str) -> None:
+    `transport_attempted` IS A BILLING FACT AND THAT IS WHY IT IS ON THE ERROR. A request that
+    reached a provider is charged whatever it returned; a request that never left this machine was
+    never charged by anybody. Phase 2.1 could not tell those apart — a credential failure and a
+    service-side validation refusal both produce zero tokens, zero latency and no request id — so
+    eleven reservations totalling USD 0.22590990 were held against the cumulative ceiling for calls
+    no provider ever saw.
+
+    IT DEFAULTS TO `True`, AND THE ASYMMETRY IS THE REASON. Assuming a request was sent when it was
+    not holds ceiling that could have been released: conservative, and wrong in the safe direction.
+    Assuming it was not sent when it was releases ceiling for money that was actually spent, which
+    is how a run walks past its authorization. An adapter that does not know says so by saying
+    nothing.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool,
+        provider: str,
+        transport_attempted: bool = True,
+    ) -> None:
         self.retryable = retryable
         self.provider = provider
+        self.transport_attempted = transport_attempted
         super().__init__(message)
+
+
+class CredentialResolutionError(ProviderError):
+    """Credentials could not be resolved, so nothing was ever sent.
+
+    A SEPARATE TYPE RATHER THAN A FLAG ON A GENERIC ERROR, because the caller that releases a
+    reservation has to be able to name the exact condition it is releasing for, and `except
+    CredentialResolutionError` is a narrower claim than reading a boolean off anything that failed.
+
+    It is never retryable. An expired federated session does not become valid by being asked twice,
+    and Phase 2.1 measured eleven consecutive failures of exactly that kind inside four minutes.
+    """
+
+    def __init__(self, message: str, *, provider: str) -> None:
+        super().__init__(message, retryable=False, provider=provider, transport_attempted=False)
 
 
 class NativeToolUseProhibitedError(LlmGatewayError):

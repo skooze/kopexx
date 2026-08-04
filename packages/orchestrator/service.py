@@ -74,6 +74,7 @@ from packages.model_catalog import (
     selector_entries,
 )
 from packages.prompt_registry import PromptRegistry
+from packages.source_inventory import FilingInventory, build_inventory
 from packages.source_transport import (
     MemberDisposition,
     SourceSet,
@@ -184,6 +185,23 @@ class RunRequest:
             summary=self.summary_label or None,
             analysis=self.analysis_label or None,
         )
+
+
+@dataclass(frozen=True)
+class InventoriedFiling:
+    """One preserved filing, its assembled source set, and the mechanical inventory of its bytes.
+
+    The three travel together because the completeness review surface needs all three at once: the
+    catalog record names the filing, the source set holds the decoded member text a source slice is
+    cut from, and the inventory is the DENOMINATOR every classification is recorded against.
+
+    NOTHING HERE WAS SENT TO A MODEL. Building an inventory issues no provider request and costs
+    nothing. It is a measurement of the preserved bytes, taken before any parse exists.
+    """
+
+    filing: FilingRecord
+    source_set: SourceSet
+    inventory: FilingInventory
 
 
 @dataclass
@@ -308,6 +326,11 @@ class ParserReviewService:
         self._region = preferred_region
         self._author = author
         self._multipart_settings = multipart_settings or MultipartSettings()
+        #: (cik, accession) -> (source set identity, inventory). Keyed on the identity rather than
+        #: on the accession alone: a member acquired between two page loads produces a different
+        #: source set from the same accession, and serving the earlier inventory would give the
+        #: review surface a denominator that no longer describes the bytes on disk.
+        self._inventories: dict[tuple[str, str], tuple[str, FilingInventory]] = {}
         self._multipart = MultipartParseService(
             store=store,
             snapshot=snapshot,
@@ -396,6 +419,43 @@ class ParserReviewService:
                 for role in ModelRole
             },
         }
+
+    # --- the mechanical inventory of one preserved filing -----------------------------------------
+
+    def inventoried_filing(self, cik: str, accession: str) -> InventoriedFiling | None:
+        """Assemble one filing's source set and measure it. None when the catalog does not hold it.
+
+        NO MODEL IS INVOLVED AND NOTHING IS SPENT. `packages/source_inventory` counts members,
+        visible text spans, table elements and images from the preserved bytes; that is the
+        denominator Phase 2.1 lacked, and it is available before any parse exists.
+
+        THE WALK IS MEMOISED AND THE ASSEMBLY IS NOT. Measured on Apple's 10-Q, walking 915,890
+        characters of markup takes roughly 0.4 seconds and a review surface re-renders it on every
+        page load, per member, per pagination step. Re-assembling the source set each time is what
+        makes the memo safe: the assembly is what notices that a member moved, and its identity is
+        the cache key.
+        """
+        filing = self._catalog.filing(cik, accession)
+        if filing is None:
+            return None
+        source_set = assemble_source_set(
+            self._inventory,
+            self._fetcher,
+            cik=filing.cik,
+            accession=filing.accession,
+            form_as_filed=filing.form_as_filed,
+            filing_date=filing.filing_date,
+            issuer_label=filing.issuer_label,
+            transport_era=filing.transport_era,
+            report_period=filing.report_period,
+        )
+        key = (filing.cik, filing.accession)
+        cached = self._inventories.get(key)
+        if cached is not None and cached[0] == source_set.source_set_id:
+            return InventoriedFiling(filing=filing, source_set=source_set, inventory=cached[1])
+        inventory = build_inventory(source_set)
+        self._inventories[key] = (source_set.source_set_id, inventory)
+        return InventoriedFiling(filing=filing, source_set=source_set, inventory=inventory)
 
     # --- preflight -------------------------------------------------------------------------------
 

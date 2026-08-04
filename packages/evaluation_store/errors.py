@@ -42,6 +42,22 @@ class RecordFormatError(EvaluationStoreError):
     """
 
 
+class BenchmarkTruthVersionExistsError(EvaluationStoreError):
+    """A benchmark-truth version is already on disk under that filing.
+
+    The truth document is SUPERSEDED, NEVER OVERWRITTEN — `rules.md` invariant 7 — so writing
+    version 4 over a stored version 4 is refused rather than accepted. The defect it prevents is
+    concrete: a completeness figure computed against version 3 means nothing if version 3 can be
+    edited under its own name, and two reviewers classifying the same filing in two browser tabs
+    both read version 3 and both write version 4.
+
+    THIS IS A CHECK BEFORE A WRITE AND NOT A LOCK. The object store offers no compare-and-swap, so
+    the window between the check and the rename is narrowed rather than closed. What it does
+    guarantee is that the losing write is REPORTED — the reviewer is told to reload and re-record —
+    instead of a judgement disappearing in silence.
+    """
+
+
 class IllegalTransitionError(EvaluationStoreError):
     """A state change is not permitted from the current state.
 

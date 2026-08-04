@@ -35,7 +35,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from ..errors import ProviderError
+from ..errors import CredentialResolutionError, ProviderError
 from .base import ModelProvider, ModelRequest, ModelResponse
 
 #: Provider error codes that describe a transient condition. Everything else is permanent.
@@ -54,6 +54,33 @@ RETRYABLE_ERROR_CODES: frozenset[str] = frozenset(
         "InternalServerException",
         "RequestTimeout",
         "RequestTimeoutException",
+    }
+)
+
+#: SDK exceptions raised while RESOLVING AN IDENTITY, before any request is constructed or sent.
+#:
+#: MEASURED, AND THE REASON THIS SET EXISTS. Phase 2.1 lost an AWS IAM Identity Center session
+#: mid-run at 2026-08-04T02:18:20Z. Eleven subsequent attempts failed with `TokenRetrievalError:
+#: Token has expired and refresh failed`, every one with zero input tokens, zero output tokens,
+#: zero latency and no provider request id — and every one held its full worst-case reservation
+#: against the cumulative ceiling, because nothing could prove the request had never been sent.
+#: USD 0.22590990 of authorization, held for calls no provider ever saw.
+#:
+#: NONE OF THESE IS RETRYABLE. An expired federated session does not become valid by being asked
+#: twice, and the eleven failures above happened inside four minutes.
+CREDENTIAL_EXCEPTION_NAMES: frozenset[str] = frozenset(
+    {
+        "TokenRetrievalError",
+        "UnauthorizedSSOTokenError",
+        "SSOTokenLoadError",
+        "SSOError",
+        "NoCredentialsError",
+        "PartialCredentialsError",
+        "CredentialRetrievalError",
+        "InvalidConfigError",
+        "ProfileNotFound",
+        "TokenProviderNotSupportedError",
+        "RefreshWithMFAUnsupportedError",
     }
 )
 
@@ -316,6 +343,17 @@ class BedrockProvider(ModelProvider):
         try:
             payload = client.converse(**arguments)
         except Exception as error:  # normalised, never leaked as a provider-specific type
+            # A CREDENTIAL FAILURE IS A DIFFERENT FACT FROM A PROVIDER REFUSAL, and the difference
+            # is worth money. Both arrive here with zero tokens and no request id; only one of them
+            # means a request was actually issued. Naming the identity failures explicitly is what
+            # lets the spend journal release a reservation it can PROVE was never spent.
+            if type(error).__name__ in CREDENTIAL_EXCEPTION_NAMES:
+                raise CredentialResolutionError(
+                    f"bedrock could not resolve an identity for {request.model_id!r} in "
+                    f"{request.region or 'an unset region'}: {type(error).__name__}: {error}. "
+                    "No request was constructed and nothing was sent.",
+                    provider=self.name,
+                ) from error
             raise ProviderError(
                 f"bedrock refused the invocation of {request.model_id!r} in "
                 f"{request.region or 'an unset region'}: {type(error).__name__}: {error}",

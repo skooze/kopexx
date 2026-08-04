@@ -1,0 +1,182 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, the plan you produced for parsing it, one
+part of that plan, and the exact partial response an earlier attempt at that part produced before
+it ran out of output room.
+
+Your task is to divide that one part into subparts, each small enough to finish.
+
+WHAT HAPPENED
+
+An earlier call was asked for this part. It began producing content and reached the output limit
+before finishing. The response was stopped mid-way by the limit, not by you.
+
+That partial response is shown to you as evidence of where the attempt got to. It is NOT being
+continued. Nothing you write will be joined to it, and it will not be treated as part of the
+finished parse unless a later complete response covers the same material properly. You do not have
+to resume it, avoid repeating it, or work out exactly which character it stopped on.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. You also receive a REPLANNING BRIEF stating the
+plan, the part that truncated, what you originally said that part would contain, the output limit
+of the attempt that failed, the size each subpart should now aim for, and whether your reasoning
+content consumes the same allowance as your answer.
+
+The brief also lists the table elements and the images that the original part was expected to
+account for. They divide among the subparts along with the material itself.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it. The very first
+character you emit must be the letter p, from the word parse_plan_id, which is the first key of the
+document.
+
+Wrap a value in double quotes whenever it contains a colon, a hash, an angle bracket, a leading
+dash or bracket, a line break, or leading or trailing spaces, and escape any double quote inside it
+as a backslash followed by a double quote. When in doubt, quote it. Quote every identifier and
+every date.
+
+SERIALIZING WHAT YOU COPIED
+
+Titles come out of the filing and table element ids contain a hash character, so this document
+carries copied text even though it carries no parsed content. Each case below is written with the
+form that parses.
+
+    A colon followed by a space turns a plain scalar into a mapping. Quote it.
+
+        wrong    title: Item 8: Financial Statements
+        right    title: "Item 8: Financial Statements"
+
+    A leading hyphen followed by a space turns a value into a list item. Quote it. A hyphen
+    inside a value is harmless but quote it too rather than deciding case by case.
+
+        wrong    title: - Signatures
+        right    title: "- Signatures"
+        right    title: "Ten-year summary"
+
+    An element id contains a hash character, which begins a comment in a plain scalar. Always
+    quote an element id.
+
+        wrong    source_table_id: aapl-20241228.htm#t13
+        right    source_table_id: "aapl-20241228.htm#t13"
+
+    A double quote inside a double-quoted value is escaped with a backslash.
+
+        right    title: "the \"Notes to Consolidated Financial Statements\""
+
+    An apostrophe or single quote needs no escaping inside a double-quoted value. Do not switch
+    the value to single quotes to avoid it.
+
+        right    title: "the Company's fiscal 2024 fourth quarter"
+
+    A line break inside a value goes in a block scalar, never inside a quoted scalar. Write a
+    vertical bar and indent the value on the lines below it.
+
+        right    purpose: |
+                   The consolidated statements of operations
+                   and the notes attached to them
+
+    A tab character inside a value is written as a backslash followed by the letter t, inside
+    double quotes. Never indent any line of your response with a tab: YAML forbids a tab in
+    indentation and the document stops parsing at that line.
+
+        right    title: "Net sales\tby segment"
+
+    A Unicode dash, a curly quote or any other non-ASCII character is copied through unchanged,
+    inside double quotes. Do not replace an en dash or em dash with a hyphen, do not straighten a
+    curly quotation mark, and do not convert a non-breaking space to a space. Titles are compared
+    to the preserved bytes; a tidied character is a character that is not there.
+
+        right    title: "Three months ended — the “Successor” period"
+
+THE DOCUMENT
+
+parse_plan_id
+    the identifier of the plan, copied exactly, quoted
+
+part_id
+    the identifier of the part that truncated, copied exactly, quoted
+
+covered_before_truncation
+    a list of what the truncated attempt appears to have reached, each with a short description.
+    This is your reading of a response that was cut off. It is recorded as your reading and is not
+    treated as coverage: only material a later complete response produces, with source references
+    that resolve in the filing, counts.
+
+remaining
+    a list of what the truncated attempt did not reach, each with a short description
+
+proposed_subparts
+    an ordered list that divides the ORIGINAL part completely — not merely the remaining half.
+    Each entry has
+      part_id      a short identifier you choose, unique, quoted, and different from every
+                   part_id already in the plan
+      order        an integer
+      title        what the filing calls that material
+      type         what kind of material it is
+      purpose      one sentence on what that subpart will contain
+      expected_coverage
+                   a list, one entry per source filename this subpart will draw on, each with
+                     member   the filename exactly as the SOURCE ARTIFACT line gives it
+                     region   one phrase saying which stretch of that member this subpart covers,
+                              in the filing's own words
+      expected_table_elements
+                   a list of the element ids this subpart will account for, each id quoted
+      expected_images
+                   a list of the image filenames this subpart will account for
+
+unassigned_table_elements
+    a list of element ids from the original part that you cannot place in any subpart, each with
+    the id and your reason
+
+unassigned_images
+    a list of image filenames from the original part that you cannot place in any subpart, each
+    with the filename and your reason
+
+overlap_risk
+    one or two sentences on where these subparts risk covering the same material twice, and how
+    you have drawn the boundaries to avoid it
+
+uncertainty
+    a list of anything about this division you are unsure of, each with a short description
+
+metadata
+    anything else worth recording
+
+WHY THE SUBPARTS MUST COVER THE WHOLE PART
+
+The truncated attempt is evidence, not output. Dividing only the material it did not reach would
+leave the first half of the part covered by nothing, because that partial response is not going to
+be used as a parse.
+
+So divide the whole of the original part. Each subpart will be requested as its own call, with this
+same complete filing in front of you again, and each will be expected to produce its material in
+full.
+
+THE TABLE ELEMENTS AND THE IMAGES DIVIDE TOO
+
+Every table element and every image the brief lists against the original part must land in exactly
+one subpart's expected_table_elements or expected_images, or in unassigned_table_elements or
+unassigned_images with your reason. An element that lands nowhere is an element nobody will be
+asked about, and the record that results cannot distinguish it from a table that was overlooked.
+
+Put a table element in the subpart that will be reading the numbers in it, and keep the two halves
+of a table the source splits across a page break in the same subpart where you can.
+
+SIZE THEM SO THEY FIT
+
+You now know something you did not know before: this part is larger than one response. Use the
+size you were given and divide accordingly. Two subparts that each overflow again is a worse answer
+than four that do not.
+
+Weigh the tables when you divide. A structured grid of cells is far larger in a response than a
+paragraph describing the same numbers, and a part that truncated with several large table elements
+in it will truncate again if the elements are not separated.
+
+Do not return parsed content here. Do not reproduce a table, quote passages at length, or describe
+what a section says. This call returns a division of work. Naming an element id is not reproducing
+a table; the cells are the next call's work.

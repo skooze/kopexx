@@ -30,9 +30,11 @@ from pathlib import Path
 from typing import Any
 
 from packages.llm_gateway import parse_yaml, require_mapping, to_yaml
+from packages.sec_identity import accession_dashed, cik_padded
 from packages.storage import FilesystemObjectStore, ObjectStore
 
 from .errors import (
+    BenchmarkTruthVersionExistsError,
     IllegalTransitionError,
     JobNotFoundError,
     RunNotFoundError,
@@ -75,6 +77,18 @@ from .tasks import MultipartTask
 _EVIDENCE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
 _RUNS = "runs"
+
+#: Human benchmark-truth documents, keyed by FILING rather than by run.
+#:
+#: WHY NOT UNDER A RUN. A reviewer's classification of Apple's inventory is evidence about ONE
+#: FILING at one source hash. It outlives every run against it, it is what a second run is measured
+#: against, and filing it under the first run that happened to exist would make the denominator of
+#: a benchmark depend on which run was created first.
+_BENCHMARKS = "benchmarks"
+
+#: `truth-0007.yaml`. Four digits is a display width, not a limit: the pattern accepts more, and
+#: sorting is done on the parsed integer so a five-digit version never sorts below a four-digit one.
+_TRUTH_VERSION = re.compile(r"^truth-(\d+)\.yaml$")
 
 
 class EvaluationStore:
@@ -137,6 +151,27 @@ class EvaluationStore:
     @staticmethod
     def _assembly_key(run_id: str, job_id: str) -> str:
         return f"{_RUNS}/{require_run_id(run_id)}/jobs/{require_job_id(job_id)}/assembly.yaml"
+
+    @staticmethod
+    def _benchmark_prefix(cik: str, accession: str) -> str:
+        """SECURITY-INVARIANT: the two path segments are NORMALISED SEC identities, not free text.
+
+        `cik_padded` and `accession_dashed` accept a ten-digit CIK and a dashed accession and refuse
+        everything else, so `..` and `/` never reach a storage key. They are also the single home
+        for that normalisation — rules.md section 5 — which is why this does not pad or hyphenate
+        anything itself.
+        """
+        return f"{_BENCHMARKS}/{cik_padded(cik)}/{accession_dashed(accession)}/"
+
+    @classmethod
+    def _benchmark_truth_key(cls, cik: str, accession: str, version: int) -> str:
+        if version < 1:
+            raise ValueError(
+                f"benchmark truth version {version} is not storable. Version 0 is the derived "
+                "document a filing starts from — mechanical suggestions and nothing accepted — and "
+                "writing it would make an unreviewed filing indistinguishable from a reviewed one."
+            )
+        return f"{cls._benchmark_prefix(cik, accession)}truth-{version:04d}.yaml"
 
     # --- parent runs ---------------------------------------------------------------------------
 
@@ -411,6 +446,57 @@ class EvaluationStore:
 
     def load_assembly(self, run_id: str, job_id: str) -> dict[str, Any] | None:
         key = self._assembly_key(run_id, job_id)
+        if not self._objects.exists(key):
+            return None
+        return require_mapping(parse_yaml(self._objects.get_text(key)))
+
+    # --- the human benchmark truth for one filing ------------------------------------------------
+
+    def save_benchmark_truth(self, document: dict[str, Any]) -> str:
+        """Write one benchmark-truth version and return its key. Never overwrites a stored one.
+
+        The document is an opaque mapping, exactly like a source set or a validation result: this
+        store does not import `packages/completeness` and holds no opinion about what a
+        classification means. It knows that the record belongs to one filing, that it carries a
+        version, and that a version already on disk is not writable.
+        """
+        version = int(document.get("version") or 0)
+        key = self._benchmark_truth_key(
+            str(document.get("cik") or ""), str(document.get("accession") or ""), version
+        )
+        if self._objects.exists(key):
+            raise BenchmarkTruthVersionExistsError(
+                f"benchmark truth version {version} is already stored for this filing. It is "
+                "superseded, never overwritten: reload the current version and record the "
+                "judgement against it."
+            )
+        self._objects.put_text(key, to_yaml(document), content_type="application/yaml")
+        return key
+
+    def benchmark_truth_versions(self, cik: str, accession: str) -> list[int]:
+        """Every stored version for one filing, ascending. Superseded documents stay readable."""
+        prefix = self._benchmark_prefix(cik, accession)
+        versions = []
+        for key in self._objects.list_keys(prefix):
+            found = _TRUTH_VERSION.match(key[len(prefix) :])
+            if found:
+                versions.append(int(found.group(1)))
+        return sorted(versions)
+
+    def load_benchmark_truth(
+        self, cik: str, accession: str, *, version: int | None = None
+    ) -> dict[str, Any] | None:
+        """One stored truth document — the newest by default — or None when none exists.
+
+        None means "no person has classified this filing yet", which is a real and common state
+        and is NOT an error. The caller derives the mechanical suggestions instead.
+        """
+        if version is None:
+            stored = self.benchmark_truth_versions(cik, accession)
+            if not stored:
+                return None
+            version = stored[-1]
+        key = self._benchmark_truth_key(cik, accession, version)
         if not self._objects.exists(key):
             return None
         return require_mapping(parse_yaml(self._objects.get_text(key)))

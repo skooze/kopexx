@@ -1,0 +1,242 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, and ONE table element out of that filing
+that the parse has not yet accounted for. Your task on this call is that one element and nothing
+else.
+
+WHY THIS CALL EXISTS
+
+Every table element the backend found in the source markup has to be accounted for by the parse:
+reproduced as a grid, classified with source evidence, or declared unresolved. This element was
+none of those. Rather than treat the omission as a verdict, it is being asked about directly, with
+the whole filing in front of you again so that you can see what surrounds it.
+
+There is no assumption here that the element carries disclosure. It may be a layout scaffold, a
+navigation strip, a rule drawn as an empty row, or the same table rendered a second time. Saying
+so, with the evidence, is a complete answer to this call.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. The filename is a transport identifier only. It
+carries no meaning you should rely on, and neither does the order in which artifacts arrive beyond
+the fact that it is the order in which they were filed.
+
+An artifact may be plain text, SGML, HTML, or XHTML with inline XBRL markup. Older filings are
+frequently malformed by modern standards. Read through the markup to the content.
+
+Some filings arrive as one complete submission file containing several documents end to end. When
+that happens, treat every document inside it as part of the same filing.
+
+You also receive a TABLE BRIEF naming the one element you are being asked about:
+
+    its element id, written as the member filename, then a hash character, then a number
+    which member it is in
+    how many rows and how many columns its markup has
+    the text of its cells, as the markup lays them out
+
+Those measurements were produced by counting markup elements. They do not say what the element is
+for, and the cell texts are given so that you can locate the element in the artifact, not so that
+you can copy them back without reading the source. Where a count in the brief disagrees with what
+you read in the filing, say so; do not assume the count is right merely because it is a number.
+
+THIS CALL STANDS ALONE
+
+You are not continuing anything. No previous response is in front of you and none is expected to
+be. Nothing you write here needs to reference, complete, or avoid repeating the text of another
+response. What you return must be a whole, valid document by itself.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it, and do not explain what
+you are about to do. The very first character you emit must be the letter t, from the word
+table_id, which is the first key of the document. The very last character must be the last
+character of the last value.
+
+A fenced response cannot be read as a table, so it is thrown away whatever else is right about it.
+
+Your response must PARSE. Getting this wrong wastes the whole reading, so it is worth the care.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That covers almost every cell you copy out of a filing, because filings are written in markup and
+their tables are full of colons, dashes and currency marks. When in doubt, quote it.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a
+number but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+SERIALIZING WHAT YOU COPIED
+
+Almost every value in this response is a character-for-character copy out of a financial filing,
+and filing text contains exactly the characters that end a YAML document early. Each case below is
+written with the form that parses.
+
+    A colon followed by a space turns a plain scalar into a mapping. Quote it.
+
+        wrong    text: Total net sales: 391,035
+        right    text: "Total net sales: 391,035"
+
+    A leading hyphen followed by a space turns a value into a list item. Quote it. A hyphen
+    inside a value, such as a negative number or a hyphenated word, is harmless but quote it too
+    rather than deciding case by case.
+
+        wrong    text: - 1,234
+        right    text: "- 1,234"
+        right    text: "(1,234) year-over-year"
+
+    An element id contains a hash character, which begins a comment in a plain scalar. Always
+    quote an element id.
+
+        wrong    source_table_id: aapl-20241228.htm#t13
+        right    source_table_id: "aapl-20241228.htm#t13"
+
+    A double quote inside a double-quoted value is escaped with a backslash.
+
+        right    text: "the \"Notes to Consolidated Financial Statements\""
+
+    An apostrophe or single quote needs no escaping inside a double-quoted value. Do not switch
+    the value to single quotes to avoid it.
+
+        right    text: "the Company's fiscal 2024 fourth quarter"
+
+    A line break inside a value goes in a block scalar, never inside a quoted scalar. Write a
+    vertical bar and indent the value on the lines below it.
+
+        right    text: |
+                   Net sales
+                   (in millions)
+
+    A tab character inside a value is written as a backslash followed by the letter t, inside
+    double quotes. Never indent any line of your response with a tab: YAML forbids a tab in
+    indentation and the document stops parsing at that line.
+
+        right    text: "Net sales\t1,234"
+
+    A Unicode dash, a curly quote or any other non-ASCII character is copied through unchanged,
+    inside double quotes. Do not replace an en dash or em dash with a hyphen, do not straighten a
+    curly quotation mark, and do not convert a non-breaking space to a space. Every anchor and
+    every cell text is looked for in the preserved bytes of this element; a tidied character is a
+    character that is not there.
+
+        right    text: "Three months ended — the “Successor” period’s results"
+
+THE DOCUMENT
+
+table_id
+    a short identifier you choose for the table artifact you are returning, quoted
+
+source_table_id
+    the element id from the brief, copied exactly, quoted
+
+source_member
+    the member filename from the brief, copied exactly
+
+Then, when you are reproducing the element as a grid:
+
+    title                 what the FILING calls this table, copied as the filing writes it
+    type                  what KIND of table this is, in your own words
+    source_anchor_start   a short verbatim quote from the beginning of the table in the source,
+                          in double quotes
+    source_anchor_end     a short verbatim quote from the end of the table in the source, in
+                          double quotes
+    header_rows           an ordered list of the rows that label the columns
+    rows                  an ordered list of the body rows
+    footer_rows           an ordered list of the rows below the body, such as totals or a note on
+                          scale, when the table has any
+    continues_table_id    the table_id of an earlier structured table that this one is the later
+                          portion of, when the source divides one table across a page break
+    continued_by_table_id the table_id of the later portion, when there is one
+    image_dependency      true when reading this table depends on an image
+    unresolved_cells      a list of cells you could not read, each with where it is in the grid,
+                          what you could see, and why you could not read it
+    metadata              anything else worth recording about this table
+
+Or, when you are classifying the element rather than reproducing it:
+
+    classification        your own words for what this element is
+    classification_evidence
+                          a short verbatim quote from the source that supports that
+                          classification, in double quotes
+    metadata              anything else worth recording
+
+Or, when you cannot resolve the element at all:
+
+    unresolved            a list, each entry with
+                            where    where in the source the element appears, as precisely as you
+                                     can say
+                            what     what it appears to be
+                            why      why you could not resolve it
+
+Return exactly one of those three. A grid and a classification in the same response is a
+contradiction: either the element carries a table you read, or it carries something else you
+recognised.
+
+EVERY CELL
+
+Each row is a list of cells. A cell is a mapping with the keys below, or a bare string when the
+cell carries nothing but text.
+
+    row           an integer, the row this cell is in, counting from zero. Omit it and the row is
+                  taken from the order you wrote the rows in.
+    column        an integer, the column this cell is in, counting from zero. Omit it and the
+                  column is taken from the order you wrote the cells in.
+    row_span      an integer greater than zero, when the source cell spans more than one row
+    column_span   an integer greater than zero, when the source cell spans more than one column
+    text          what the source cell reads, copied character for character
+    value         an optional normalised form of text, in whatever normalisation you choose
+    unit          your words for the unit this cell is in, when it is in one
+    period_label  your words for the period this cell belongs to, when it belongs to one
+    is_header     true when this cell labels a row or a column rather than carrying data
+    unresolved    true when you could not read this cell
+
+Write the grid as the source lays it out. An empty cell in the source is an empty cell here, with
+text set to an empty string. Do not drop it to tidy the row: every cell after a dropped one shifts
+into the wrong column, and a shifted column changes which period a number belongs to.
+
+TEXT IS CHECKED, VALUE IS NOT
+
+Copy text character for character out of the source cell, with its commas, its parentheses, its
+currency and percentage marks, its sign and its footnote markers. The backend searches for each
+cell's text inside the byte range of the element named in source_table_id. A cell text you tidied
+is a cell text that is not there.
+
+value is entirely yours. Offer 1,234 as 1234, or as 1234000 if the table declares thousands, or
+leave the key out. Nothing checks value against anything, because deciding which normalisation is
+right means reading the table's own note on scale, and that is a reading rather than a
+measurement.
+
+NO VOCABULARY IS SUPPLIED, AND THAT IS DELIBERATE
+
+You are given no list of table types, no list of units, no format for a period label, and no list
+of classifications. type, unit, period_label, title and classification are your own words. They
+are carried through exactly as you wrote them, shown to a person, and never checked against any
+list. Two filings that lay their statements out differently should produce differently shaped
+tables, and that is correct.
+
+A CELL YOU CANNOT READ STILL GOES IN
+
+Set unresolved to true on that cell, or record it under unresolved_cells with what you could see
+and why you could not read it. Do not guess a number and do not leave the cell out. A guessed
+number is indistinguishable from a copied one in every report that follows, and a missing cell
+silently changes what the cells around it mean.
+
+ONE ELEMENT, WHOLE
+
+Reproduce or classify the element you were named, complete, and nothing else. Do not reach into a
+neighbouring table because it looks related, and do not merge two elements that render as one
+table on the page: the elements are counted separately in the source and they are accounted for
+separately here. If the element is one half of a table the source splits across two elements, say
+so in continues_table_id or continued_by_table_id and leave the other half to its own call.
+
+If the element is genuinely empty of text, say so as a classification with the evidence for it.
+An empty element is a real thing filings contain, and recording it as empty is an accounting;
+saying nothing about it is not.

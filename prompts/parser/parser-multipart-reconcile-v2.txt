@@ -1,0 +1,235 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, the plan you produced for parsing it, and a
+compact inventory of every part that has been produced against that plan.
+
+Your task is to decide whether the plan has actually been carried out, and to say what is still
+required.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed.
+
+You also receive a RECONCILIATION BRIEF containing, for every part of the plan: its identifier, its
+title, the status the producing call declared, how many nodes it returned, how many of its source
+references were located in the filing and how many were not, what it declared unresolved, and
+whether it truncated.
+
+The brief is an inventory, not the parses themselves. It is deliberately compact so that this call
+has room to think about the whole filing rather than re-reading every response. Where a count looks
+wrong to you, say so; do not assume it is right merely because it is a number.
+
+THE CURRENT EFFECTIVE STATE
+
+The brief carries a further section stating where the parse stands against the source itself, in
+three lists:
+
+    table elements still unaccounted
+        element ids from the mechanical table inventory that no part reproduced, classified or
+        declared unresolved
+
+    source regions no claim reaches
+        stretches of a member that fall outside every coverage claim every part made, each given
+        as the member filename and the text at either end of the stretch
+
+    images unaccounted
+        filed images that no part referenced, classified or declared unresolved
+
+These are MECHANICAL findings. They were produced by counting and searching, not by reading.
+Nothing that produced them knows what a filing contains, what any section means, or which material
+belongs where. That is the judgement being asked of you.
+
+So do not treat a finding as an instruction. A table element nobody accounted for may be a
+financial statement that was skipped, or a layout scaffold with no disclosure in it at all. A
+region no claim reaches may be a page of narrative nobody read, or the whitespace and rendering
+markup between two sections. Say which, and why.
+
+Confirming that a finding is wrong is an accepted answer, and it is a useful one. If a region the
+brief lists as unreached is in fact covered by a part whose anchors did not resolve, say so and
+say which part: the region was read, and what failed was the anchor, which is a different repair.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it. The very first
+character you emit must be the letter p, from the word parse_plan_id, which is the first key of the
+document.
+
+Wrap a value in double quotes whenever it contains a colon, a hash, an angle bracket, a leading
+dash or bracket, a line break, or leading or trailing spaces, and escape any double quote inside it
+as a backslash followed by a double quote. When in doubt, quote it. Quote every identifier and
+every date.
+
+SERIALIZING WHAT YOU COPIED
+
+This document carries element ids, member filenames and short quotes out of the filing. Each case
+below is written with the form that parses.
+
+    A colon followed by a space turns a plain scalar into a mapping. Quote it.
+
+        wrong    what: Item 8: Financial Statements
+        right    what: "Item 8: Financial Statements"
+
+    A leading hyphen followed by a space turns a value into a list item. Quote it. A hyphen
+    inside a value is harmless but quote it too rather than deciding case by case.
+
+        wrong    what: - Signatures
+        right    what: "- Signatures"
+        right    what: "Ten-year summary"
+
+    An element id contains a hash character, which begins a comment in a plain scalar. Always
+    quote an element id.
+
+        wrong    source_table_id: aapl-20241228.htm#t13
+        right    source_table_id: "aapl-20241228.htm#t13"
+
+    A double quote inside a double-quoted value is escaped with a backslash.
+
+        right    what: "the \"Notes to Consolidated Financial Statements\""
+
+    An apostrophe or single quote needs no escaping inside a double-quoted value. Do not switch
+    the value to single quotes to avoid it.
+
+        right    what: "the Company's fiscal 2024 fourth quarter"
+
+    A line break inside a value goes in a block scalar, never inside a quoted scalar. Write a
+    vertical bar and indent the value on the lines below it.
+
+        right    note: |
+                   The consolidated statements of operations
+                   and the notes attached to them
+
+    A tab character inside a value is written as a backslash followed by the letter t, inside
+    double quotes. Never indent any line of your response with a tab: YAML forbids a tab in
+    indentation and the document stops parsing at that line.
+
+        right    what: "Net sales\tby segment"
+
+    A Unicode dash, a curly quote or any other non-ASCII character is copied through unchanged,
+    inside double quotes. Do not replace an en dash or em dash with a hyphen, do not straighten a
+    curly quotation mark, and do not convert a non-breaking space to a space. Quotes are compared
+    to the preserved bytes; a tidied character is a character that is not there.
+
+        right    what: "Three months ended — the “Successor” period"
+
+THE DOCUMENT
+
+parse_plan_id
+    the identifier of the plan, copied exactly, quoted
+
+cycle
+    an integer, the reconciliation cycle you were told this is
+
+plan_complete
+    true only when you believe every human-readable thing in this filing is now represented by
+    some part, or is listed in unresolvable below
+
+missing
+    a list of material in the filing that no part covers, each with
+      where        where in the source it appears, as precisely as you can say
+      what         what it appears to be
+      why          why you believe no part covers it
+
+uncovered_regions
+    your judgement on each region the brief lists as reached by no claim, each with
+      member       the member filename
+      what         what you find in that stretch of the source
+      verdict      one of: uncovered, covered_by_a_part_whose_anchors_failed, no_disclosure
+      why          the reasoning, and for the middle verdict the part_id that covered it
+
+unaccounted_tables
+    your judgement on each table element the brief lists as unaccounted, each with
+      source_table_id   the element id, quoted
+      verdict           one of: request_a_table_call, classify_here, unresolvable
+      classification    your own words for what the element is, when the verdict is classify_here
+      classification_evidence
+                        a short verbatim quote from the source supporting that classification, in
+                        double quotes, when the verdict is classify_here
+      why               the reasoning
+
+unaccounted_images
+    your judgement on each image the brief lists as unaccounted, each with
+      filename     the image filename
+      verdict      one of: assign_to_a_part, no_content_to_represent, unresolvable
+      why          the reasoning, naming the part_id when you are assigning it
+
+table_requests
+    a list of the element ids you want asked about directly, quoted. Each becomes its own call,
+    with this same complete filing and that one element in front of you. Request one when the
+    element carries data you believe belongs in the parse and no part is going to reach it.
+
+duplicated
+    a list of material you believe more than one part covers, each with
+      what         what the material is
+      parts        the part_id values that cover it
+      note         which one should own it, in your view
+
+conflicting
+    a list of places where two parts say incompatible things, each with
+      what         what the disagreement is about
+      parts        the part_id values that disagree
+      note         what you would need in order to resolve it
+
+additional_parts
+    an ordered list of NEW parts required to cover what is missing. Each entry has
+      part_id      a short identifier you choose, unique, quoted, and different from every
+                   part_id already in the plan
+      order        an integer
+      title        what the filing calls that material
+      type         what kind of material it is
+      purpose      one sentence on what that part will contain
+      expected_table_elements
+                   a list of the element ids that part will account for, each id quoted
+      expected_images
+                   a list of the image filenames that part will account for
+
+replacement_parts
+    an ordered list of parts that must be produced again because the existing result cannot stand.
+    Same fields as additional_parts. Give each a NEW part_id; the earlier result is kept as
+    evidence and is not overwritten.
+
+unresolvable
+    a list of material that cannot be completed at all, each with what it is and why. Material you
+    list here is reported to a person as unresolved. That is an acceptable outcome and is far
+    better than describing the filing as covered when it is not.
+
+model_declared_coverage
+    two or three sentences stating, in your own words, what you believe is and is not covered
+
+metadata
+    anything else worth recording
+
+WHAT plan_complete MEANS AND DOES NOT MEAN
+
+It is your claim about your own work. It is recorded as your claim, shown to a person as your
+claim, and it does not by itself mark anything complete. Coverage is separately checked by locating
+the quotes each part supplied inside the filing's own bytes, and a person reviews the result.
+
+So there is nothing to gain by claiming completeness you do not believe. A false complete is the
+one outcome this whole process exists to prevent; an honest missing entry is the outcome it exists
+to produce.
+
+A REGION NOBODY CLAIMED IS THE HARDEST THING TO SEE
+
+Every other finding here starts from something a part said. A region no claim reaches starts from
+the source: it is material that produced no quote to check, no node to count and no error to
+report, because nothing was ever written about it. It is invisible to every measurement except a
+denominator taken from the filing itself, which is what the current effective state is.
+
+Give each of those regions the same attention as a failed reference, and more than a duplicate.
+A duplicate costs a reconciliation. A region nobody claimed is a hole in the parse that no later
+step will find on its own.
+
+ASKING FOR MORE WORK IS NORMAL
+
+Every part you list in additional_parts or replacement_parts becomes another call, with this same
+complete filing in front of you again, and so does every element id in table_requests. There is a
+limit on how many reconciliation cycles run, and you are told which cycle this is. If material
+still cannot be covered when the limit is reached, it is reported unresolved rather than quietly
+dropped.
+
+Do not return parsed content here. Do not reproduce a table, quote passages at length, or describe
+what a section says beyond what is needed to identify it. This call returns a judgement about
+coverage and a list of work.

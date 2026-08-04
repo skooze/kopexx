@@ -1,0 +1,458 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, together with a plan you produced earlier
+for parsing it. Your task on this call is to produce ONE part of that plan, completely.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. The filename is a transport identifier only. It
+carries no meaning you should rely on, and neither does the order in which artifacts arrive beyond
+the fact that it is the order in which they were filed.
+
+An artifact may be plain text, SGML, HTML, or XHTML with inline XBRL markup. Older filings are
+frequently malformed by modern standards. Read through the markup to the content.
+
+Some filings arrive as one complete submission file containing several documents end to end. When
+that happens, treat every document inside it as part of the same filing.
+
+You also receive a PART BRIEF stating the plan, which part_id you are being asked for now, what you
+said that part would contain, the output limit of this call, the size this part should aim for, the
+response headroom reserved, and whether your reasoning content consumes the same allowance as your
+answer.
+
+The brief also carries two mechanical inventories: every table element the backend found in the
+source markup, and every image filed with this filing. Both are described further down, and every
+entry in both must be accounted for by some part.
+
+THIS CALL STANDS ALONE
+
+You are not continuing anything. No previous response is in front of you and none is expected to
+be. The other parts of this plan are being produced by other calls, each of which also receives
+this same complete filing. Nothing you write here needs to reference, complete, or avoid repeating
+the text of another response.
+
+That is why what you return must be a whole, valid document by itself. It will be read on its own,
+reviewed on its own, and re-run on its own if it needs to be.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it, and do not explain what
+you are about to do. The very first character you emit must be the letter p, from the word
+parse_plan_id, which is the first key of the document. The very last character must be the last
+character of the last value.
+
+A fenced response cannot be read as a parse, so it is thrown away whatever else is right about it.
+
+Your response must PARSE. Getting this wrong wastes the whole reading, so it is worth the care.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That covers almost every quote you copy out of a filing, because filings are written in markup and
+their prose is full of colons. When in doubt, quote it.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a
+number but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+SERIALIZING WHAT YOU COPIED
+
+This response carries more copied source text than any earlier one did: two anchors per coverage
+claim and one text value per table cell, all of them character-for-character copies out of a
+financial filing. Filing text contains exactly the characters that end a YAML document early. Each
+case below is written with the form that parses.
+
+    A colon followed by a space turns a plain scalar into a mapping. Quote it.
+
+        wrong    text: Total net sales: 391,035
+        right    text: "Total net sales: 391,035"
+
+    A leading hyphen followed by a space turns a value into a list item. Quote it. A hyphen
+    inside a value, such as a negative number or a hyphenated word, is harmless but quote it too
+    rather than deciding case by case.
+
+        wrong    text: - 1,234
+        right    text: "- 1,234"
+        right    text: "(1,234) year-over-year"
+
+    A double quote inside a double-quoted value is escaped with a backslash.
+
+        right    text: "the \"Notes to Consolidated Financial Statements\""
+
+    An apostrophe or single quote needs no escaping inside a double-quoted value. Do not switch
+    the value to single quotes to avoid it.
+
+        right    text: "the Company's fiscal 2024 fourth quarter"
+
+    A line break inside a value goes in a block scalar, never inside a quoted scalar. Write a
+    vertical bar and indent the value on the lines below it.
+
+        right    text: |
+                   Net sales
+                   (in millions)
+
+    A tab character inside a value is written as a backslash followed by the letter t, inside
+    double quotes. Never indent any line of your response with a tab: YAML forbids a tab in
+    indentation and the document stops parsing at that line.
+
+        right    text: "Net sales\t1,234"
+
+    A Unicode dash, a curly quote or any other non-ASCII character is copied through unchanged,
+    inside double quotes. Do not replace an en dash or em dash with a hyphen, do not straighten a
+    curly quotation mark, and do not convert a non-breaking space to a space. Every anchor and
+    every cell text is looked for in the preserved bytes; a tidied character is a character that
+    is not there.
+
+        right    text: "Three months ended — the “Successor” period’s results"
+
+THE DOCUMENT
+
+parse_plan_id
+    the identifier of the plan you were given, copied exactly, quoted
+
+part_id
+    the identifier of the part you were asked for, copied exactly, quoted
+
+parent_part_id
+    the identifier of the part this one belongs under, when you were asked for a subpart.
+    Omit this key otherwise.
+
+status
+    exactly one of these five words:
+
+      complete                        you produced this part in full
+      needs_subparts                  this part is too large for one response and you are
+                                      proposing how to divide it instead
+      source_ambiguity                you cannot tell which source material this part refers to
+      image_dependency_unavailable    this part depends on an image you were not given
+      unable_to_complete              you cannot produce this part, for a reason you state
+
+title
+    what the FILING calls this material, copied as the filing writes it
+
+type
+    what KIND of material this is, in your own words
+
+nodes
+    an ordered list representing this part's own structure, in the order the filing presents it.
+    Omit this key when status is needs_subparts.
+
+tables
+    a list of the structured tables in this part's material, and of the table elements you are
+    classifying rather than reproducing. See EVERY TABLE below. Omit this key when status is
+    needs_subparts.
+
+coverage_claims
+    an ordered list saying which stretches of which source artifacts this part accounted for.
+    See COVERAGE CLAIMS below. Omit this key when status is needs_subparts.
+
+image_references
+    a list of the filed images this part accounts for, each with
+      filename     the image filename exactly as the brief gives it
+      note         what the image contains and what in this part depends on it, or the reason
+                   its content is not represented
+
+unresolved
+    a list of anything within this part you could not account for, each with
+      where        where in the source it appears, as precisely as you can say
+      what         what it appears to be
+      why          why you could not resolve it
+
+coverage_summary
+    one or two sentences on what this part covers and where it stops
+
+subparts_required
+    true when status is needs_subparts
+
+proposed_subparts
+    an ordered list, present only when you are proposing subparts, each with
+      part_id      a short identifier you choose, unique, quoted, and different from every
+                   part_id already in the plan
+      order        an integer
+      title        what the filing calls that material
+      type         what kind of material it is
+      purpose      one sentence on what that subpart will contain
+      expected_table_elements
+                   the element ids from the mechanical table inventory that subpart will account
+                   for, quoted
+      expected_images
+                   the image filenames that subpart will account for
+
+metadata
+    anything else worth recording about this part
+
+EVERY NODE
+
+Each entry in nodes may carry these keys. Only id, type, title and order are required.
+
+    id            a short identifier you choose, unique within this response, quoted
+    order         an integer, the position of this node among its siblings
+    type          what KIND of thing this is, in your own words
+    title         the title the FILING uses for it, copied as the filing writes it
+    parent_id     the id of the node this belongs to, omitted for a top-level node
+    content       your description of what this section says, in plain prose
+    table_ids     the table_id values, from the top-level tables list, of the tables that appear
+                  in this node's material. The tables themselves go in that list and not here:
+                  a table written out inside a node's prose loses its grid, and the grid is the
+                  reason the table is being asked for.
+    source        a list of references locating this node in the source, see below
+    confidence    high, medium or low
+    ambiguity     what is unclear about this node, when something is
+    image         true when understanding this node depends on an image you were shown or were
+                  not shown
+    children      omit this key; express the hierarchy with parent_id instead
+
+USE THE FILING'S OWN NAMES
+
+Do not translate the filing's structure into a standard vocabulary. If the filing calls a section
+Item 7A, call it Item 7A. If it calls something Note 12 or Schedule II or Exhibit 21 or Report of
+Independent Registered Public Accounting Firm, use those words. If a section has no title, say so
+rather than inventing one.
+
+The same applies to type. Describe what a node is in whatever words fit. Two filings that organise
+themselves differently should produce differently shaped responses, and that is correct.
+
+SOURCE REFERENCES
+
+Every substantive node should carry at least one entry under source. Each entry has
+
+    filename      which source artifact it came from
+    quote         a short verbatim string copied exactly from that artifact, long enough to be
+                  found by searching for it and short enough to be one line. ALWAYS write this
+                  one in double quotes, whatever it contains.
+
+The quote is what makes the reference checkable. Copy it character for character from the source.
+Do not paraphrase it, do not normalise its spacing, and do not construct one that seems likely.
+If you cannot produce an exact quote for a node, omit source for that node rather than supplying
+an approximate one.
+
+COVERAGE CLAIMS
+
+A source reference locates one node. A coverage claim bounds a REGION: it says that between these
+two points of this artifact, this part did the work. Each entry in coverage_claims has
+
+    member                which source artifact this claim is about, its filename exactly as the
+                          SOURCE ARTIFACT line gives it
+    start_anchor          a short verbatim quote copied exactly from that artifact, marking the
+                          point where this part's coverage BEGINS. Always in double quotes,
+                          whatever it contains.
+    end_anchor            a short verbatim quote copied exactly from that artifact, marking the
+                          point where this part's coverage ENDS. Always in double quotes.
+    intermediate_anchors  an optional list of further verbatim quotes from inside the region,
+                          each in double quotes. Supply them for a long region: they show where
+                          inside it you actually read, and they survive when one end anchor
+                          happens to be ambiguous.
+    purpose               one sentence on what this part did with that region
+    unresolved            true when this part bounded the region but could not account for what
+                          is in it. Give the reason under unresolved as well.
+
+Write one claim per contiguous region. A part that covers two separated stretches of one artifact
+writes two claims, not one claim spanning the gap between them: a claim covering material you did
+not read is a false statement about coverage, and it is exactly the statement this protocol exists
+to prevent.
+
+WHY TWO QUOTES AND NOT AN OFFSET
+
+You cannot count characters in a document you were handed as text, and nothing in your answer
+would show that you had tried. A fabricated offset resolves to a real position in the file, points
+at the wrong material, and looks exactly like a measured one. Two quotes do not have that
+property: they either occur in the preserved bytes or they do not.
+
+The backend searches for both anchors in the preserved bytes of the member you named. Two anchors
+that are found bound a region. A claim whose anchors are not found bounds nothing at all — it is
+recorded as a claim that could not be checked, and the region it was about stays unaccounted for.
+So copy the anchors character for character, with their original spacing, punctuation, dashes and
+quotation marks. An anchor you improved is an anchor that will not be found.
+
+WHAT THE CLAIMS ARE FOR
+
+Between them, the claims of all parts should reach every human-readable region of every source
+artifact in this filing. A region that no claim reaches, and that no part declares unresolved, is
+recorded as content the parse never mentioned.
+
+That is a different measurement from counting how many of your quotes were found, and it is a
+harsher one. A section you skipped produces no quote to fail: it is simply absent, and only a
+denominator taken from the source itself can see it. An honest claim with unresolved set to true
+is a good outcome. A region nobody claimed is the outcome this protocol exists to prevent.
+
+THE TABLES YOU RETURN MUST BE TABLES
+
+Every table in this part's material comes back as a grid of cells with positions, under the
+top-level tables key. Not as a caption. Not as a paragraph of numbers. Not as a description of
+what the table shows.
+
+The reason is measured, not stylistic. In the previous phase five parsing models produced seven
+complete multipart parses of financial filings and returned zero structured tables between them.
+The tabular material came back as narrative, and the numbers in that narrative were confirmed to
+occur in the filing's own bytes. What was gone was which row, which column and which period each
+number belonged to — and those three facts are what a table IS. A balance sheet written out as a
+paragraph is not a balance sheet.
+
+THE MECHANICAL TABLE INVENTORY
+
+The brief lists every table element the backend found in the source markup. Each entry gives
+
+    an element id, written as the member filename, then a hash character, then a number
+    which member it is in
+    how many rows and how many columns its markup has
+    the text of its first few cells, so that you can recognise which table it is
+
+That inventory was produced by counting markup elements. It knows nothing about what any element
+is for. An element may be a financial statement, a layout scaffold holding a page header in place,
+a navigation strip, a rule drawn as an empty row, or the same table rendered a second time. The
+inventory cannot tell those apart and deliberately does not try. That judgement is yours.
+
+EVERY TABLE ELEMENT MUST BE ACCOUNTED FOR
+
+For each element id in the inventory that falls inside your part, do exactly one of these three
+things:
+
+    return a structured table for it, naming that element id in source_table_id
+    classify it, in your own words in classification, with a verbatim source quote in
+      classification_evidence saying what you saw that supports the classification
+    declare it unresolved, under unresolved, with where it is, what it appears to be and why you
+      could not resolve it
+
+SILENCE IS NOT COVERAGE. An element you say nothing about is recorded as a table the parse never
+mentioned, and that record cannot distinguish a table you overlooked from a table you correctly
+judged to be a spacing device. "This element holds a page header and carries no disclosure" is a
+complete, correct and useful answer. Saying nothing is not an answer at all.
+
+If an element in the inventory does not fall inside your part, leave it to the part that owns it.
+If it falls inside no part, account for it here and say so in metadata.
+
+EVERY TABLE
+
+Each entry in tables may carry these keys. table_id, source_member and rows are the minimum for a
+table you are reproducing; a table you are classifying instead needs table_id, source_member,
+source_table_id, classification and classification_evidence.
+
+    table_id              a short identifier you choose, unique within this response, quoted
+    title                 what the FILING calls this table, copied as the filing writes it
+    type                  what KIND of table this is, in your own words
+    source_member         which source artifact it comes from
+    source_table_id       the element id from the mechanical table inventory that this table
+                          represents, quoted
+    source_anchor_start   a short verbatim quote from the beginning of the table in the source,
+                          in double quotes
+    source_anchor_end     a short verbatim quote from the end of the table in the source, in
+                          double quotes
+    header_rows           an ordered list of the rows that label the columns
+    rows                  an ordered list of the body rows
+    footer_rows           an ordered list of the rows below the body, such as totals or a note on
+                          scale, when the table has any
+    continues_table_id    the table_id of the earlier structured table that this one is the later
+                          portion of, when one source table was split between two of your tables
+    continued_by_table_id the table_id of the later portion, when you split one
+    image_dependency      true when reading this table depends on an image
+    unresolved_cells      a list of cells you could not read, each with where it is in the grid,
+                          what you could see, and why you could not read it
+    classification        your own words for what this element is, when you are classifying it
+                          rather than reproducing its grid
+    classification_evidence
+                          a short verbatim quote from the source that supports that
+                          classification, in double quotes
+    metadata              anything else worth recording about this table
+
+EVERY CELL
+
+Each row is a list of cells. A cell is a mapping with the keys below, or a bare string when the
+cell carries nothing but text.
+
+    row           an integer, the row this cell is in, counting from zero. Omit it and the row is
+                  taken from the order you wrote the rows in.
+    column        an integer, the column this cell is in, counting from zero. Omit it and the
+                  column is taken from the order you wrote the cells in.
+    row_span      an integer greater than zero, when the source cell spans more than one row
+    column_span   an integer greater than zero, when the source cell spans more than one column
+    text          what the source cell reads, copied character for character
+    value         an optional normalised form of text, in whatever normalisation you choose
+    unit          your words for the unit this cell is in, when it is in one
+    period_label  your words for the period this cell belongs to, when it belongs to one
+    is_header     true when this cell labels a row or a column rather than carrying data
+    unresolved    true when you could not read this cell
+
+Write the grid as the source lays it out. An empty cell in the source is an empty cell here, with
+text set to an empty string. Do not drop it to tidy the row: every cell after a dropped one shifts
+into the wrong column, and a shifted column changes which period a number belongs to.
+
+TEXT IS CHECKED, VALUE IS NOT
+
+Copy text character for character out of the source cell, with its commas, its parentheses, its
+currency and percentage marks, its sign and its footnote markers. The backend searches for each
+cell's text inside the byte range of the table element you named in source_table_id. A cell text
+you tidied is a cell text that is not there.
+
+value is entirely yours. Offer 1,234 as 1234, or as 1234000 if the table declares thousands, or
+leave the key out. Nothing checks value against anything, because deciding which normalisation is
+right means reading the table's own note on scale, and that is a reading rather than a
+measurement.
+
+NO VOCABULARY IS SUPPLIED, AND THAT IS DELIBERATE
+
+You are given no list of table types, no list of units, and no format for a period label. type,
+unit, period_label, title and classification are your own words. They are carried through exactly
+as you wrote them, shown to a person, and never checked against any list. Two filings that lay
+their statements out differently should produce differently shaped tables, and that is correct.
+
+A CELL YOU CANNOT READ STILL GOES IN
+
+Set unresolved to true on that cell, or record it under unresolved_cells with what you could see
+and why you could not read it. Do not guess a number and do not leave the cell out. A guessed
+number is indistinguishable from a copied one in every report that follows, and a missing cell
+silently changes what the cells around it mean.
+
+IMAGES
+
+The brief lists every image filed with this filing, and states separately which of them were not
+included in this request. Every one of them must be accounted for by some part, under
+image_references.
+
+If you were given the image, say what it contains and what in this part depends on it. If the
+brief says the image was filed and not included, say exactly that: that it was filed, that it was
+not given to you, and that its content is therefore not represented in this parse. That is a
+complete answer and it is not a failure.
+
+An image that no part mentions at all is recorded as an image the parse never mentioned, and that
+record cannot distinguish an overlooked chart from a spacing pixel.
+
+STAY INSIDE YOUR PART
+
+Represent everything human-readable that belongs to THIS part, and nothing that belongs to another
+one. You are not being judged on covering the whole filing here; the other parts are covering the
+rest, and material repeated across parts has to be reconciled later at a cost.
+
+If you find material inside your part that the plan assigned elsewhere, leave it there and say so
+in metadata. If you find material inside your part that the plan assigned to nobody, include it and
+say so in metadata.
+
+Nothing within your part may be dropped for being routine, boilerplate, short, legal, repetitive or
+apparently unimportant. If you believe a passage is boilerplate, represent it and say so in content.
+
+If part of your material depends on an image and you were not given that image, create the node
+anyway, set image to true, and record in unresolved that its content could not be read.
+
+Numbers you report must appear in the source exactly as you write them, including their sign,
+their scale and their currency or percentage marks.
+
+IF THIS PART IS TOO LARGE
+
+Decide that BEFORE you start writing content, not after you run out of room. Compare what this part
+actually contains against the size you were told to aim for, and count the table elements the
+inventory places inside it: a structured grid costs far more room than a paragraph describing the
+same numbers, and a part with many large tables in it is larger than it looks.
+
+If it will not fit, set status to needs_subparts, omit nodes, tables and coverage_claims entirely,
+and return an ordered proposed_subparts list that divides this part completely. Each subpart will
+be requested as its own call, with this same complete filing in front of you again.
+
+A response that begins parsing and stops in the middle is worth less than a response that says the
+part is too big and how to divide it. The first has to be thrown away. The second is a plan.

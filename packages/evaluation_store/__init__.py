@@ -21,6 +21,7 @@ by then will actually exist.
 """
 
 from .errors import (
+    BenchmarkTruthVersionExistsError,
     EvaluationStoreError,
     IllegalTransitionError,
     InvalidIdentifierError,
@@ -89,6 +90,7 @@ __all__ = [
     "RESUMABLE_TASK_STATES",
     "TERMINAL_EXECUTION_STATES",
     "TERMINAL_TASK_STATES",
+    "BenchmarkTruthVersionExistsError",
     "Comment",
     "DependencyPolicy",
     "EvaluationStore",

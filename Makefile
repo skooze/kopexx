@@ -39,7 +39,8 @@ COV_PACKAGES := --cov=packages.sec_identity --cov=packages.configuration \
                 --cov=packages.source_transport --cov=packages.coverage_validation \
                 --cov=packages.prompt_registry --cov=packages.orchestrator \
                 --cov=packages.review_api --cov=packages.review_web \
-                --cov=packages.multipart
+                --cov=packages.multipart --cov=packages.source_inventory \
+                --cov=packages.completeness
 
 .PHONY: help install fmt fmt-check lint typecheck test test-unit \
         test-architecture test-integration test-security test-no-skips coverage test-summary \

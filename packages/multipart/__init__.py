@@ -37,6 +37,7 @@ from .assembly import (
     assemble,
     order_parts,
 )
+from .effective import ArtifactTask, EffectiveArtifacts, Supersession, resolve_effective
 from .envelopes import (
     PART_ENVELOPE_KEYS,
     PLAN_ENVELOPE_KEYS,
@@ -60,10 +61,17 @@ from .errors import (
     RecursionDepthExceededError,
     UnsafePartIdentifierError,
 )
+from .gaps import GapFingerprint, fingerprint, fold
 from .identity import (
     MAX_PART_IDENTIFIER_CHARACTERS,
     require_part_identifier,
     storage_token,
+)
+from .tables import (
+    TABLE_ENVELOPE_KEYS,
+    StructuredTable,
+    read_table,
+    read_tables,
 )
 from .validation import (
     AssemblyValidation,
@@ -80,11 +88,15 @@ __all__ = [
     "PART_ENVELOPE_KEYS",
     "PLAN_ENVELOPE_KEYS",
     "SETTLED_PART_STATUSES",
+    "TABLE_ENVELOPE_KEYS",
     "AssembledPart",
     "AssemblyInputs",
     "AssemblyStatus",
     "AssemblyValidation",
+    "ArtifactTask",
+    "EffectiveArtifacts",
     "EnvelopeUnreadableError",
+    "GapFingerprint",
     "MultipartError",
     "ParsePlan",
     "PartArtifact",
@@ -95,6 +107,8 @@ __all__ = [
     "PlanValidation",
     "PlannedPart",
     "ProposedPart",
+    "StructuredTable",
+    "Supersession",
     "RecursionDepthExceededError",
     "ReplanOutcome",
     "UnsafePartIdentifierError",
@@ -104,7 +118,12 @@ __all__ = [
     "read_amendment",
     "read_part",
     "read_plan",
+    "fingerprint",
+    "fold",
     "read_replan",
+    "read_table",
+    "read_tables",
+    "resolve_effective",
     "require_part_identifier",
     "storage_token",
     "validate_assembly",

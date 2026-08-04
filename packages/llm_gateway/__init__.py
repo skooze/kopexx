@@ -27,6 +27,7 @@ from .cost_calculator import ModelPricing, PricingRegistry, default_registry
 from .errors import (
     BoundaryViolationError,
     BudgetExceededError,
+    CredentialResolutionError,
     LlmGatewayError,
     NativeToolUseProhibitedError,
     ProviderError,
@@ -58,6 +59,7 @@ __all__ = [
     "ModelPricing",
     "NativeToolUseProhibitedError",
     "PricingRegistry",
+    "CredentialResolutionError",
     "ProviderError",
     "Violation",
     "YamlParseError",

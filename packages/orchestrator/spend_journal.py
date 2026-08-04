@@ -30,6 +30,32 @@ _JOURNAL_KEY = "spend-journal.yaml"
 
 
 @dataclass(frozen=True)
+class UnsettledReservation:
+    """One task holding ceiling with no settlement and no release behind it.
+
+    HELD IS NOT SPENT AND THE TWO ARE NEVER SHOWN AS ONE NUMBER. A held reservation is money the
+    ceiling has committed and the provider may never have charged. Reporting it inside `spent_usd`
+    was the honest conservative choice while nothing could tell the two apart; reporting it
+    SEPARATELY is the honest precise one now that something can.
+    """
+
+    task_id: str
+    run_id: str
+    job_id: str
+    model_label: str
+    held_usd: Decimal
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "run_id": self.run_id,
+            "job_id": self.job_id,
+            "model_label": self.model_label,
+            "held_usd": str(self.held_usd),
+        }
+
+
+@dataclass(frozen=True)
 class SpendEntry:
     """One reservation or settlement, with everything needed to re-derive the total.
 
@@ -317,3 +343,98 @@ class SpendJournal:
         )
         self._save()
         return actual
+
+    def release(
+        self,
+        *,
+        reserved: Decimal,
+        at: str,
+        run_id: str,
+        job_id: str,
+        model_label: str,
+        task_id: str,
+        evidence: str,
+    ) -> Decimal:
+        """Return a reservation to the ceiling because NO PROVIDER TRANSPORT OCCURRED.
+
+        THE MECHANISM AND ITS JUSTIFICATION WERE NOT THE SAME SIZE, AND THIS IS WHERE THEY MEET.
+        This module has always said "a billable request that failed still cost money, and a ledger
+        that only charged successes would let a run of rejections walk straight past the ceiling".
+        That is true of a request that REACHED a provider. It is false of one that never left this
+        machine, and Phase 2.1 held real ceiling for eleven of those.
+
+            MEASURED IN THE DURABLE JOURNAL. Twelve task ids held unsettled reservations totalling
+            USD 0.24197085. Eleven were `TokenRetrievalError: Token has expired and refresh failed`,
+            every one with zero input tokens, zero output tokens, zero latency and no provider
+            request id — USD 0.22590990 of ceiling held for calls no provider ever saw. The twelfth,
+            USD 0.01606095, is a different defect: a task interrupted after reserving, resumed, and
+            reserved a second time, with only the later reservation settled.
+
+        WHAT THIS IS NOT. It is not a way to un-charge a failure. A request that reached a provider
+        is charged whatever it returned, and it stays charged. Releasing requires POSITIVE evidence
+        that transport did not occur, `evidence` records what that evidence was, and a caller who
+        cannot supply it must not call this.
+
+        THE JOURNAL STAYS APPEND-ONLY. A RELEASE entry carries `amount_usd = 0` and
+        `released_usd = reserved`, so it contributes exactly the negative of the reservation to
+        `sum(amount - released)` and no total needs different arithmetic. Nothing is edited, nothing
+        is deleted, and the original reservation stays visible with its timestamp.
+        """
+        if reserved <= 0:
+            raise ValueError("a release must name the positive amount it returns to the ceiling")
+        if not evidence.strip():
+            raise ValueError(
+                "a release must record the evidence that no provider transport occurred; a "
+                "release with no evidence is indistinguishable from un-charging a real failure"
+            )
+        self._entries.append(
+            SpendEntry(
+                at=at,
+                kind="RELEASE",
+                run_id=run_id,
+                job_id=job_id,
+                model_label=model_label,
+                amount_usd=Decimal(0),
+                released_usd=reserved,
+                note=evidence,
+                task_id=task_id,
+                phase=self._phase,
+            )
+        )
+        self._save()
+        return reserved
+
+    def unsettled(self) -> tuple[UnsettledReservation, ...]:
+        """Every reservation with no matching settlement or release, by task.
+
+        REPORTED RATHER THAN RESOLVED. This is the input to a decision, not the decision: whether a
+        given unsettled reservation may be released depends on whether transport can be proved not
+        to have occurred, and only the attempt record knows that.
+        """
+        # HELD IS NOT NET SPEND, AND CONFUSING THE TWO REPORTS EVERY HEALTHY TASK AS UNSETTLED.
+        # A settled task's entries sum to `reserved + (actual - reserved)`, which is `actual` — a
+        # positive number, and exactly the money it really cost. What is HELD is the reservation
+        # side alone, minus whatever a settlement or a release gave back.
+        held: dict[str, Decimal] = {}
+        labels: dict[str, str] = {}
+        runs: dict[str, str] = {}
+        jobs: dict[str, str] = {}
+        for entry in self._entries:
+            if not entry.task_id:
+                continue
+            delta = entry.amount_usd if entry.kind == "RESERVATION" else -entry.released_usd
+            held[entry.task_id] = held.get(entry.task_id, Decimal(0)) + delta
+            labels.setdefault(entry.task_id, entry.model_label)
+            runs.setdefault(entry.task_id, entry.run_id)
+            jobs.setdefault(entry.task_id, entry.job_id)
+        return tuple(
+            UnsettledReservation(
+                task_id=task_id,
+                run_id=runs[task_id],
+                job_id=jobs[task_id],
+                model_label=labels[task_id],
+                held_usd=amount,
+            )
+            for task_id, amount in sorted(held.items())
+            if amount > 0
+        )

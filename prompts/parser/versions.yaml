@@ -99,10 +99,10 @@ prompts:
     file: parser-multipart-plan-v1.txt
     sha256: "134e6b485cac8259e596025d3b0673a3f5c7fa7fe5b701ceaf7a4090ed4289b7"
     created: "2026-08-03"
-    status: ACTIVE
+    status: SUPERSEDED
     role: parsing_multipart_plan
     supersedes: null
-    superseded_by: null
+    superseded_by: "parser-multipart-plan@2"
     note: >-
       The first billable call of a multipart parse. It receives the complete intact filing and
       returns a COMPACT plan — a division of labour the model chooses for itself — and nothing
@@ -122,10 +122,10 @@ prompts:
     file: parser-multipart-part-v1.txt
     sha256: "0171a2c6a6993e67598c9f1d6fceeca93a344764761e9f76dd9fc8f99dbd7efc"
     created: "2026-08-03"
-    status: ACTIVE
+    status: SUPERSEDED
     role: parsing_multipart_part
     supersedes: null
-    superseded_by: null
+    superseded_by: "parser-multipart-part@2"
     note: >-
       One part of the model's own plan, produced completely, as ONE STANDALONE YAML DOCUMENT. The
       call receives the complete intact filing again — not a slice of it — plus the plan and the
@@ -146,10 +146,10 @@ prompts:
     file: parser-multipart-replan-v1.txt
     sha256: "2132e2ca91de209bbabbed2eb4fcbf2ce80b915bc6302ee929935f02f5044f82"
     created: "2026-08-03"
-    status: ACTIVE
+    status: SUPERSEDED
     role: parsing_multipart_replan
     supersedes: null
-    superseded_by: null
+    superseded_by: "parser-multipart-replan@2"
     note: >-
       What runs INSTEAD OF a continuation when a part attempt stops at the output limit. It shows
       the model the exact truncated bytes as EVIDENCE, states in the prompt that they are not being
@@ -166,10 +166,10 @@ prompts:
     file: parser-multipart-reconcile-v1.txt
     sha256: "3e9ac8226f704a7de9d77bf908e9c90bafb3299098f92ec4cbcbbb98b3df2e54"
     created: "2026-08-03"
-    status: ACTIVE
+    status: SUPERSEDED
     role: parsing_multipart_reconcile
     supersedes: null
-    superseded_by: null
+    superseded_by: "parser-multipart-reconcile@2"
     note: >-
       A multipart parse is not complete because every planned part returned something. This call
       receives the complete intact filing and a COMPACT DETERMINISTIC INVENTORY of what was
@@ -189,10 +189,10 @@ prompts:
     file: parser-multipart-gap-v1.txt
     sha256: "f6810da11a3734b598545e88c3cd0cc3b7b64d7b0d27770e39d62b994315b5f3"
     created: "2026-08-03"
-    status: ACTIVE
+    status: SUPERSEDED
     role: parsing_multipart_gap
     supersedes: null
-    superseded_by: null
+    superseded_by: "parser-multipart-gap@2"
     note: >-
       The backend reports MECHANICAL EVIDENCE and never names the missing semantic material. This
       prompt is where that boundary is written down for the model: the findings were produced by
@@ -208,10 +208,10 @@ prompts:
     file: parser-multipart-format-repair-v1.txt
     sha256: "c2fd5413eaf268e08816f8558c44144861b06e1b8b7f54fc3d1f547c519495b8"
     created: "2026-08-03"
-    status: ACTIVE
+    status: SUPERSEDED
     role: parsing_multipart_format_repair
     supersedes: null
-    superseded_by: null
+    superseded_by: "parser-multipart-format-repair@2"
     note: >-
       SECTION 6 OF THE PHASE 2.1 BRIEF PERMITS THIS FAMILY "ONLY IF OBJECTIVELY REQUIRED", AND THE
       EVIDENCE IS IN THE PHASE 2 RECORD. Under prompt version 2, five of fifteen responses were
@@ -229,3 +229,166 @@ prompts:
       the repaired response and its validation are all preserved separately. The original is never
       replaced. It is never used to improve semantic quality, and an architecture test fails the
       build if a second attempt is ever configured.
+
+  # --- the COMPLETENESS-AWARE, TABLE-AWARE families, added by Phase 2.2 ---------------------------
+  #
+  # THE SIX v1 MULTIPART FAMILIES ABOVE ARE NOW SUPERSEDED AND ARE UNTOUCHED. Seven preserved proof
+  # runs and 286 provider attempts quote them by hash; every measured result in
+  # docs/sprints/PHASE-0201 was produced by one of them, and every one of those results stays
+  # attributable to the exact bytes that produced it. Superseding is recorded with a forward note;
+  # nothing is rewritten. rules.md section 21 rule 16.
+  #
+  # THE SINGLE-RESPONSE FAMILY IS ALSO UNTOUCHED. `parser-complete-filing@2` remains the ACTIVE
+  # prompt for the `parsing` role, so the single-response protocol stays runnable and the two
+  # protocols can still be compared.
+  #
+  # WHY THESE ARE VERSIONS RATHER THAN NEW ROLES, WHICH IS THE OPPOSITE OF THE PHASE 2.1 CHOICE.
+  # Phase 2.1 needed multipart and single-response to be runnable SIMULTANEOUSLY, so they had to be
+  # separate roles — `active_for` resolves one active prompt per role. Phase 2.2 does not: the
+  # completeness protocol REPLACES the Phase 2.1 multipart protocol for new runs, and a version is
+  # exactly the right shape for a replacement whose predecessor's evidence must stay readable.
+  #
+  # THE SEMANTIC REQUEST IS CARRIED OVER FROM EACH v1 WORD FOR WORD WHERE IT STILL APPLIES. What is
+  # added is a coverage-claim contract, a structured-table contract and an image contract. What is
+  # NOT added is any vocabulary of sections, table types, units or period labels — rules.md section
+  # 21 rule 2 forbids a universal filing taxonomy without explicit user approval, and a table schema
+  # is the most tempting place in this entire system to build one.
+
+  - prompt_id: parser-multipart-plan
+    version: "2"
+    file: parser-multipart-plan-v2.txt
+    sha256: "840ebf0086733381b9c5f4b8174dc8d9a6aa631859b85ad461c266380caf731b"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_plan
+    supersedes: "parser-multipart-plan@1"
+    superseded_by: null
+    note: >-
+      THE PLAN NOW ACCOUNTS FOR A MECHANICAL INVENTORY IT DID NOT SEE IN VERSION 1. The brief
+      supplies a list of table element identifiers and image identifiers measured from the
+      preserved bytes, and the plan must say which part expects to account for each, and name
+      anything it cannot yet assign. The backend still supplies NO part names, NO section
+      vocabulary and NO minimum or maximum part count: an element identifier is a transport fact
+      about where a `table` tag sits, not a claim that the table means anything.
+
+      WHY THE INVENTORY IS SUPPLIED AT ALL. Phase 2.1 had no denominator. A parse could resolve
+      352 of 364 of its own references and say nothing about what it never mentioned, because a
+      region a model never cited never entered the count. Naming the elements up front is what
+      makes an omission visible as an omission.
+
+  - prompt_id: parser-multipart-part
+    version: "2"
+    file: parser-multipart-part-v2.txt
+    sha256: "54e0c15d4bcb7fc174e0df04fd9b53cbc36dd322441e2e6c32a69a2733e459d3"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_part
+    supersedes: "parser-multipart-part@1"
+    superseded_by: null
+    note: >-
+      TWO ADDITIONS, AND BOTH EXIST BECAUSE PHASE 2.1 COULD NOT MEASURE WHAT IT NEEDED TO.
+
+      COVERAGE CLAIMS. Every part now bounds the source regions it covered with a start quote and
+      an end quote, both verbatim. Two resolved quotes bound an interval in the preserved bytes; a
+      fabricated offset resolves to the wrong place while looking exactly like a real one, and a
+      model handed a document as text cannot count characters in it. The union of every part's
+      intervals, measured against the mechanical span inventory, is a coverage figure with a real
+      denominator underneath it.
+
+      STRUCTURED TABLES. `table_count` was ZERO in all seven Phase 2.1 proof runs, on both a 1996
+      10-K405 and a 2025 10-Q/A, across five candidates. No prompt in that phase asked for one, so
+      it measured unprompted behaviour rather than capability. This version asks, with a full cell
+      contract and worked serialisation examples, and the answer to whether these models CAN
+      preserve a table is the largest open question the previous proof left.
+
+      THE SEMANTIC REQUEST IS OTHERWISE CARRIED OVER WORD FOR WORD. The node contract, the source
+      reference contract, the use-the-filing's-own-names rule, the quoting rules, THIS CALL STANDS
+      ALONE and IF THIS PART IS TOO LARGE are the same words as version 1. A v2 that scored
+      differently because it asked an easier question would measure the prompt, not the protocol.
+
+  - prompt_id: parser-multipart-replan
+    version: "2"
+    file: parser-multipart-replan-v2.txt
+    sha256: "442b74b1c69a03e743ce8c6db1608b8aa8b51cb4974653b89901e6db420987b5"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_replan
+    supersedes: "parser-multipart-replan@1"
+    superseded_by: null
+    note: >-
+      Carries version 1's replanning contract unchanged — the truncated bytes are shown as
+      EVIDENCE, they are explicitly not being continued, and the subparts must cover the WHOLE
+      original part rather than the remainder — and adds the coverage-claim and structured-table
+      contracts so a replanned subpart is measured on the same terms as any other part.
+
+  - prompt_id: parser-multipart-reconcile
+    version: "2"
+    file: parser-multipart-reconcile-v2.txt
+    sha256: "7f1f792c2d17b806b78286c5c21bf47ba51a4471ecc7890baa28ad676141b958"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_reconcile
+    supersedes: "parser-multipart-reconcile@1"
+    superseded_by: null
+    note: >-
+      THE INVENTORY IT IS SHOWN IS NOW THE CURRENT EFFECTIVE STATE. Version 1 was re-shown a
+      superseded part's stale unresolved counts, because an earlier result is never overwritten, so
+      the model kept re-reporting items whose replacements had already run. The counts now come
+      from whichever artifact holds a part's content.
+
+      It is additionally shown which table elements are still unaccounted for, which source regions
+      no coverage claim reaches, and which images are unaccounted. Version 1's language is kept
+      verbatim: these are MECHANICAL findings produced by counting and searching, nothing that
+      produced them knows what a filing contains, and confirming that a finding is wrong is an
+      accepted answer.
+
+  - prompt_id: parser-multipart-gap
+    version: "2"
+    file: parser-multipart-gap-v2.txt
+    sha256: "bd3d6bf5a5747efa73949d72f92b7c89ee9cc3c40355667535d2a9bd4a225d93"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_gap
+    supersedes: "parser-multipart-gap@1"
+    superseded_by: null
+    note: >-
+      Version 1's boundary is unchanged — the backend reports mechanical evidence and never names
+      the missing semantic material — and the gap now carries a stable fingerprint so a repeated
+      gap can be recognised as repeated. Confirming a gap does not exist remains an accepted
+      answer, because the alternative is a part invented to make a count balance.
+
+  - prompt_id: parser-multipart-format-repair
+    version: "2"
+    file: parser-multipart-format-repair-v2.txt
+    sha256: "35ba683a7d76cececaa28854be1a22b74f670bc49a585a0e96a6f2e6f24bc491"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_format_repair
+    supersedes: "parser-multipart-format-repair@1"
+    superseded_by: null
+    note: >-
+      Version 1's narrowness is unchanged and is the whole point: it receives the malformed
+      response and the format rules, NOT the filing, because there is nothing to look up and it is
+      forbidden to change meaning. Version 2 extends the enumerated must-not-change list to cover
+      the new structured-table and coverage-claim fields, so a repair cannot quietly invent a cell
+      or an anchor while fixing a quoting error.
+
+  - prompt_id: parser-multipart-table
+    version: "1"
+    file: parser-multipart-table-v1.txt
+    sha256: "a5eedb3b49e999ad8f8cd2746549c06709db982a1dd8d3524bc9946d5f9df4bb"
+    created: "2026-08-04"
+    status: ACTIVE
+    role: parsing_multipart_table
+    supersedes: null
+    superseded_by: null
+    note: >-
+      A NEW ROLE, NOT A NEW VERSION, BECAUSE IT SUPERSEDES NOTHING. It is the targeted call
+      reconciliation makes when a data-bearing table element was not accounted for by any part: it
+      receives the intact filing plus ONE mechanical table element and returns one structured table
+      for it, a classification with source evidence, or an unresolved declaration.
+
+      IT EXISTS SO A MISSING TABLE COSTS ONE CALL RATHER THAN A WHOLE PART. Re-requesting an entire
+      part to recover one table would re-send the intact filing and re-emit everything else the
+      part already produced, and on a filing this size that is the difference between a repair and
+      a rerun.
