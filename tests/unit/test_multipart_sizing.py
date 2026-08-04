@@ -29,7 +29,10 @@ from packages.orchestrator.sizing import (
     CONTEXT_SAFETY_TOKENS,
     MAXIMUM_PART_TARGET_TOKENS,
     MINIMUM_PART_TARGET_TOKENS,
+    OUTPUT_CAP_HEADROOM_FLOOR,
+    OUTPUT_CAP_HEADROOM_MULTIPLE,
     compact_sizing,
+    context_safety_tokens,
     part_sizing,
     repair_sizing,
 )
@@ -113,8 +116,47 @@ def test_a_compact_call_is_bounded_well_below_a_part() -> None:
 
 
 def test_the_cap_never_exceeds_what_the_context_has_left() -> None:
-    sizing = part_sizing(_capability(context=50_000, output=32_000), estimated_input_tokens=40_000)
-    assert sizing.requested_output_tokens == 50_000 - 40_000 - CONTEXT_SAFETY_TOKENS
+    """The invariant this test's NAME states, asserted as an inequality rather than an equality.
+
+    CORRECTED 2026-08-04, AND THE OLD ASSERTION WAS WRONG IN A WAY THAT COST A RUN. It read
+    `requested_output_tokens == context - input - CONTEXT_SAFETY_TOKENS`, which does not say "never
+    exceeds what is left" — it says "ALWAYS CLAIMS EVERYTHING LEFT". Under that rule a planning call
+    told to aim for 4,000 tokens was handed a cap of 122,542 of GLM 5's 202,752, and the request
+    failed by ONE token because a cap claiming the whole window has no tolerance for an input
+    estimate that reads low. Every input estimate this project makes reads low.
+
+    The intent the name describes is unchanged and is still enforced below. What is added is the
+    second half: the cap is bounded by the WORK, not by the horizon.
+    """
+    capability = _capability(context=50_000, output=32_000)
+    sizing = part_sizing(capability, estimated_input_tokens=40_000)
+    room = 50_000 - 40_000 - context_safety_tokens(40_000)
+
+    assert sizing.requested_output_tokens <= room
+    assert sizing.requested_output_tokens + 40_000 + context_safety_tokens(40_000) <= 50_000
+
+    # MUTATION PROOF. With room to spare the cap is bounded by the target and its headroom rather
+    # than by the context, so a model with an enormous window is not handed an enormous cap.
+    roomy = part_sizing(
+        _capability(context=1_000_000, output=128_000), estimated_input_tokens=40_000
+    )
+    assert roomy.requested_output_tokens < 1_000_000 - 40_000
+    assert roomy.requested_output_tokens <= max(
+        int(roomy.visible_target_tokens * OUTPUT_CAP_HEADROOM_MULTIPLE),
+        roomy.visible_target_tokens + OUTPUT_CAP_HEADROOM_FLOOR,
+    )
+
+
+def test_the_safety_reserve_is_proportional_because_the_estimator_error_is() -> None:
+    """A flat reserve is generous at 40,000 tokens and nothing at 250,000.
+
+    MEASURED TWICE. The intact Apple payload estimated 244,708 and Bedrock counted at least
+    254,145 — 3.9 percent low. The projected payload estimated 73,458 and GLM 5 counted at least
+    80,211 — 8.4 percent low. The direction is consistent; only the magnitude moves.
+    """
+    assert context_safety_tokens(10_000) == CONTEXT_SAFETY_TOKENS
+    assert context_safety_tokens(250_000) == 30_000
+    assert context_safety_tokens(250_000) > context_safety_tokens(40_000)
 
 
 def test_a_model_with_no_room_left_gets_an_honest_zero_rather_than_an_impossible_number() -> None:

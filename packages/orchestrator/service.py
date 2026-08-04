@@ -483,6 +483,25 @@ class ParserReviewService:
             request.cik, from_date=request.from_date, to_date=request.to_date
         )
 
+    def _projected_text(self, source_set: Any) -> str | None:
+        """The serialised projection this run would actually send, or None in intact mode.
+
+        Built here rather than taken from the executor so that PREFLIGHT COSTS WHAT THE RUN COSTS.
+        A guard that sized the intact bytes and a run that sent the projection would authorize one
+        request and issue another, which is the whole reason the source set is re-verified on every
+        task in the first place.
+        """
+        if self._multipart_settings.source_input_mode != "projected":
+            return None
+        from packages.llm_gateway import to_yaml  # noqa: PLC0415 - single home for serialisation
+        from packages.projection import ProjectionError, project
+        from packages.source_inventory import SourceInventoryError, build_inventory
+
+        try:
+            return to_yaml(project(build_inventory(source_set)))
+        except (ProjectionError, SourceInventoryError):
+            return None
+
     def preflight(self, request: RunRequest) -> RunPlan:
         """Assemble every source set, assess compatibility, and bound the cost. No spend."""
         selection = request.selection()
@@ -513,8 +532,10 @@ class ParserReviewService:
                 report_period=filing.report_period,
             )
             instruction = self._instruction_text(filing, source_set, capability.multimodal)
+            projected = self._projected_text(source_set)
             probe = assess(
                 source_set,
+                projected_text=projected,
                 prompt_text=prompt.text + instruction,
                 model_context_tokens=capability.effective_context_tokens(
                     images_submitted=capability.multimodal
@@ -538,6 +559,7 @@ class ParserReviewService:
                 )
             report = assess(
                 source_set,
+                projected_text=projected,
                 prompt_text=prompt.text + instruction,
                 model_context_tokens=capability.effective_context_tokens(
                     images_submitted=capability.multimodal

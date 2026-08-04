@@ -99,10 +99,25 @@ def assess(
     model_context_tokens: int,
     requested_output_tokens: int,
     model_accepts_images: bool,
+    projected_text: str | None = None,
 ) -> CompatibilityReport:
-    """Assess one filing against one model under INTACT_SOURCE_ONLY."""
+    """Assess one filing against one model.
+
+    `projected_text`, when supplied, is what actually travels instead of the members' own bytes —
+    the lossless YAML projection of everything human-readable in them. Sizing against the members
+    in that mode would measure a request nobody is sending: on Apple's 10-Q the difference is
+    254,000 tokens against 69,000, which is the difference between every candidate refusing and
+    every candidate fitting.
+
+    THE IMAGES ARE COUNTED THE SAME WAY IN BOTH MODES, because they travel the same way in both:
+    a projection cannot carry a JPEG, so a multimodal parser still receives the preserved bytes.
+    """
     prompt_tokens = estimate_tokens(prompt_text)
-    text_tokens = sum(estimate_tokens(m.text or "") for m in source_set.text_members)
+    text_tokens = (
+        estimate_tokens(projected_text)
+        if projected_text is not None
+        else sum(estimate_tokens(m.text or "") for m in source_set.text_members)
+    )
 
     images = source_set.image_members
     # A text-only parser receives no images. They are NOT dropped from the record: they stay in

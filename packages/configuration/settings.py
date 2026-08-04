@@ -120,6 +120,8 @@ class ReviewSettings:
     #: which is an ABSENT OPTIONAL SOURCE and not a fallback: nothing substitutes a different
     #: filing, the benchmark surface simply answers 404 for a filing nobody supplied.
     benchmark_manifest: str = "./docs/benchmark/benchmark-filings.yaml"
+    #: "intact" or "projected". See MultipartSettings.source_input_mode.
+    source_input_mode: str = "intact"
     author_label: str = "local-developer"
     cost_ceiling_usd: str = "5.00"
     max_concurrent_invocations: int = 1
@@ -212,6 +214,7 @@ class Settings:
                 benchmark_manifest=source.get(
                     "BENCHMARK_MANIFEST", "./docs/benchmark/benchmark-filings.yaml"
                 ),
+                source_input_mode=source.get("SOURCE_INPUT_MODE", "intact"),
                 author_label=source.get("REVIEW_AUTHOR", "local-developer"),
                 cost_ceiling_usd=source.get("COST_CEILING_USD", "5.00"),
                 max_concurrent_invocations=int(source.get("MAX_CONCURRENT_INVOCATIONS", "1")),

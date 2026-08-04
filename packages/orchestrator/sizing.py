@@ -84,7 +84,7 @@ REPAIR_HEADROOM_MULTIPLE: Final[float] = 1.6
 #: measured 17 percent low on a modern filing; this phase measured 3.86 percent low on another.
 #: The direction is consistent and the magnitude is not, so the reserve is sized above the larger
 #: of the two measurements this filing produced rather than at either observation.
-CONTEXT_SAFETY_FRACTION: Final[float] = 0.05
+CONTEXT_SAFETY_FRACTION: Final[float] = 0.12
 
 #: The floor, for a filing small enough that five percent is negligible.
 CONTEXT_SAFETY_TOKENS: Final[int] = 4000
@@ -165,6 +165,30 @@ def _cap(capability: ModelCapability, estimated_input_tokens: int) -> int:
     return 0 if room < MINIMUM_USABLE_OUTPUT_TOKENS else room
 
 
+#: How much more than its target a call may be ALLOWED to write. The gap is deliberate — a model
+#: that runs a little over its target should finish rather than truncate — but it is a gap, not the
+#: whole horizon.
+#:
+#: MEASURED, AND THE DEFECT IS EMBARRASSING IN HINDSIGHT. The PLANNING call is told to aim for about
+#: 4,000 tokens and was being handed a cap of every token of context left over: 122,542 of GLM 5's
+#: 202,752. It then failed by ONE token, because a request that claims the entire remaining window
+#: has no tolerance at all for an input estimate that reads low — and every input estimate this
+#: project makes reads low.
+#:
+#: A cap sized to the work is both cheaper in context and robust to the estimator being wrong,
+#: which it always is.
+OUTPUT_CAP_HEADROOM_MULTIPLE: Final[float] = 3.0
+OUTPUT_CAP_HEADROOM_FLOOR: Final[int] = 8000
+
+
+def _requested(cap: int, target: int) -> int:
+    """The cap handed to the provider: the target plus real headroom, never the whole window."""
+    if cap <= 0:
+        return 0
+    wanted = max(int(target * OUTPUT_CAP_HEADROOM_MULTIPLE), target + OUTPUT_CAP_HEADROOM_FLOOR)
+    return max(1, min(cap, wanted))
+
+
 def _target(
     cap: int, *, fraction: float, reasoning_fraction: float, floor: int, ceiling: int, reasons: bool
 ) -> int:
@@ -178,16 +202,17 @@ def _target(
 def part_sizing(capability: ModelCapability, *, estimated_input_tokens: int) -> OutputSizing:
     """Sizing for one part or subpart invocation."""
     cap = _cap(capability, estimated_input_tokens)
+    target = _target(
+        cap,
+        fraction=PART_TARGET_FRACTION,
+        reasoning_fraction=PART_TARGET_FRACTION_WITH_REASONING,
+        floor=MINIMUM_PART_TARGET_TOKENS,
+        ceiling=MAXIMUM_PART_TARGET_TOKENS,
+        reasons=capability.emits_reasoning_before_answer,
+    )
     return OutputSizing(
-        requested_output_tokens=cap,
-        visible_target_tokens=_target(
-            cap,
-            fraction=PART_TARGET_FRACTION,
-            reasoning_fraction=PART_TARGET_FRACTION_WITH_REASONING,
-            floor=MINIMUM_PART_TARGET_TOKENS,
-            ceiling=MAXIMUM_PART_TARGET_TOKENS,
-            reasons=capability.emits_reasoning_before_answer,
-        ),
+        requested_output_tokens=_requested(cap, target),
+        visible_target_tokens=target,
         model_max_output_tokens=capability.max_output_tokens,
         model_context_tokens=capability.effective_context_tokens(
             images_submitted=capability.multimodal
@@ -203,16 +228,17 @@ def compact_sizing(
 ) -> OutputSizing:
     """Sizing for a plan, a replan, a reconciliation or a gap repair. All return work, not content."""
     cap = _cap(capability, estimated_input_tokens)
+    target = _target(
+        cap,
+        fraction=COMPACT_TARGET_FRACTION,
+        reasoning_fraction=COMPACT_TARGET_FRACTION_WITH_REASONING,
+        floor=MINIMUM_COMPACT_TARGET_TOKENS,
+        ceiling=MAXIMUM_COMPACT_TARGET_TOKENS,
+        reasons=capability.emits_reasoning_before_answer,
+    )
     return OutputSizing(
-        requested_output_tokens=cap,
-        visible_target_tokens=_target(
-            cap,
-            fraction=COMPACT_TARGET_FRACTION,
-            reasoning_fraction=COMPACT_TARGET_FRACTION_WITH_REASONING,
-            floor=MINIMUM_COMPACT_TARGET_TOKENS,
-            ceiling=MAXIMUM_COMPACT_TARGET_TOKENS,
-            reasons=capability.emits_reasoning_before_answer,
-        ),
+        requested_output_tokens=_requested(cap, target),
+        visible_target_tokens=target,
         model_max_output_tokens=capability.max_output_tokens,
         model_context_tokens=capability.effective_context_tokens(
             images_submitted=capability.multimodal
@@ -234,9 +260,10 @@ def repair_sizing(
     """
     cap = _cap(capability, estimated_input_tokens)
     wanted = int(math.ceil(malformed_tokens * REPAIR_HEADROOM_MULTIPLE))
+    target = max(1, min(wanted, cap))
     return OutputSizing(
-        requested_output_tokens=cap,
-        visible_target_tokens=max(1, min(wanted, cap)),
+        requested_output_tokens=_requested(cap, target),
+        visible_target_tokens=target,
         model_max_output_tokens=capability.max_output_tokens,
         model_context_tokens=capability.effective_context_tokens(
             images_submitted=capability.multimodal

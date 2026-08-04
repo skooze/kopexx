@@ -172,6 +172,14 @@ class MultipartSettings:
     #: stops. One, because a cycle that finds nothing new has already told us what it knows.
     no_progress_tolerance: int = 1
 
+    #: How the filing reaches the model. "intact" sends the bytes SEC published; "projected" sends
+    #: the lossless YAML projection of everything human-readable in them.
+    #:
+    #: THE DEFAULT IS "intact" AND IT STAYS THERE. Which of the two a run used changes what a
+    #: measurement means, so it is recorded on the run and is never inferred from an unset value.
+    #: rules.md section 21 rule 7, as amended by ADR-0022.
+    source_input_mode: str = "intact"
+
     def __post_init__(self) -> None:
         if self.max_depth < 1:
             raise ValueError("max_depth must be at least 1")
@@ -190,6 +198,11 @@ class MultipartSettings:
             )
         if self.no_progress_tolerance < 0:
             raise ValueError("no_progress_tolerance cannot be negative")
+        if self.source_input_mode not in ("intact", "projected"):
+            raise ValueError(
+                f"{self.source_input_mode!r} is not a source input mode. Choose intact or "
+                "projected. There is no default beyond intact and no silent fallback."
+            )
 
 
 @dataclass
@@ -208,6 +221,10 @@ class _Context:
     #: makes dozens of calls. None when the inventory could not be built, in which case the brief
     #: simply omits it rather than shipping an empty list that reads as "this filing has no tables".
     source_inventory: Any = None
+    #: The YAML projection of this filing, when the run is in PROJECTED input mode. None in
+    #: INTACT mode, which stays the default: switching how a model sees a filing is a change
+    #: to what is being measured and it never happens because a setting was left unset.
+    projection: dict[str, Any] | None = None
     plan: ParsePlan | None = None
     prompts_used: list[dict[str, Any]] = field(default_factory=list)
 
@@ -240,6 +257,7 @@ class MultipartParseService:
         #: source_set_id -> FilingInventory. See `_source_inventory` for why it is keyed on
         #: the bytes rather than on the job.
         self._source_inventories: dict[str, Any] = {}
+        self._projected = settings.source_input_mode == "projected"
 
     @property
     def settings(self) -> MultipartSettings:
@@ -497,6 +515,7 @@ class MultipartParseService:
                 "bytes, so this is refused rather than reconciled."
             )
         blocks = self._blocks(source_set, multimodal=capability.multimodal)
+        inventory = self._source_inventory(source_set)
         return _Context(
             job=job,
             capability=capability,
@@ -513,9 +532,27 @@ class MultipartParseService:
                 members=[m.to_mapping() for m in source_set.members],
                 images_submitted=capability.multimodal,
             ),
-            source_inventory=self._source_inventory(source_set),
+            source_inventory=inventory,
+            projection=self._projection(inventory) if self._projected else None,
             plan=self._load_plan(job),
         )
+
+    def _projection(self, inventory: Any) -> dict[str, Any] | None:
+        """The YAML projection of this filing, or None when it cannot be built.
+
+        REFUSED RATHER THAN DEGRADED. `packages/projection` fails closed if it would not carry
+        every visible span, table element and image the inventory measured, and a projection that
+        lost content is the exact failure visible-content projection was refused authorization for
+        through two phases. A None here means the run falls back to nothing — the caller refuses.
+        """
+        from packages.projection import ProjectionError, project
+
+        if inventory is None:
+            return None
+        try:
+            return project(inventory)
+        except ProjectionError:
+            return None
 
     def _source_inventory(self, source_set: SourceSet) -> Any:
         """The mechanical inventory of this source set, memoised on its own identity.
@@ -713,6 +750,16 @@ class MultipartParseService:
 
         prompt = self._prompts.get(task.prompt.prompt_id, task.prompt.version)
         brief = self._brief_for(context, task)
+        # IN PROJECTED MODE THE FILING TRAVELS AS SYNTHETIC YAML, NOT AS A PRESERVED ARTIFACT.
+        # `OriginalSourceBlock` is admitted by PROVENANCE — its bytes must hash to a preserved
+        # object — and a projection is by construction not those bytes. It is synthetic content,
+        # so it goes through the compiler and the boundary validator like every other synthetic
+        # component, which is exactly where a rewritten document belongs.
+        #
+        # THE IMAGES STILL TRAVEL AS THEMSELVES. They cannot be projected and they are preserved
+        # bytes, so a multimodal parser receives them intact alongside the projected text.
+        if context.projection is not None:
+            brief = {**brief, "source": context.projection}
         payload = compile_yaml(brief, origin=f"multipart.{task.task_type.value.lower()}")
         task.idempotency = self._idempotency(job, task, brief_content=payload.content)
         self._store.save_task(task)
@@ -777,7 +824,8 @@ class MultipartParseService:
 
         if task.state is not TaskState.READY:
             self._store.set_task_state(task, TaskState.READY)
-        record = self._invoke(context, task, prompt=prompt, payload=payload, blocks=blocks)
+        sent = tuple(b for b in blocks if b.is_image) if context.projection is not None else blocks
+        record = self._invoke(context, task, prompt=prompt, payload=payload, blocks=sent)
         if record is None:
             return
 

@@ -316,3 +316,131 @@ candidates:
       no usable room for an answer inside the documented 256,000. The documented figure stands as
       documented, unverified at the endpoint, and the refusal is a property of this filing rather
       than a measurement of this model.
+
+  # --- ADDED 2026-08-04 BY PHASE 2.2 ------------------------------------------------------------
+  #
+  # WHY TWO MORE CANDIDATES, AND WHY THESE TWO. Every one of the five above is limited by how much
+  # it may WRITE, not by how much it may read: against the projected Apple 10-Q at roughly 69,000
+  # input tokens they have between 58,000 and 192,000 tokens of context to spare and output caps of
+  # 8,000 to 32,000. A filing of this size needs 40,000 to 80,000 output tokens to express, so the
+  # existing five need between three and ten calls each and these two need one.
+  #
+  # BOTH WERE REACHED BEFORE BEING RECORDED, exactly as the original five were. Neither entry
+  # carries a number that was not returned by a live API or read from an official AWS page today.
+  #
+  # A THIRD WAS REQUESTED AND IS NOT HERE. Claude Sonnet 5 returned AccessDeniedException on both
+  # `us.anthropic.claude-sonnet-5` and `global.anthropic.claude-sonnet-5` in us-east-1, pointing at
+  # AWS sales support. It needs an account-level entitlement this project cannot grant itself, so it
+  # is recorded as an external blocker rather than as an unavailable model.
+
+  - label: Amazon Nova 2 Lite
+    provider: Amazon
+    model_id: "amazon.nova-2-lite-v1:0"
+    model_name: Nova 2.0 Lite
+    version_qualifier: "v1:0"
+    mapping: UNIQUE
+    mapping_evidence: >-
+      One model in the account is named Nova 2.0 Lite. Nova Lite, Nova 2.0 Omni and Nova 2.0 Pro are
+      separately named and separately priced models and are NOT this label.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1"]
+    inference_profile_required: true
+    inference_profile_id: "us.amazon.nova-2-lite-v1:0"
+    text_input: true
+    image_input: true
+    multimodal: true
+    image_verified: true
+    context_tokens: 1000000
+    max_output_tokens: 64000
+    invocation_apis: [Converse, InvokeModel]
+    streaming_supported: true
+    emits_reasoning_before_answer: true
+    reasoning_evidence: >-
+      NOT MEASURED. The default is deliberately the conservative one: assuming a model reasons when
+      it does not costs a smaller output target, and assuming it does not when it does costs a
+      truncated part.
+    price_input_per_1k: 0.00033
+    price_output_per_1k: 0.00275
+    price_image: none published; image input billed as input tokens
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: >-
+      Returned exactly hello, stopReason end_turn, 57 input and 4 output tokens, invoked through the
+      cross-region inference profile in us-east-1. The BARE model id was refused — "0 with on-demand
+      throughput isn't supported" — which is the same shape as Llama 4 Maverick and is verified
+      rather than assumed.
+
+      IMAGE PATH VERIFIED BY INVOCATION, not from a modality flag. An 87-byte synthetic 64x16
+      greyscale PNG — drawn for the gate so no SEC content is sent to prove a transport path — was
+      accepted and read, stopReason end_turn. It cost 291 input tokens against roughly 20 for the
+      accompanying text, so one small image is on the order of 270 tokens rather than the 4,000 the
+      pre-spend guard charges as its unverified upper bound.
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      THE LARGEST OUTPUT LIMIT AVAILABLE TO THIS ACCOUNT ON AN ORDINARY PATH, at 64,000 tokens —
+      double the best of the original five and eight times three of them. Combined with a 1M context
+      it is the only candidate that can hold this filing and answer about it in one response.
+
+      PRICES ARE THE us-west-2 RATES AND us-east-1 MAY BE CHEAPER. The Price List publishes a lower
+      us-east-1 input rate; the higher figure is recorded because a ceiling that under-states is the
+      unsafe direction. Output is priced at 8.3x input, so a full 64,000-token response costs about
+      USD 0.176 — the output limit that makes this candidate useful is also what makes it expensive.
+
+      IT IS THE ONLY RELEVANT MODEL IN THIS ACCOUNT THAT PUBLISHES A PROMPT-CACHE RATE.
+
+  - label: GLM 5
+    provider: Z.AI
+    model_id: "zai.glm-5"
+    model_name: GLM 5
+    version_qualifier: none published
+    mapping: UNIQUE
+    mapping_evidence: >-
+      The only GLM 5 in the account. GLM 4.7 and GLM 4.7 Flash are separately named and separately
+      priced models and are NOT this label.
+    availability: AVAILABLE
+    access_status: agreement AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1", "us-west-2"]
+    inference_profile_required: false
+    inference_profile_id: null
+    text_input: true
+    image_input: false
+    multimodal: false
+    image_verified: false
+    context_tokens: 202752
+    context_tokens_documented: 200000
+    context_tokens_source: MEASURED_BY_INVOCATION
+    max_output_tokens: 128000
+    invocation_apis: [Converse, InvokeModel]
+    streaming_supported: true
+    emits_reasoning_before_answer: true
+    reasoning_evidence: >-
+      NOT MEASURED. Conservative default, for the reason given on Nova 2 Lite.
+    price_input_per_1k: 0.001
+    price_output_per_1k: 0.0032
+    price_image: none published; image input not supported
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: >-
+      Returned exactly hello, stopReason end_turn, 16 input and 2 output tokens, in BOTH us-east-1
+      and us-west-2, on the bare model id with no inference profile.
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      128,000 OUTPUT TOKENS ON AN ORDINARY ON-DEMAND PATH, with no inference profile and therefore
+      no cross-region data-residency decision attached. That is sixteen times the cap three of the
+      original five carry.
+
+      ITS 200,000 CONTEXT IS THE SMALLEST OF THE LARGE-OUTPUT OPTIONS and it does NOT hold this
+      filing intact — 254,000 tokens of markup exceeds it. It holds the PROJECTION comfortably, at
+      roughly 69,000, with 130,000 to spare. It is a candidate for projected input and not for
+      intact input, and that is a property of the trade rather than a defect.
+
+      TEXT ONLY. A filing's images are reported unanalysed and this candidate's parse may not claim
+      image coverage.
+

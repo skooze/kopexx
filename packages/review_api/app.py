@@ -172,6 +172,7 @@ def build(settings: Settings, *, provider: ModelProvider | None = None) -> Appli
             max_depth=review.multipart_max_depth,
             max_reconciliation_cycles=review.multipart_reconciliation_cycles,
             filing_budget_usd=Decimal(review.multipart_filing_budget_usd),
+            source_input_mode=review.source_input_mode,
         ),
     )
 
