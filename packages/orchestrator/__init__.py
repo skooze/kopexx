@@ -19,6 +19,7 @@ from .catalog import (
     FilingRecord,
     PreservedFile,
 )
+from .completeness_service import measure
 from .errors import (
     CeilingReachedError,
     FilingNotInCatalogError,
@@ -72,6 +73,7 @@ __all__ = [
     "FilingRecord",
     "InlineWorker",
     "InventoriedFiling",
+    "measure",
     "MultipartParseService",
     "MultipartProtocolError",
     "MultipartSettings",
