@@ -127,29 +127,67 @@ control-plane evidence, the documentation evidence, and what could not be verifi
 
 ## What was actually measured, and how little it is
 
-**ONE CANDIDATE, ONE FILING, FIVE CALLS.** `GPT OSS 120B` against the preserved 3M 10-K405 of 1996,
-`0000066740-96-000005`, 146,471 bytes. Provider-reported counts, not estimates.
+**SEVEN RUNS, TWO FILINGS, FIVE CANDIDATES, `USD 2.603827`.** Provider-reported counts, not
+estimates. Every request and response preserved.
+
+### The five candidates on one filing — 3M CO 10-K405, `0000066740-96-000005`, 146,471 bytes
+
+| model | calls | input tokens | output tokens | max single response | USD |
+|---|---:|---:|---:|---:|---|
+| GPT OSS 120B | 51 | 1,965,451 | 125,159 | 7,184 | 0.36991305 |
+| NVIDIA Nemotron 3 Super 120B | 78 | 3,145,019 | 165,202 | 18,303 | 0.57913415 |
+| Qwen3 235B A22B | 58 | 2,142,106 | 131,349 | 8,000 (cap) | 0.58685044 |
+| Llama 4 Maverick | 14 | 520,442 | 7,153 | 909 | 0.13184449 |
+| Qwen3 VL 235B | 47 | 902,097 | 29,432 | 5,754 | 0.55640053 |
+
+### Both multimodal candidates on an image-bearing filing — Macy's 10-Q/A
+
+| model | calls | input tokens | output tokens | USD |
+|---|---:|---:|---:|---|
+| Llama 4 Maverick | 16 | 330,276 | 7,628 | 0.08666540 |
+| Qwen3 VL 235B | 20 | 408,042 | 28,856 | 0.29301922 |
+
+### The shape of the arithmetic, now measured rather than predicted
+
+**INPUT DOMINATES, AND BY HOW MUCH IS NOW A NUMBER.** For `GPT OSS 120B` on the 3M filing the input
+side is `USD 0.29481765` and the output side `USD 0.07509540` — **79.7% of the spend is the intact
+filing being re-sent**, 51 times, at roughly 38,538 tokens per call. Nemotron's is 81.5%.
+
+**THE NUMBER OF CALLS IS A PROPERTY OF THE MODEL, NOT OF THE FILING.** The same 146,471 bytes
+produced plans of 5, 12, 24, 27 and 28 parts, and runs of 14 to 102 tasks. A cost model that treats
+"calls per filing" as a filing property is wrong by a factor of five before it starts.
+
+**TWO FILINGS IS NOT A DENOMINATOR, AND SEVEN RUNS IS NOT A CORPUS.** Nothing here extrapolates to
+613 filings, to a form string that has not run, or to a filing of a materially different size. Both
+proof filings fit every candidate's context intact, so R-21 — whether a materially sized modern
+filing does — is untouched by construction. **Repeat-run variability is also unmeasured**: no filing
+was parsed twice by the same model, because a rerun is billable and none was authorized.
+
+## The discounted tiers, verified but NOT enabled
+
+Investigated 2026-08-04 from the AWS Price List API bulk file for `us-east-1`:
 
 ```
-planning call             36,414 input   3,093 output   USD 0.00731790
-part: cover-page          measured       4,006 output   USD 0.00815655
-part: item-1-business     measured       3,416 output   USD 0.00780405
-part: item-2-properties   measured       2,313 output   USD 0.00714000
-part: item-3-legal...     measured       2,941 output   USD 0.00751860
+Standard     what every measurement above was billed at
+Flex         exactly 50% of Standard, SYNCHRONOUS. Verified for gpt-oss-120b in us-east-1 at
+             USD 0.000075/1K input and USD 0.0003/1K output. Four of the five candidates list it.
+Batch        exactly 50% of Standard, ASYNCHRONOUS (24-168h job timeout), S3 JSONL input.
+             us-east-1 is absent from Qwen3 235B A22B's batch region list.
+Priority     +75% over Standard. Standard is the MIDDLE of three synchronous prices, not the floor.
+Reserved     1- or 3-month capacity reservation. NOT supported on the candidate model cards read.
+Provisioned  none of the five candidates appears on the supported-models table.
+Throughput
 ```
 
-The model planned **24 parts**. At the observed per-call cost that implies roughly **USD 0.19** for
-this filing under multipart, against **USD 0.0078** measured for the same model and filing under
-single response in Phase 2 — very close to a factor of 24, which is what an input-dominated cost
-model predicts when the input is re-sent per call.
+At Flex rates the GPT OSS 120B run above would have cost `USD 0.184957` rather than `USD 0.369913`.
+**NOTHING IS ENABLED.** Flex carries materially lower throughput limits, switching tiers mid-proof
+would change what was being measured, and enabling it is a user decision that has not been made.
 
-**FOUR OF THE FIVE CANDIDATES HAVE NOT RUN**, twenty of the twenty-four parts have not run, and
-the multimodal filing has not run at all. The blocker is an expired AWS IAM Identity Center session
-and is recorded in `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
-
-**FIVE CALLS IS NOT A DENOMINATOR.** Nothing here extrapolates to a corpus, to another candidate, or
-to a filing of a different size. What it establishes is the SHAPE of the arithmetic and one
-data point inside it.
+**A NOTE ON WHY PROMPT CACHING WOULD NOT HELP EVEN IF IT EXISTED.** `bedrock.py` places the
+per-call brief FIRST and the intact filing after it, deliberately, so the instruction is readable
+before the filing it concerns. Prefix caching matches a strict token prefix, so the invariant 40,000
+tokens are not a shared prefix at all. Reordering is a semantic change requiring re-benchmarking and
+explicit approval; it has not been made.
 
 ## What the ceilings do about it
 
@@ -167,8 +205,15 @@ before another filing ran. A refusal PAUSES the branch with its reason visible; 
 dropped or downgraded to fit, and nothing already produced is discarded.
 
 Every provider attempt reserves its conservative worst case before the call and settles against
-measured usage after it. **A failed attempt's reservation is not released** — that request was
-issued and cost money — and a retry takes a second reservation.
+measured usage after it. **A failed attempt's reservation is not released** — and a retry takes a
+second reservation.
+
+The rationale that used to sit here, "that request was issued and cost money", does not hold for
+every failure. Four attempts in this phase failed at CREDENTIAL RESOLUTION, before transport:
+`input_tokens 0`, `latency_ms 0`, no `provider_request_id`, and no settlement entry. They hold
+`USD 0.10396815` of ceiling for calls that never reached a provider. The MECHANISM is stated
+above and is unchanged; the justification is narrower than the mechanism, and closing that gap is
+open work rather than a claim.
 
 ---
 

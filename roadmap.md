@@ -1,7 +1,7 @@
 # roadmap.md — Kopexx Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2.1, 2026-08-03)
-LAST UPDATED: 2026-08-03, after Phase 2.1 completed against published baseline `be446fe`.
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2.1, 2026-08-04)
+LAST UPDATED: 2026-08-04, after the Phase 2.1 five-model proof completed.
 ARCHITECTURE DECISIONS: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
 `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md` and
@@ -44,9 +44,10 @@ PHASE 0    Corpus evidence                            COMPLETE
 PHASE 0.5  Repository cleanup and corpus reverify     COMPLETE
 PHASE 1    Secure AWS and model-access verification   COMPLETE  2026-08-03
 PHASE 2    Parser experiments + review UI, together   COMPLETE  2026-08-03
-PHASE 2.1  Model-directed multipart parsing           IMPLEMENTED AND PUBLISHED 2026-08-03;
-                                                      the five-model proof is BLOCKED on an
-                                                      expired AWS SSO session
+PHASE 2.1  Model-directed multipart parsing           COMPLETE  2026-08-04. All five
+                                                      candidates ran, both multimodal ones
+                                                      also on an image-bearing filing.
+                                                      Seven runs, USD 2.603827 measured.
 PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
                                                       BLOCKED on a user parser-selection decision
 PHASE 3    Optional model stages: image, summary, chat
@@ -335,7 +336,13 @@ EXPLICITLY OUT OF SCOPE. Any rigid database schema. Any universal semantic taxon
 ---
 
 # PHASE 2.1 — MODEL-DIRECTED MULTIPART PARSING
-# IMPLEMENTED AND PUBLISHED 2026-08-03. THE FIVE-MODEL PROOF IS BLOCKED EXTERNALLY.
+# COMPLETE 2026-08-04. ALL FIVE CANDIDATES RAN. NO PARSER WAS SELECTED.
+#
+# Seven runs, USD 2.603827 of measured Bedrock spend, every request and response preserved.
+# Plan sizes for ONE identical filing ranged from 5 parts to 28 — a 5.6x spread. Each candidate
+# exercised a different path: the reconciliation loop, the format-repair path, the truncation and
+# replanning path, none of them, and the filing budget. table_count is ZERO in all seven runs.
+# Measured results: docs/sprints/PHASE-0201-model-directed-multipart-parsing.md section 3.
 
 Phase 2 sent a complete filing intact and then expected the complete parsed artifact back in ONE
 provider response. Thirty preserved invocations measured what that assumption costs: three of the

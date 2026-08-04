@@ -21,7 +21,8 @@ response, not to a parse.** That assumption is withdrawn. Decision:
 section names, node types, table labels, relationships, subparts and unresolved material are all
 model-created. Measured against a real model: `GPT OSS 120B` divided the preserved 3M 10-K405 of
 1996 into **24 parts it named itself** — `item-7-md&a`, `auditor-report`, `exhibit-27-1995` — and
-four completed parts resolved **65 of 66 source references** against the preserved bytes.
+the completed parse resolved **352 of 364 source references** against the preserved bytes.
+Across the five candidates, plan sizes for that one filing ranged from **5 parts to 28**.
 
 **WHAT IS STILL NOT TRUE.** No application database. No Redis. No summary, image or chat artifact —
 Phase 2.1 multiplies the number of PARSER calls and authorizes no other stage. No parser has been
@@ -29,10 +30,17 @@ selected, ranked or promoted; all five remain equally available. No breadth run 
 strings. Prompt caching was investigated and is available for none of the candidates. Nothing is
 deployed.
 
-**THE FIVE-MODEL PROOF IS INCOMPLETE, AND THE REASON IS EXTERNAL.** The AWS IAM Identity Center
-session expired mid-run at `2026-08-04T02:18:20Z`. The orchestrator recorded a non-retryable
-provider error, marked the task FAILED with the reason, and stopped — nothing was retried,
-substituted, or lost. `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
+**THE FIVE-MODEL PROOF IS COMPLETE: SEVEN RUNS, `USD 2.603827` MEASURED.** All five candidates
+parsed the 3M 10-K405 through the multipart protocol; both multimodal candidates also parsed an
+image-bearing Macy's 10-Q/A with the filed GIF sent intact on every call. An AWS IAM Identity
+Center session expired mid-way through the first attempt at `2026-08-04T02:18:20Z`; the
+orchestrator recorded a non-retryable provider error, marked the task FAILED with the reason, and
+stopped — nothing was retried, substituted, or lost. The user cleared it and the proof ran to
+completion.
+
+**`table_count` IS ZERO IN ALL SEVEN RUNS.** No candidate emitted a structured table from a
+financial filing. Correctness and repeat-run variability remain unmeasured.
+`docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` sections 3 and 5.
 
 ### Added
 

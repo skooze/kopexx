@@ -251,10 +251,10 @@ Phase 0    Representative filing corpus                  COMPLETE
 Phase 0.5  Repository cleanup and corpus reverification  COMPLETE
 Phase 1    Secure AWS and model-access verification      COMPLETE 2026-08-03
 Phase 2    Parser experiments AND the review UI, TOGETHER   COMPLETE 2026-08-03
-Phase 2.1  Model-directed multipart parsing                 IMPLEMENTED AND PUBLISHED
-                                                            2026-08-03; the five-model proof
-                                                            is BLOCKED on an expired AWS SSO
-                                                            session, not on a defect
+Phase 2.1  Model-directed multipart parsing                 COMPLETE 2026-08-04. All five
+                                                            candidates ran; both multimodal
+                                                            ones also on an image-bearing
+                                                            filing. Seven runs, USD 2.603827.
 Phase 2.5  BREADTH across all 22 substantive form strings   BLOCKED on a user decision about
                                                             which parser and prompt version advances
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
@@ -312,10 +312,22 @@ prompts/parser/parser-multipart-*         six immutable families
 docs/llm/prompt-caching-investigation.md  investigated; available for NO candidate
 ```
 
-**THE FIVE-MODEL PROOF IS INCOMPLETE AND THE BLOCKER IS EXTERNAL.** One candidate produced a valid
-24-part plan and four completed parts resolving 65 of 66 references; the AWS IAM Identity Center
-session then expired mid-run. `aws sso login` on the host unblocks it. Nothing was retried,
-substituted or lost. See `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
+**THE FIVE-MODEL PROOF IS COMPLETE. SEVEN RUNS, USD 2.603827 MEASURED.** All five candidates
+parsed the 3M 10-K405 of 1996 through the multipart protocol, and both multimodal candidates also
+parsed an image-bearing Macy's 10-Q/A with the filed GIF sent intact on every call. Plan sizes for
+ONE identical filing ranged from **5 parts to 28** — a 5.6x spread from the same bytes on the same
+day. Each candidate exercised a different path: the reconciliation loop, the format-repair path,
+the truncation-and-replanning path, none of them, and the filing budget.
+
+**`table_count` IS ZERO IN ALL SEVEN RUNS.** Not one candidate emitted a structured table from a
+financial filing. No prompt in this phase asks for one, so it is a measured fact about unprompted
+behaviour rather than a compliance failure — and it is the largest open question the proof leaves.
+
+**A STATUS IS NOT A SCORE.** `INCOMPLETE_WORK` means scheduled work did not finish;
+`RECONCILIATION_UNRESOLVED` means the last reconciliation returned `plan_complete: false`. Neither
+judges parse quality. **Correctness is still unmeasured** — `review_history` is empty on all seven
+— and so is repeat-run variability, because no filing was parsed twice by the same model.
+Measured results: `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 3.
 
 **NO PARSER HAS BEEN SELECTED, RANKED OR PROMOTED**, and the single-response protocol remains
 runnable so the two can be compared. Do not choose one.
