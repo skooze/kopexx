@@ -113,10 +113,34 @@ class OutputSizing:
         }
 
 
+#: Below this many output tokens a call cannot produce a usable answer, so the pairing is refused
+#: rather than requested.
+#:
+#: MEASURED, AND THE DEFECT IT CLOSES REACHED A PROVIDER SDK. On Apple's 10-Q the input left Qwen3
+#: VL 235B 3,349 tokens of context, the cap arithmetic floored to ZERO, and the request went out
+#: with `inferenceConfig.maxTokens: 0`. botocore refused it — "Invalid value for parameter
+#: inferenceConfig.maxTokens, value: 0, valid min value: 1" — and the reservation was charged for a
+#: call no provider ever saw.
+#:
+#: A ZERO IS NOT A SMALL BUDGET, IT IS AN IMPOSSIBLE ONE, and `_cap` returning it made an
+#: incompatible pairing look compatible: the compatibility guard checked `input + 0 <= context` and
+#: passed. The floor is what turns that back into the refusal it always was.
+MINIMUM_USABLE_OUTPUT_TOKENS: Final[int] = 512
+
+
 def _cap(capability: ModelCapability, estimated_input_tokens: int) -> int:
-    """The largest output this model can be asked for, given what the input already occupies."""
-    context_left = capability.context_tokens - estimated_input_tokens - CONTEXT_SAFETY_TOKENS
-    return max(0, min(capability.max_output_tokens, context_left))
+    """The largest output this model can be asked for, given what the input already occupies.
+
+    Returns 0 when there is not enough room left to be worth asking for. A caller must treat 0 as
+    INCOMPATIBLE and refuse; it must never be sent as a request cap.
+    """
+    context_left = (
+        capability.effective_context_tokens(images_submitted=capability.multimodal)
+        - estimated_input_tokens
+        - CONTEXT_SAFETY_TOKENS
+    )
+    room = max(0, min(capability.max_output_tokens, context_left))
+    return 0 if room < MINIMUM_USABLE_OUTPUT_TOKENS else room
 
 
 def _target(
@@ -143,7 +167,9 @@ def part_sizing(capability: ModelCapability, *, estimated_input_tokens: int) -> 
             reasons=capability.emits_reasoning_before_answer,
         ),
         model_max_output_tokens=capability.max_output_tokens,
-        model_context_tokens=capability.context_tokens,
+        model_context_tokens=capability.effective_context_tokens(
+            images_submitted=capability.multimodal
+        ),
         estimated_input_tokens=estimated_input_tokens,
         reasoning_shares_allowance=capability.emits_reasoning_before_answer,
         kind="part",
@@ -166,7 +192,9 @@ def compact_sizing(
             reasons=capability.emits_reasoning_before_answer,
         ),
         model_max_output_tokens=capability.max_output_tokens,
-        model_context_tokens=capability.context_tokens,
+        model_context_tokens=capability.effective_context_tokens(
+            images_submitted=capability.multimodal
+        ),
         estimated_input_tokens=estimated_input_tokens,
         reasoning_shares_allowance=capability.emits_reasoning_before_answer,
         kind=kind,
@@ -188,7 +216,9 @@ def repair_sizing(
         requested_output_tokens=cap,
         visible_target_tokens=max(1, min(wanted, cap)),
         model_max_output_tokens=capability.max_output_tokens,
-        model_context_tokens=capability.context_tokens,
+        model_context_tokens=capability.effective_context_tokens(
+            images_submitted=capability.multimodal
+        ),
         estimated_input_tokens=estimated_input_tokens,
         reasoning_shares_allowance=capability.emits_reasoning_before_answer,
         kind="format_repair",

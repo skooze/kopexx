@@ -259,6 +259,15 @@ def _candidate(
         multimodal=_as_bool(mapping["multimodal"], "multimodal", where),
         image_verified=_as_bool(mapping["image_verified"], "image_verified", where),
         context_tokens=_as_int(mapping["context_tokens"], "context_tokens", where),
+        context_tokens_with_image_input=(
+            _as_int(
+                mapping["context_tokens_with_image_input"],
+                "context_tokens_with_image_input",
+                where,
+            )
+            if "context_tokens_with_image_input" in mapping
+            else 0
+        ),
         max_output_tokens=_as_int(mapping["max_output_tokens"], "max_output_tokens", where),
         invocation_apis=_as_str_tuple(mapping["invocation_apis"], "invocation_apis", where),
         streaming_supported=_as_bool(mapping["streaming_supported"], "streaming_supported", where),

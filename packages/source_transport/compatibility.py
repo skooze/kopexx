@@ -142,6 +142,41 @@ def assess(
             uncovered_member_count=len(source_set.uncovered_members),
         )
 
+    # A ZERO OUTPUT BUDGET IS AN IMPOSSIBLE REQUEST, NOT A SMALL ONE, and it must not pass here.
+    #
+    # MEASURED 2026-08-04. On Apple's 10-Q accession 0000320193-25-000008 the intact source set
+    # left Qwen3 VL 235B roughly 3,300 tokens of context, the sizing policy floored its output cap
+    # to zero, and `estimated + 0 <= context` was TRUE — so an incompatible pairing was reported
+    # compatible, the request went out with `inferenceConfig.maxTokens: 0`, and botocore refused it
+    # before transport while the reservation was charged.
+    #
+    # The arithmetic was right and the question was wrong. "Does the input fit" is not the question
+    # this guard exists to answer; "can this model be asked to parse this filing" is, and a model
+    # that has no room to answer cannot.
+    if requested_output_tokens <= 0:
+        return CompatibilityReport(
+            compatible=False,
+            reason="no_room_for_an_answer",
+            detail=(
+                f"the complete source set is estimated at {estimated:,} input tokens against a "
+                f"verified context of {model_context_tokens:,}, which leaves no usable room for a "
+                "response. INTACT_SOURCE_ONLY is the authorized mode: nothing is truncated, sliced "
+                "or split, and no other model is substituted. Select a model with a larger "
+                "verified context."
+            ),
+            estimated_input_tokens=estimated,
+            prompt_tokens=prompt_tokens,
+            text_tokens=text_tokens,
+            image_tokens=image_tokens,
+            image_count=image_count,
+            submitted_bytes=submitted_bytes,
+            model_context_tokens=model_context_tokens,
+            requested_output_tokens=requested_output_tokens,
+            unknown_member_count=0,
+            images_unprocessed=images_unprocessed,
+            uncovered_member_count=len(source_set.uncovered_members),
+        )
+
     # The output shares the context window with the input on every candidate's Converse path, so
     # the guard reserves room for both. Sizing only the input is how a request is accepted and
     # then truncated at max_tokens with the parse half-finished.

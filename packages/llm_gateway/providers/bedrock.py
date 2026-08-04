@@ -67,7 +67,8 @@ RETRYABLE_ERROR_CODES: frozenset[str] = frozenset(
 #: USD 0.22590990 of authorization, held for calls no provider ever saw.
 #:
 #: NONE OF THESE IS RETRYABLE. An expired federated session does not become valid by being asked
-#: twice, and the eleven failures above happened inside four minutes.
+#: twice, and the eleven failures above happened inside four minutes. Neither does a request the
+#: SDK refused to send: the same parameters produce the same refusal.
 CREDENTIAL_EXCEPTION_NAMES: frozenset[str] = frozenset(
     {
         "TokenRetrievalError",
@@ -81,6 +82,15 @@ CREDENTIAL_EXCEPTION_NAMES: frozenset[str] = frozenset(
         "ProfileNotFound",
         "TokenProviderNotSupportedError",
         "RefreshWithMFAUnsupportedError",
+        # NOT a credential failure, but provably pre-transport for the same reason and with the
+        # same billing consequence: botocore validates the request parameters locally and raises
+        # before it opens a connection. MEASURED 2026-08-04 — a sizing policy that computed a
+        # zero-token output budget produced `Invalid value for parameter
+        # inferenceConfig.maxTokens, value: 0`, and the reservation was charged for a call no
+        # provider ever saw.
+        "ParamValidationError",
+        "MissingParametersError",
+        "ValidationError",
     }
 )
 

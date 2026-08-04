@@ -516,7 +516,9 @@ class ParserReviewService:
             probe = assess(
                 source_set,
                 prompt_text=prompt.text + instruction,
-                model_context_tokens=capability.context_tokens,
+                model_context_tokens=capability.effective_context_tokens(
+                    images_submitted=capability.multimodal
+                ),
                 requested_output_tokens=0,
                 model_accepts_images=capability.multimodal,
             )
@@ -530,12 +532,16 @@ class ParserReviewService:
                 requested_output = sized_output_tokens(
                     estimated_input_tokens=probe.estimated_input_tokens,
                     model_max_output=capability.max_output_tokens,
-                    model_context=capability.context_tokens,
+                    model_context=capability.effective_context_tokens(
+                        images_submitted=capability.multimodal
+                    ),
                 )
             report = assess(
                 source_set,
                 prompt_text=prompt.text + instruction,
-                model_context_tokens=capability.context_tokens,
+                model_context_tokens=capability.effective_context_tokens(
+                    images_submitted=capability.multimodal
+                ),
                 requested_output_tokens=requested_output,
                 model_accepts_images=capability.multimodal,
             )

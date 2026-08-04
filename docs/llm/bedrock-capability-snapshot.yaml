@@ -146,7 +146,9 @@ candidates:
     image_input: false
     multimodal: false
     image_verified: false
-    context_tokens: 256000
+    context_tokens: 131072
+    context_tokens_documented: 256000
+    context_tokens_source: MEASURED_BY_INVOCATION
     max_output_tokens: 32000
     invocation_apis: [Converse, InvokeModel, ChatCompletions]
     streaming_supported: true
@@ -162,7 +164,18 @@ candidates:
     blocker: null
     disabled_reason: null
     compatibility_note: >-
-      Largest published output limit of the five, at 32K, over a 256K context.
+      THE DOCUMENTED CONTEXT IS 256K AND THE RUNTIME LIMIT IS 131,072. MEASURED 2026-08-04 by an
+      actual Converse invocation against Apple's 10-Q accession 0000320193-25-000008, which Bedrock
+      refused with: "This model's maximum context length is 131072 tokens. However, you requested
+      7292 output tokens and your prompt contains at least 123781 input tokens". The AWS model card
+      read the same day says 256K.
+
+      THE RUNTIME IS AUTHORITATIVE FOR WHAT AN ACCOUNT CAN ACTUALLY SEND, exactly as it is for
+      Qwen3 235B A22B's us-east-1 availability. A documented limit that the endpoint refuses is not
+      a limit this project can plan against, and Phase 2's benchmark never caught it because every
+      filing in that shared benchmark fitted inside 128K.
+
+      Largest published output limit of the five, at 32K, over a runtime context of 128K.
 
   - label: Qwen3 235B A22B
     provider: Qwen
@@ -185,7 +198,9 @@ candidates:
     image_input: false
     multimodal: false
     image_verified: false
-    context_tokens: 256000
+    context_tokens: 262144
+    context_tokens_documented: 256000
+    context_tokens_source: MEASURED_BY_INVOCATION
     max_output_tokens: 8000
     invocation_apis: [Converse, InvokeModel, ChatCompletions]
     streaming_supported: true
@@ -231,6 +246,8 @@ candidates:
     multimodal: true
     image_verified: true
     context_tokens: 1000000
+    context_tokens_with_image_input: 131072
+    context_tokens_source: MEASURED_BY_INVOCATION
     max_output_tokens: 8000
     invocation_apis: [Converse, InvokeModel]
     streaming_supported: true

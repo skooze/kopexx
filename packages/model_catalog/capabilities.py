@@ -140,6 +140,28 @@ class ModelCapability:
     #: measured as a well-formed response with no text in it, and which at multipart scale is a
     #: truncated part and a replanning cycle. An unmeasured candidate gets the safe direction.
     emits_reasoning_before_answer: bool = True
+    #: The runtime context limit WHEN AN IMAGE IS IN THE REQUEST, when it differs from the
+    #: text-only one. Zero means it does not differ, or has not been measured.
+    #:
+    #: MEASURED 2026-08-04 AND IT IS NOT A ROUNDING DIFFERENCE. Llama 4 Maverick documents a
+    #: 1,000,000-token context. Sent Apple's 10-Q with the filing's two GRAPHIC members attached,
+    #: Bedrock refused with "Context length: 275912 > limit of 131072 with image provided" — an
+    #: eightfold reduction that no model card mentions and that no control-plane API returns.
+    #:
+    #: A CAPABILITY THAT DEPENDS ON THE REQUEST IS STILL A CAPABILITY. Carrying one number would
+    #: mean either refusing text-only work the model can do, or accepting multimodal work it will
+    #: reject after the reservation is charged. Phase 2.2 did the second, once, and paid for it.
+    context_tokens_with_image_input: int = 0
+
+    def effective_context_tokens(self, *, images_submitted: bool) -> int:
+        """The context limit that actually applies to a request of this shape.
+
+        The image-aware limit is used only when images are genuinely going, so a multimodal model
+        parsing a filing with no images keeps its full text-only context.
+        """
+        if images_submitted and self.context_tokens_with_image_input:
+            return self.context_tokens_with_image_input
+        return self.context_tokens
 
     def __post_init__(self) -> None:
         if self.multimodal and not (self.image_input and self.image_verified):
