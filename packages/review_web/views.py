@@ -20,7 +20,7 @@ analysed, and unresolved content in the parse.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from .assets import STYLESHEET  # noqa: F401 - re-exported for the asset route
 from .html import badge, each, esc, join, tag, url, warning
@@ -50,6 +50,48 @@ _REVIEW_KIND = {
 }
 
 
+#: The two things a person does in this workspace, and they are genuinely different jobs.
+#:
+#: FILING is "is this parse any good" — the raw source beside what a model made of it, the gaps,
+#: the tables, the nodes. BENCHMARK is "which model should we use" — every candidate against one
+#: filing on the same denominator. Forcing them into one screen makes both worse: the filing view
+#: wants a whole viewport for two documents side by side, and the benchmark view wants a wide table
+#: nobody scrolls a document inside.
+FILING_TAB: Final[str] = "filing"
+BENCHMARK_TAB: Final[str] = "benchmark"
+
+
+def tabs(active: str, *, filing_href: str = "", benchmark_href: str = "") -> str:
+    """The dashboard's two views, as a tab strip.
+
+    A TAB WITH NOWHERE TO GO IS RENDERED DISABLED RATHER THAN HIDDEN. A control that appears and
+    disappears depending on state is one a person cannot learn; one that is visibly unavailable
+    tells them the view exists and what it needs. Same reasoning as the model selector, which shows
+    an unavailable candidate with its reason instead of dropping it from the list.
+    """
+
+    def one(key: str, label: str, href: str) -> str:
+        if not href:
+            return tag("span", esc(label), class_="tab tab-disabled", aria_disabled="true")
+        return tag(
+            "a",
+            esc(label),
+            class_="tab tab-active" if key == active else "tab",
+            href=href,
+            aria_current="page" if key == active else None,
+        )
+
+    return tag(
+        "nav",
+        join(
+            one(FILING_TAB, "Filing", filing_href),
+            one(BENCHMARK_TAB, "Benchmark", benchmark_href),
+        ),
+        class_="tabs",
+        aria_label="dashboard view",
+    )
+
+
 def layout(
     *,
     title: str,
@@ -58,6 +100,7 @@ def layout(
     run_id: str | None,
     collapsed: bool,
     https: bool,
+    tab_strip: str = "",
 ) -> str:
     """The shell: a persistent left panel, the workspace, and the anchored run identifier."""
     reopen = tag("a", "&#9776; menu", class_="reopen", href="?panel=open") if collapsed else ""
@@ -83,7 +126,7 @@ def layout(
         '<script src="/static/app.js" defer></script>',
         "</head><body>",
         tag("aside", panel, class_="panel collapsed" if collapsed else "panel"),
-        tag("main", join(reopen, main, mode)),
+        tag("main", join(reopen, tab_strip, main, mode)),
         _run_id_bar(run_id),
         "</body></html>",
     )

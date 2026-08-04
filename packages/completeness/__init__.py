@@ -50,7 +50,15 @@ from .status import (
     TableState,
     TransportState,
 )
-from .tables import TableValidation, table_source_interval, validate_table, validate_tables
+from .tables import (
+    CellOutcome,
+    TableValidation,
+    classify_cell,
+    source_cell_text,
+    table_source_interval,
+    validate_table,
+    validate_tables,
+)
 from .truth import (
     EXCLUDED_IMAGE,
     EXCLUDED_SPAN,
@@ -75,6 +83,7 @@ __all__ = [
     "REQUIRED_TABLE",
     "BenchmarkTruth",
     "BenchmarkTruthError",
+    "CellOutcome",
     "CompletenessError",
     "CompletenessLedger",
     "Condition",
@@ -98,12 +107,14 @@ __all__ = [
     "TableValidation",
     "TransportState",
     "build_ledger",
+    "classify_cell",
     "covered_length",
     "evaluate",
     "gaps",
     "merge",
     "overlaps",
     "resolve_claims",
+    "source_cell_text",
     "suggest",
     "table_source_interval",
     "validate_table",

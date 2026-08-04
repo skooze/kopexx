@@ -37,6 +37,42 @@ STYLESHEET: Final[str] = """
   --accent-red:     rgba(190, 90, 90, 0.20);
 }
 
+/* THE DASHBOARD'S TWO VIEWS. A tab strip and not a dropdown: both views are top-level, a person
+   moves between them constantly, and a dropdown hides the fact that the second one exists. The
+   active tab is carried by a filled surface AND by aria-current, never by colour alone — the
+   stylesheet's own rule, and the reason every status marker here has a text equivalent. */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 18px 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 0;
+}
+.tabs .tab {
+  display: inline-block;
+  padding: 9px 20px;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--ink-muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  margin-bottom: -1px;
+  background: transparent;
+}
+.tabs .tab:hover { color: var(--ink); background: var(--surface-sunken); }
+.tabs .tab-active {
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-color: var(--rule);
+  border-bottom: 1px solid var(--surface-raised);
+  font-weight: 600;
+  box-shadow: inset 0 2px 0 var(--accent-blue-in);
+}
+.tabs .tab-disabled { color: var(--rule); cursor: default; }
+.tabs .tab-disabled:hover { background: transparent; color: var(--rule); }
+
 * { box-sizing: border-box; }
 
 body {
@@ -130,6 +166,12 @@ thead th { border-bottom: none; font-weight: 600; }
 
 .warning { background: var(--accent-amber); border-left: 3px solid rgba(198,146,44,.8);
            padding: .45rem .7rem; margin: .5rem 0; border-radius: 0 5px 5px 0; }
+
+/* The one figure on the model-comparison page a reviewer must not be able to miss: source ranges
+   a parse never mentioned in any form. Weight and size only — the badge already says SILENTLY
+   OMITTED in words, because status is never carried by colour alone. */
+td.omitted { font-weight: 700; white-space: nowrap; }
+td.omitted .badge { font-size: .8rem; padding: .12rem .5rem; }
 
 .views { display: flex; gap: .4rem; margin-bottom: .8rem; flex-wrap: wrap; }
 .views a { padding: .28rem .7rem; border: 1px solid var(--rule); border-radius: 6px;

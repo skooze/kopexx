@@ -120,20 +120,22 @@ def _tabs(items: Iterable[tuple[str, str, bool]]) -> str:
     )
 
 
-def _navigation(base: tuple[str, ...], current: str) -> str:
+def page_navigation(base: tuple[str, ...], current: str) -> str:
+    """The strip every page of this surface carries. A page nobody can reach is not a surface."""
     pages = (
         ("", "Overview"),
         ("inventory", "Source inventory"),
         ("spans", "Spans"),
         ("tables", "Tables"),
         ("images", "Images"),
+        ("models", "Model runs"),
     )
     return _tabs(
         (url(*base, page) if page else url(*base), label, page == current) for page, label in pages
     )
 
 
-def _heading(inventory: FilingInventory, truth: BenchmarkTruth) -> str:
+def filing_heading(inventory: FilingInventory, truth: BenchmarkTruth) -> str:
     """The filing this surface is about, and the truth version it is being classified at.
 
     A SOURCE-HASH DISAGREEMENT IS SHOWN AT THE TOP OF EVERY PAGE. The stored judgements describe
@@ -386,9 +388,9 @@ def benchmark_index(
     )
 
     return join(
-        _heading(inventory, truth),
+        filing_heading(inventory, truth),
         tag("p", esc(issuer_label)),
-        _navigation(base, ""),
+        page_navigation(base, ""),
         tag(
             "div",
             join(
@@ -564,8 +566,8 @@ def inventory_page(*, inventory: FilingInventory, truth: BenchmarkTruth) -> str:
     total_bytes = sum(member.byte_count for member in inventory.members)
     total_characters = sum(member.character_count for member in inventory.members)
     return join(
-        _heading(inventory, truth),
-        _navigation(base, "inventory"),
+        filing_heading(inventory, truth),
+        page_navigation(base, "inventory"),
         tag(
             "div",
             join(
@@ -754,8 +756,8 @@ def spans_page(
         )
 
     return join(
-        _heading(inventory, truth),
-        _navigation(base, "spans"),
+        filing_heading(inventory, truth),
+        page_navigation(base, "spans"),
         member_links,
         body,
     )
@@ -840,7 +842,9 @@ def tables_page(
                                 clipped,
                             ),
                         ),
-                        tag("section", join(tag("h3", "Extracted grid"), _grid(table))),
+                        tag(
+                            "section", join(tag("h3", "Extracted grid"), source_element_grid(table))
+                        ),
                     ),
                     class_="panes",
                 ),
@@ -858,8 +862,8 @@ def tables_page(
 
     total, reviewed, suggested = _table_counts(inventory, truth)
     return join(
-        _heading(inventory, truth),
-        _navigation(base, "tables"),
+        filing_heading(inventory, truth),
+        page_navigation(base, "tables"),
         tag(
             "div",
             join(
@@ -884,7 +888,7 @@ def tables_page(
     )
 
 
-def _grid(table: TableElement) -> str:
+def source_element_grid(table: TableElement) -> str:
     """The extracted cells at their computed grid positions, every value escaped.
 
     POSITIONS ARE POST-SPAN AND THE GRID IS NOT RECONSTRUCTED. `row_index` and `column_index`
@@ -978,8 +982,8 @@ def images_page(*, inventory: FilingInventory, truth: BenchmarkTruth, csrf: str)
 
     total, reviewed, suggested = _image_counts(inventory, truth)
     return join(
-        _heading(inventory, truth),
-        _navigation(base, "images"),
+        filing_heading(inventory, truth),
+        page_navigation(base, "images"),
         tag(
             "div",
             join(

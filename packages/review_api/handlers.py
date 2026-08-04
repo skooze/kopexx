@@ -63,6 +63,8 @@ from packages.orchestrator.multipart_service import (
     RESPONSE_EVIDENCE as TASK_RESPONSE_EVIDENCE,
 )
 from packages.review_web import (
+    BENCHMARK_TAB,
+    FILING_TAB,
     KIND_CLASSIFICATIONS,
     SCRIPT,
     STYLESHEET,
@@ -76,12 +78,15 @@ from packages.review_web import (
     job_page,
     join,
     layout,
+    model_comparison_page,
+    model_run_page,
     multipart_page,
     preflight_page,
     run_page,
     search_panel,
     spans_page,
     tables_page,
+    tabs,
     tag,
     task_page,
     url,
@@ -125,8 +130,23 @@ class ReviewApp:
         return session.csrf_token if session else ""
 
     def _page(
-        self, request: Request, *, title: str, panel: str, main: str, run_id: str | None
+        self,
+        request: Request,
+        *,
+        title: str,
+        panel: str,
+        main: str,
+        run_id: str | None,
+        tab: str = "",
+        filing_href: str = "",
+        benchmark_href: str = "",
     ) -> Response:
+        """Wrap one view in the shell, with the dashboard's tab strip when the page has one.
+
+        A PAGE THAT BELONGS TO NEITHER VIEW GETS NO TAB STRIP AT ALL. The home page and the
+        preflight page are not the dashboard; showing them a strip with both tabs inactive would
+        say a person is somewhere they are not.
+        """
         return html(
             layout(
                 title=title,
@@ -135,7 +155,23 @@ class ReviewApp:
                 run_id=run_id,
                 collapsed=request.q("panel") == "closed",
                 https=self.policy.https,
+                tab_strip=(
+                    tabs(tab, filing_href=filing_href, benchmark_href=benchmark_href) if tab else ""
+                ),
             )
+        )
+
+    def _benchmark_href(self, cik: str, accession: str) -> str:
+        """The benchmark view of one filing, or empty when that filing has no benchmark truth.
+
+        CHECKED RATHER THAN ASSUMED. Only filings named in the supplied benchmark contract have an
+        inventory and a truth document, and a tab that 404s is worse than one that is visibly
+        unavailable.
+        """
+        return (
+            url("benchmark", cik, accession, "models")
+            if self.service.catalog.filing(cik, accession) is not None
+            else ""
         )
 
     def _panel(self, request: Request) -> str:
@@ -324,6 +360,22 @@ class ReviewApp:
             "/benchmark/{cik}/{accession}/images",
             self.benchmark_images_html,
             name="benchmarkImagesPage",
+        )
+        # EVERY RECORDED PARSE OF THIS FILING, IN RECORDED ORDER. Also filing-scoped, and for the
+        # same reason: the classification above is the denominator, and these are the parses
+        # measured against it. Neither route sorts, ranks or recommends — `rules.md` section 21
+        # rule 14 — and neither invokes anything.
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/models",
+            self.benchmark_models_html,
+            name="benchmarkModelComparisonPage",
+        )
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/models/{run_id}",
+            self.benchmark_model_run_html,
+            name="benchmarkModelRunPage",
         )
         r.add(
             "POST",
@@ -695,6 +747,11 @@ class ReviewApp:
         return self._page(
             request,
             title=f"{job.form_as_filed} {job.accession}",
+            tab=FILING_TAB,
+            filing_href=url("runs", run_id, "jobs", job.job_id),
+            # The benchmark view of the SAME filing. A job whose filing nobody has benchmarked
+            # gets an empty href and the tab renders disabled rather than 404ing on click.
+            benchmark_href=self._benchmark_href(job.cik, job.accession),
             panel=self._panel(request),
             main=job_page(
                 run=run.to_mapping(),
@@ -1095,6 +1152,8 @@ class ReviewApp:
         identifier of whichever run was last opened would invite exactly the wrong reading: that
         this classification describes that run.
         """
+        cik = request.params.get("cik", "")
+        accession = request.params.get("accession", "")
         return html(
             layout(
                 title=title,
@@ -1103,8 +1162,28 @@ class ReviewApp:
                 run_id=None,
                 collapsed=request.q("panel") == "closed",
                 https=self.policy.https,
+                # THE TOGGLE WORKS IN BOTH DIRECTIONS OR IT IS NOT A TOGGLE. The filing side points
+                # at the most recent run of THIS filing; when nothing has parsed it, the tab is
+                # disabled rather than pointing somewhere that will not load.
+                tab_strip=tabs(
+                    BENCHMARK_TAB,
+                    filing_href=self._latest_job_href(cik, accession),
+                    benchmark_href=url("benchmark", cik, accession, "models"),
+                ),
             )
         )
+
+    def _latest_job_href(self, cik: str, accession: str) -> str:
+        """The most recently created child job for one filing, or empty when there is none."""
+        newest: tuple[str, str, str] | None = None
+        for run_id in self.service.store.list_run_ids():
+            for job in self.service.store.load_jobs(run_id):
+                if job.cik != cik or job.accession != accession:
+                    continue
+                stamp = getattr(job, "created_at", "") or ""
+                if newest is None or stamp >= newest[0]:
+                    newest = (stamp, run_id, job.job_id)
+        return url("runs", newest[1], "jobs", newest[2]) if newest else ""
 
     def benchmark_html(self, request: Request) -> Response:
         found, truth, versions = self._for_display(request)
@@ -1169,6 +1248,55 @@ class ReviewApp:
             request,
             title=f"Images {found.filing.accession}",
             main=images_page(inventory=found.inventory, truth=truth, csrf=self._csrf(request)),
+        )
+
+    def benchmark_models_html(self, request: Request) -> Response:
+        """Every run recorded against this filing, measured against one shared denominator.
+
+        NOTHING HERE IS SORTED, RANKED OR SCORED, and the ordering is not the renderer's choice
+        either: the service returns the runs in the order they were created and this handler
+        passes them through. `rules.md` section 21 rule 14 forbids selecting a parser, and a page
+        that reordered the rows by any figure on them would be making that selection for the
+        reader.
+        """
+        found, truth, _ = self._for_display(request)
+        return self._benchmark_page(
+            request,
+            title=f"Model runs {found.filing.accession}",
+            main=model_comparison_page(
+                inventory=found.inventory,
+                truth=truth,
+                runs=self.service.measured_runs(found, truth),
+                issuer_label=found.filing.issuer_label,
+            ),
+        )
+
+    def benchmark_model_run_html(self, request: Request) -> Response:
+        """One recorded parse of this filing in full: gate, claims, omissions, tables, unresolved.
+
+        A run identifier naming no job against THIS filing is a 404 rather than a redirect to the
+        run itself. The page's every figure is computed against this filing's denominator, and
+        answering with a parse of another filing would present a ledger measured against bytes the
+        reviewer is not looking at.
+        """
+        found, truth, _ = self._for_display(request)
+        run = self.service.measured_run(found, truth, request.params["run_id"])
+        if run is None:
+            return as_json(
+                {
+                    "code": "not_found",
+                    "message": (
+                        "no run with that identifier is recorded against this filing. A run that "
+                        "parsed another filing is measured against another denominator and is not "
+                        "shown here."
+                    ),
+                },
+                status=404,
+            )
+        return self._benchmark_page(
+            request,
+            title=f"{run.model_label} — {found.filing.accession}",
+            main=model_run_page(inventory=found.inventory, truth=truth, run=run),
         )
 
     def benchmark_inventory_json(self, request: Request) -> Response:

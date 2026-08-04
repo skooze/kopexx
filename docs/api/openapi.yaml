@@ -1040,6 +1040,75 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/SourceUnavailable" }
 
+  /benchmark/{cik}/{accession}/models:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkModelComparisonPage
+      summary: Every run recorded against this filing, measured against one shared denominator.
+      description: |
+        One row per recorded run: the model, the region or inference profile, how the filing
+        reached it, the execution, serialization and convergence states, visible spans covered,
+        the SILENTLY OMITTED span count, structured tables emitted and resolved to a source
+        element, table validations passing, cell texts found nowhere in the source, source members
+        accounted for, images accounted for, the measured cost, and the gate verdict with how many
+        of its fourteen conditions passed.
+
+        NO RANKING, NO SORTING BY ANY COVERAGE FIGURE, NO AGGREGATE SCORE AND NO HIGHLIGHTED
+        WINNER. Rows are ordered by when the run was created and by nothing else. `rules.md`
+        section 21 rule 14 forbids selecting a parser, and a table ordered by a computed figure is
+        that selection made for the reader.
+
+        A run that failed at preflight or at the provider with zero parts is a row stating what
+        happened. Its coverage columns are withheld rather than reported as zero, because zero in a
+        coverage column is a measurement and a run that never answered has not made one.
+
+        NOTHING HERE INVOKES A MODEL OR SPENDS ANYTHING. Every figure is computed from preserved
+        bytes and preserved responses.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /benchmark/{cik}/{accession}/models/{run_id}:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkModelRunPage
+      summary: One recorded parse of this filing, in full.
+      description: |
+        All fourteen gate conditions with their verdicts and evidence sentences; every coverage
+        claim with its two anchors, whether each resolved, at which rung of the six-level ladder,
+        and the interval the pair bounded; the SILENTLY OMITTED spans listed with their source
+        offsets and their text; every structured table beside the mechanical source element it
+        claims to represent, as two grids, with cells found nowhere in that element marked; and the
+        items the model itself declared unresolved.
+
+        A run identifier naming no child job against THIS filing is a 404 rather than a redirect.
+        Every figure on the page is computed against this filing's denominator, and answering with
+        a parse of another filing would show a ledger measured against other bytes.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
   /benchmark/{cik}/{accession}/judgements:
     post:
       tags: [review]

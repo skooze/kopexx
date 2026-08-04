@@ -32,11 +32,64 @@ and the gate counts it as exposed rather than as broken.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
-from packages.source_inventory import FilingInventory, normalize_text
+from packages.source_inventory import FilingInventory, TableElement, normalize_text
 
 from .intervals import Interval
+
+
+class CellOutcome(StrEnum):
+    """What became of ONE model-supplied cell when it was looked for in the source element.
+
+    A COUNT CANNOT BE DISPLAYED BESIDE THE CELL IT ACCUSES. `TableValidation` reports that three
+    cell texts do not occur in the source, which is the right shape for a gate and the wrong shape
+    for a reviewer: the person deciding whether a table was fabricated has to see WHICH cell. This
+    enumeration is the per-cell half of the same measurement, so the review UI marks the exact
+    cells the validator counted rather than recomputing the rule and drifting from it.
+    """
+
+    #: The model declared it could not read this cell. `rules.md` section 21 rule 5: that is the
+    #: right thing to do with unknown content and it is a pass, not a defect.
+    UNRESOLVED = "UNRESOLVED"
+    #: No text at all. A blank cell at a blank grid position says nothing false about the filing.
+    EMPTY = "EMPTY"
+    FOUND = "FOUND"
+    #: Neither in the source element nor declared unresolved — a cell supplied from somewhere
+    #: other than this filing.
+    MISSING = "MISSING"
+    #: The table names no source element that exists, so no cell of it can be checked at all.
+    NO_SOURCE_ELEMENT = "NO_SOURCE_ELEMENT"
+
+
+def source_cell_text(element: TableElement) -> str:
+    """One source element's cell texts, normalised, deduplicated and one per line.
+
+    Joined on a newline, which `normalize_text` has already removed from every cell, so no cell
+    text can straddle the separator and appear to match across two cells.
+    """
+    texts = {normalize_text(cell.text) for cell in element.cells if cell.text.strip()}
+    return "\n".join(sorted(texts))
+
+
+def classify_cell(cell: Any, *, source_text: str, source_present: bool) -> CellOutcome:
+    """Look for one model-supplied cell in the source element's own cells.
+
+    SUBSTRING MATCHING IS THE LENIENT DIRECTION AND IT IS CHOSEN DELIBERATELY. A model that writes
+    `124` where the source cell reads `124,300` is recorded as found. The check exists to catch a
+    cell supplied from somewhere other than this filing, and a false accusation of fabrication is
+    worse than a missed truncation: the model's cell is displayed beside the source cell in the
+    review UI, where a person sees the difference immediately.
+    """
+    if getattr(cell, "unresolved", False):
+        return CellOutcome.UNRESOLVED
+    text = normalize_text(str(getattr(cell, "text", "") or ""))
+    if not text:
+        return CellOutcome.EMPTY
+    if not source_present:
+        return CellOutcome.NO_SOURCE_ELEMENT
+    return CellOutcome.FOUND if text in source_text else CellOutcome.MISSING
 
 
 @dataclass(frozen=True)
@@ -126,17 +179,7 @@ def validate_table(
 
     slice_text = ""
     if element is not None:
-        cell_texts = {normalize_text(cell.text) for cell in element.cells if cell.text.strip()}
-        # Joined on a newline, which `normalize_text` has already removed from every cell, so
-        # no cell text can straddle the separator and appear to match across two cells.
-        #
-        # SUBSTRING MATCHING IS THE LENIENT DIRECTION AND IT IS CHOSEN DELIBERATELY. A model
-        # that writes `124` where the source cell reads `124,300` is recorded as found. This
-        # validator exists to catch a cell the model supplied from somewhere other than this
-        # filing, and a false accusation of fabrication is worse than a missed truncation:
-        # the cell's own text is displayed beside the source cell in the review UI, where a
-        # person sees the difference immediately.
-        slice_text = "\n".join(sorted(cell_texts))
+        slice_text = source_cell_text(element)
         for anchor_name in ("source_anchor_start", "source_anchor_end"):
             anchor = normalize_text(str(getattr(table, anchor_name, "") or ""))
             if anchor and anchor not in slice_text:
@@ -157,19 +200,19 @@ def validate_table(
                 positions[key] = positions.get(key, 0) + 1
                 if positions[key] == 2:
                     collisions += 1
-        if getattr(cell, "unresolved", False):
+        outcome = classify_cell(cell, source_text=slice_text, source_present=element is not None)
+        if outcome is CellOutcome.UNRESOLVED:
             unresolved += 1
             continue
-        text = normalize_text(str(getattr(cell, "text", "") or ""))
-        if not text:
+        if outcome is CellOutcome.EMPTY:
             continue
-        if _is_numeric(text):
-            numeric += 1
-        if element is not None and text in slice_text:
+        text = normalize_text(str(getattr(cell, "text", "") or ""))
+        is_numeric = _is_numeric(text)
+        numeric += 1 if is_numeric else 0
+        if outcome is CellOutcome.FOUND:
             found += 1
-            if _is_numeric(text):
-                numeric_found += 1
-        elif element is not None:
+            numeric_found += 1 if is_numeric else 0
+        elif outcome is CellOutcome.MISSING:
             missing += 1
 
     if collisions:

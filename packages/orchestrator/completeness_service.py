@@ -23,6 +23,7 @@ the result to a gate whose strongest verdict means "a person can now review this
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from packages.completeness import (
@@ -92,6 +93,84 @@ def _references_of(
     return outcomes
 
 
+@dataclass(frozen=True)
+class EffectiveDocument:
+    """One part, the artifact that currently holds its content, and that artifact's document."""
+
+    task: Any
+    source_task: Any
+    part_id: str
+    document: dict[str, Any]
+
+    @property
+    def superseded(self) -> bool:
+        """Whether a format repair, rather than the model's own response, supplied this content."""
+        return self.task.task_id != self.source_task.task_id
+
+
+@dataclass(frozen=True)
+class EffectiveParse:
+    """Every readable part document of one parse, plus what could not be read.
+
+    THE COUNTS TRAVEL WITH THE DOCUMENTS BECAUSE THEY ARE THE SAME WALK. A caller that re-derived
+    "how many parts were unreadable" or "how many needed a repair" from a second pass over the
+    tasks would be free to disagree with the ledger about the parse the ledger measured, and that
+    disagreement is invisible: both numbers look plausible.
+    """
+
+    documents: tuple[EffectiveDocument, ...]
+    part_tasks: int
+    unparseable: int
+    repaired: int
+
+
+def effective_parse(
+    *,
+    tasks: list[Any],
+    documents: dict[str, dict[str, Any]],
+    part_types: frozenset[Any],
+    repair_type: Any,
+    succeeded_state: Any,
+) -> EffectiveParse:
+    """Resolve every part task to the document that currently holds its content.
+
+    A part with no readable artifact is not silently skipped: it contributes nothing to coverage,
+    which is exactly what it did, and it is counted so the gate can see it.
+    """
+    effective = resolve_effective(
+        list(tasks),
+        part_types=part_types,
+        repair_type=repair_type,
+        succeeded_state=succeeded_state,
+    )
+    found: list[EffectiveDocument] = []
+    part_tasks = unparseable = repaired = 0
+    for task in tasks:
+        if task.task_type not in part_types:
+            continue
+        part_tasks += 1
+        source = effective.effective(task)
+        document = documents.get(source.task_id)
+        if document is None:
+            if source.state is succeeded_state:
+                unparseable += 1
+            continue
+        entry = EffectiveDocument(
+            task=task,
+            source_task=source,
+            part_id=str(document.get("part_id") or task.part_id or source.task_id),
+            document=document,
+        )
+        repaired += 1 if entry.superseded else 0
+        found.append(entry)
+    return EffectiveParse(
+        documents=tuple(found),
+        part_tasks=part_tasks,
+        unparseable=unparseable,
+        repaired=repaired,
+    )
+
+
 def measure(
     *,
     tasks: list[Any],
@@ -114,42 +193,39 @@ def measure(
     repeated_gap_fingerprints: int = 0,
     unsettled_reservations: int = 0,
     held_billing_unknown: int = 0,
+    index: ArtifactIndex | None = None,
 ) -> tuple[CompletenessLedger, GateResult, tuple[Any, ...]]:
     """Measure one parse. Returns the ledger, the gate verdict and the table validations.
 
     `documents` maps a task id to the parsed response it holds. The caller reads them because it
     owns the evidence store; this module owns what they mean for coverage.
+
+    `index` MAY BE SUPPLIED BY A CALLER MEASURING SEVERAL PARSES OF ONE FILING, and it is the same
+    bytes for every one of them. Preparing the six-level anchor ladder over a 900,000-character
+    filing costs seconds; doing it once per model rather than once per parse is the difference
+    between a comparison page that opens and one nobody waits for. It changes no result: the index
+    is a prepared search structure over the preserved artifacts and holds nothing about a parse.
     """
-    effective = resolve_effective(
-        list(tasks),
+    parse = effective_parse(
+        tasks=tasks,
+        documents=documents,
         part_types=part_types,
         repair_type=repair_type,
         succeeded_state=succeeded_state,
     )
-    index = ArtifactIndex(artifact_texts)
+    resolved_index = ArtifactIndex(artifact_texts) if index is None else index
 
     claims: list[CoverageClaim] = []
     outcomes: list[ReferenceOutcome] = []
     tables: list[Any] = []
-    unparseable = 0
     unresolved_spans: set[str] = set()
     unresolved_tables: set[str] = set()
     image_references: set[str] = set()
 
-    for task in tasks:
-        if task.task_type not in part_types:
-            continue
-        source = effective.effective(task)
-        document = documents.get(source.task_id)
-        if document is None:
-            # A part with no readable artifact is not silently skipped: it contributes nothing to
-            # coverage, which is exactly what it did, and it is counted so the gate can see it.
-            if source.state is succeeded_state:
-                unparseable += 1
-            continue
-        part_id = str(document.get("part_id") or task.part_id or source.task_id)
-        claims.extend(_claims_of(document, part_id))
-        outcomes.extend(_references_of(document, index, part_id))
+    for entry in parse.documents:
+        document = entry.document
+        claims.extend(_claims_of(document, entry.part_id))
+        outcomes.extend(_references_of(document, resolved_index, entry.part_id))
         tables.extend(read_tables(document.get("tables")))
         for item in document.get("unresolved") or []:
             if not isinstance(item, dict):
@@ -172,7 +248,7 @@ def measure(
     ledger = build_ledger(
         inventory=inventory,
         truth=truth,
-        index=index,
+        index=resolved_index,
         claims=tuple(claims),
         reference_outcomes=tuple(outcomes),
         structured_tables=tuple(tables),
@@ -188,7 +264,7 @@ def measure(
         serialization=serialization,
         convergence=convergence,
         human_readiness=human_readiness,
-        unparseable_effective_artifacts=unparseable,
+        unparseable_effective_artifacts=parse.unparseable,
         nonterminal_required_jobs=nonterminal_required_jobs,
         truncations_without_replacement=truncations_without_replacement,
         reconciliation_created_new_work=reconciliation_created_new_work,

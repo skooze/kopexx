@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Final
 
+from packages.completeness import BenchmarkTruth
 from packages.coverage_validation import validate_response
 from packages.evaluation_store import (
     Comment,
@@ -84,6 +85,7 @@ from packages.source_transport import (
 )
 
 from .catalog import FilingCatalog, FilingRecord
+from .comparison_service import MeasuredRun, ModelComparisonService
 from .errors import (
     FilingNotInCatalogError,
     NoParsingModelError,
@@ -342,6 +344,9 @@ class ParserReviewService:
             settings=self._multipart_settings,
             author=author,
         )
+        self._comparison = ModelComparisonService(
+            store=store, job_response_evidence=RESPONSE_EVIDENCE
+        )
 
     # --- read paths ------------------------------------------------------------------------------
 
@@ -365,6 +370,11 @@ class ParserReviewService:
     @property
     def multipart_settings(self) -> MultipartSettings:
         return self._multipart_settings
+
+    @property
+    def comparison(self) -> ModelComparisonService:
+        """Every recorded parse of one filing, measured against one shared denominator."""
+        return self._comparison
 
     def prompt_for_strategy(self, strategy: str) -> Any:
         """The prompt a run of this strategy STARTS from.
@@ -456,6 +466,56 @@ class ParserReviewService:
         inventory = build_inventory(source_set)
         self._inventories[key] = (source_set.source_set_id, inventory)
         return InventoriedFiling(filing=filing, source_set=source_set, inventory=inventory)
+
+    # --- every recorded parse of one preserved filing ---------------------------------------------
+
+    def measured_runs(self, found: InventoriedFiling, truth: BenchmarkTruth) -> list[MeasuredRun]:
+        """Measure every recorded run against this filing, in the order they were created.
+
+        THE MEASUREMENT INPUTS ARE ASSEMBLED HERE AND NOWHERE ELSE. Which member texts back the
+        anchor ladder, and which images were actually submitted, are properties of the assembled
+        source set — and a caller that built either of them differently would compute a ledger
+        against a denominator no other page uses.
+        """
+        return self._comparison.measured_runs(
+            inventory=found.inventory,
+            truth=truth,
+            artifact_texts={m.filename: (m.text or "") for m in found.source_set.text_members},
+            images_submitted=self._images_submitted(found),
+        )
+
+    def measured_run(
+        self, found: InventoriedFiling, truth: BenchmarkTruth, run_id: str
+    ) -> MeasuredRun | None:
+        """One recorded run against this filing, or None when this filing has no such run.
+
+        RESOLVED THROUGH THIS FILING'S OWN JOBS rather than by loading the run directly. A run
+        identifier a browser supplies names nothing until a child job of it is found against this
+        accession, and answering with a run that parsed a different filing would show a reviewer a
+        ledger computed against the wrong denominator.
+        """
+        for candidate, job in self._comparison.jobs_for(found.filing.cik, found.filing.accession):
+            if candidate != run_id:
+                continue
+            return self._comparison.measured_run(
+                candidate,
+                job,
+                inventory=found.inventory,
+                truth=truth,
+                artifact_texts={m.filename: (m.text or "") for m in found.source_set.text_members},
+                images_submitted=self._images_submitted(found),
+            )
+        return None
+
+    @staticmethod
+    def _images_submitted(found: InventoriedFiling) -> frozenset[str]:
+        """The filed images of this filing, which reach a MULTIMODAL parser and no other.
+
+        The ledger is told separately whether the model accepts images at all, and it is the
+        combination that decides whether an unreferenced image is unresolved — a text-only parser
+        is not penalised for lacking vision — or silently omitted.
+        """
+        return frozenset(m.filename for m in found.source_set.image_members)
 
     # --- preflight -------------------------------------------------------------------------------
 
