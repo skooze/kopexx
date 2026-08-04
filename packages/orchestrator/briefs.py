@@ -123,11 +123,82 @@ def _plan_summary(plan: ParsePlan) -> dict[str, Any]:
     }
 
 
-def planning_brief(*, filing: dict[str, Any], sizing: OutputSizing) -> dict[str, Any]:
+def mechanical_inventory(inventory: Any) -> dict[str, Any]:
+    """The TABLE and IMAGE inventory the completeness prompts ask a model to account for.
+
+    WHY THIS IS IN THE BRIEF AT ALL, GIVEN THAT THE BACKEND OWNS NO SEMANTIC DECISION. A model
+    cannot account for something it was never told exists. Phase 2.1 asked for a complete parse and
+    got `table_count` zero from all five candidates on both proof filings — and could not tell a
+    model that had considered the tables and left them as prose from one that never noticed them,
+    because nothing named them. Naming a `table` element is naming a syntactic construct the FILER
+    put in the bytes, in the same sense as naming a member's declared media type.
+
+    WHAT IS DELIBERATELY NOT IN IT. No title, no type, no classification, no statement that any of
+    these tables matters. `first_cells` carries a handful of the element's own cell texts so a model
+    can tell which table is being named without hunting for a byte offset; it is quotation, not
+    description. Which elements carry data is the MODEL's judgement with source evidence, and a
+    human reviewer's after it — `rules.md` section 21 rules 1 and 2.
+
+    IT IS NOT AN INPUT FILTER. The complete compatible source set still goes to the model intact on
+    this call and on every other one. This is a list of identifiers for material the model already
+    has in front of it.
+    """
+    tables = [
+        {
+            "table_element_id": element.table_id,
+            "member": element.member,
+            "rows": element.row_count,
+            "columns": element.max_columns,
+            "cells": element.cell_count,
+            "first_cells": [c.text for c in element.cells if c.text.strip()][:6],
+        }
+        for element in inventory.tables
+    ]
+    images = [
+        {
+            "image_id": image.filename,
+            "member": image.member,
+            "media_type": image.media_type,
+            "width": image.width,
+            "height": image.height,
+        }
+        for image in inventory.images
+    ]
+    return {
+        "table_elements": tables,
+        "table_element_count": len(tables),
+        "images": images,
+        "image_count": len(images),
+        "visible_text_span_count": len(inventory.visible_spans),
+        "visible_character_count": inventory.visible_character_count,
+        "how_this_was_produced": (
+            "by walking the preserved markup and recording where each table element and each "
+            "filed image sits. Nothing that produced this list knows what a filing contains, and "
+            "no entry here is a claim that the material matters."
+        ),
+        "what_is_asked_of_you": (
+            "account for every table_element_id and every image_id: map it to a structured table "
+            "or an image reference, classify it with source evidence, or declare it unresolved. "
+            "Silence is not coverage."
+        ),
+    }
+
+
+def planning_brief(
+    *,
+    filing: dict[str, Any],
+    sizing: OutputSizing,
+    inventory: Any = None,
+) -> dict[str, Any]:
     """The brief for the first billable call of a multipart parse."""
     return {
         "brief": PLANNING,
         "filing": filing,
+        **(
+            {"mechanical_inventory": mechanical_inventory(inventory)}
+            if inventory is not None
+            else {}
+        ),
         "sizing": {
             **sizing.to_mapping(),
             "this_call_returns": "a plan only",
@@ -144,12 +215,18 @@ def part_brief(
     requested: PlannedPart | dict[str, Any],
     parent_part_id: str | None,
     sizing: OutputSizing,
+    inventory: Any = None,
 ) -> dict[str, Any]:
     """The brief for one part or subpart. `requested` is the model's own specification of it."""
     spec = requested.to_mapping() if isinstance(requested, PlannedPart) else dict(requested)
     return {
         "brief": PART,
         "filing": filing,
+        **(
+            {"mechanical_inventory": mechanical_inventory(inventory)}
+            if inventory is not None
+            else {}
+        ),
         "plan": _plan_summary(plan),
         "requested_part": {
             "part_id": spec.get("part_id"),
@@ -248,6 +325,7 @@ def reconcile_brief(
     filing: dict[str, Any],
     plan: ParsePlan,
     inventory: list[dict[str, Any]],
+    source_inventory: Any = None,
     cycle: int,
     cycle_limit: int,
     sizing: OutputSizing,
@@ -258,6 +336,11 @@ def reconcile_brief(
         "filing": filing,
         "plan": _plan_summary(plan),
         "produced_parts": part_inventory(inventory),
+        **(
+            {"mechanical_inventory": mechanical_inventory(source_inventory)}
+            if source_inventory is not None
+            else {}
+        ),
         "inventory_note": (
             "counts, not parses. Every number was produced by counting or by searching the filing "
             "for a quote; nothing that produced them read a response for meaning."
@@ -277,6 +360,7 @@ def gap_brief(
     filing: dict[str, Any],
     plan: ParsePlan,
     inventory: list[dict[str, Any]],
+    source_inventory: Any = None,
     findings: list[dict[str, Any]],
     cycle: int,
     sizing: OutputSizing,

@@ -202,6 +202,12 @@ class _Context:
     blocks: tuple[OriginalSourceBlock, ...]
     artifact_texts: dict[str, str]
     filing_brief: dict[str, Any]
+    #: The MECHANICAL inventory of the preserved bytes — table elements, images, span and
+    #: character counts. Carried on the context rather than rebuilt per call because walking
+    #: 915,890 characters of inline-XBRL markup takes roughly 0.4 seconds and a filing's parse
+    #: makes dozens of calls. None when the inventory could not be built, in which case the brief
+    #: simply omits it rather than shipping an empty list that reads as "this filing has no tables".
+    source_inventory: Any = None
     plan: ParsePlan | None = None
     prompts_used: list[dict[str, Any]] = field(default_factory=list)
 
@@ -231,6 +237,9 @@ class MultipartParseService:
         self._journal = journal
         self._settings = settings
         self._author = author
+        #: source_set_id -> FilingInventory. See `_source_inventory` for why it is keyed on
+        #: the bytes rather than on the job.
+        self._source_inventories: dict[str, Any] = {}
 
     @property
     def settings(self) -> MultipartSettings:
@@ -504,8 +513,33 @@ class MultipartParseService:
                 members=[m.to_mapping() for m in source_set.members],
                 images_submitted=capability.multimodal,
             ),
+            source_inventory=self._source_inventory(source_set),
             plan=self._load_plan(job),
         )
+
+    def _source_inventory(self, source_set: SourceSet) -> Any:
+        """The mechanical inventory of this source set, memoised on its own identity.
+
+        MEMOISED ON THE SOURCE SET ID AND NOT ON THE JOB, because the identity of the bytes is the
+        only thing that can invalidate it. Walking Apple's 915,890 characters of inline-XBRL markup
+        takes roughly 0.4 seconds and a filing's parse rebuilds its context on every task; without
+        this a fifty-call parse spends twenty seconds re-measuring bytes that did not move.
+
+        A FAILURE HERE DOES NOT STOP A PARSE. If the walk raises, the brief omits the inventory
+        rather than shipping an empty one — an empty table list reads as "this filing has no
+        tables", which is a false statement about the filing rather than an honest absence.
+        """
+        from packages.source_inventory import SourceInventoryError, build_inventory
+
+        cached = self._source_inventories.get(source_set.source_set_id)
+        if cached is not None:
+            return cached
+        try:
+            built = build_inventory(source_set)
+        except SourceInventoryError:
+            return None
+        self._source_inventories[source_set.source_set_id] = built
+        return built
 
     @staticmethod
     def _blocks(source_set: SourceSet, *, multimodal: bool) -> tuple[OriginalSourceBlock, ...]:
@@ -1585,6 +1619,7 @@ class MultipartParseService:
 
         if task.task_type is TaskType.PLAN_PARSE:
             return briefs.planning_brief(
+                inventory=context.source_inventory,
                 filing=context.filing_brief,
                 sizing=part_sizing(context.capability, estimated_input_tokens=estimated),
             )
@@ -1607,6 +1642,7 @@ class MultipartParseService:
 
         if task.task_type in {TaskType.PARSE_PART, TaskType.PARSE_SUBPART}:
             return briefs.part_brief(
+                inventory=context.source_inventory,
                 filing=context.filing_brief,
                 plan=plan,
                 requested=task.part_spec or {},
@@ -1642,6 +1678,7 @@ class MultipartParseService:
         cycle = int((task.part_spec or {}).get("cycle") or 1)
         if task.task_type is TaskType.RECONCILE_PARSE:
             return briefs.reconcile_brief(
+                source_inventory=context.source_inventory,
                 filing=context.filing_brief,
                 plan=plan,
                 inventory=inventory,
@@ -1652,6 +1689,7 @@ class MultipartParseService:
                 ),
             )
         return briefs.gap_brief(
+            source_inventory=context.source_inventory,
             filing=context.filing_brief,
             plan=plan,
             inventory=inventory,
