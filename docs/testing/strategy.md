@@ -18,7 +18,7 @@
 > **UPDATED 2026-08-03 BY PHASE 2.1.** Six modules were added — five unit modules for the
 > multipart envelopes, their validation, the queue, the sizing policy and the review surface,
 > plus `tests/architecture/test_phase21_boundaries.py` — and one integration module for the
-> multipart sequence. The suite went from 1,049 to **1,234 tests at 91.55 percent coverage**,
+> multipart sequence. The suite went from 1,049 to **1,253 tests at 91.64 percent coverage**,
 > still with ZERO skips and still with no environmental precondition: the multipart integration
 > test drives a scripted provider that answers by BRIEF KIND, so it also proves the orchestrator
 > asked for the part it thinks it asked for.

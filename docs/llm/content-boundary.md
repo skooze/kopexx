@@ -236,7 +236,7 @@ response validation, safe parsing, audit — is identical.
 
 ---
 
-## Two verified YAML facts that drive the design
+## Three verified YAML facts that drive the design
 
 ### YAML 1.2 does not coerce yes, no, on, off
 
@@ -267,6 +267,33 @@ by the serializer. `require_string` refuses to return an identifier that arrived
 rather than coercing it back, because the leading zeros are already unrecoverable at that point.
 
 Covered by `test_yaml_parser_preserves_quoted_cik` and `test_yaml_parser_preserves_accession`.
+
+### A forced block scalar can carry a character the reader turns into a line break
+
+```
+quote: |-              a raw U+0085 inside a block scalar
+  before<U+0085>after   -> read back as "before\nafter", and the indentation of
+  second line              everything after it is broken
+
+quote: "before\Nafter"  -> read back as the exact character
+```
+
+FOUND BY A REAL FILING. A 1996 10-K405 table quoted by a parsing model contained `U+0085 NEXT
+LINE`. `to_yaml` forces style `|` on prose, which bypasses the emitter's own scalar analysis — the
+analysis that would have refused block style for that string. The reader counts `U+0085`, `U+2028`
+and `U+2029` as line breaks, so the character came back as a newline: silently, a preserved quote
+stopped matching the bytes it cited; loudly, an assembly this repository had just written became
+one it could not load.
+
+A string containing any character a block scalar cannot return unchanged is double-quoted instead,
+where the emitter escapes it (`\N`, `\L`, `\P`, `\v`, `\f`) and the reader restores it exactly.
+Tab and newline are excluded from that set deliberately — a block scalar carries both, and EDGAR
+text tables are made of them, so an ordinary table stays a readable block scalar.
+
+Covered by `test_a_serialized_document_reads_back_the_character_it_was_given`,
+`test_the_ordinary_characters_of_a_filing_still_get_a_readable_block_scalar` and
+`test_every_character_a_filing_can_contain_survives_serialization`, which sweeps every code point
+through U+10FFF.
 
 ---
 

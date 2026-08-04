@@ -79,6 +79,10 @@ class AssembledPart:
     unresolved: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     coverage_summary: str = ""
     depth: int = 0
+    #: The task whose response was unreadable, when this row's content came from a format repair
+    #: instead. BOTH tasks stay named: `task_id` is where the content came from and this is what it
+    #: replaced, so a reviewer can open the malformed original and the repair side by side.
+    repaired_from_task_id: str | None = None
 
     def to_mapping(self) -> dict[str, Any]:
         return {
@@ -108,6 +112,7 @@ class AssembledPart:
             "stop_reason": self.stop_reason,
             "prompt": self.prompt_identity,
             "coverage_summary": self.coverage_summary,
+            "repaired_from_task_id": self.repaired_from_task_id,
             "nodes": list(self.nodes),
             "unresolved": list(self.unresolved),
         }

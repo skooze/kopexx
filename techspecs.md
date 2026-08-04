@@ -53,7 +53,7 @@ LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 2.1.
 VERIFICATION, measured locally on that date:
 
 ```
-1,234 tests passing, 0 skipped        coverage 91.55 percent against an 85 percent gate
+1,253 tests passing, 0 skipped        coverage 91.64 percent against an 85 percent gate
 ruff format and lint clean            across `packages tests`
 mypy clean                            `packages`
 wheel and sdist built and inspected   packages/ and dist-info only
@@ -607,7 +607,9 @@ completion, source-reference coverage and human approval are carried as four sep
 evaluation_store/queue_states.py   11 task types, 14 durable states, and the transition table.
                                    TRUNCATED is terminal by construction, so a truncated attempt
                                    can never be reopened. FAILED and INTERRUPTED reopen only to
-                                   READY, and only through an explicit user action.
+                                   READY, and only through an explicit user action. The child
+                                   job's own INTERRUPTED reopens the same way, to RUNNING, so a
+                                   parse that is resumed and finished can actually reach review.
 evaluation_store/tasks.py          the durable task record: dependencies and their policy, the
                                    model-created identifiers verbatim, the billable identity,
                                    attempts, reservation, settled cost, evidence names.

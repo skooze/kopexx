@@ -1271,3 +1271,222 @@ def test_the_session_summary_carries_the_plan_as_soon_as_the_plan_exists(
     assert session is not None
     assert session["parse_plan_id"] == "plan-alpha"
     assert session["planned_part_count"] == 3
+
+
+# --- a repaired part must reach the index -----------------------------------------------------------
+#
+# FOUND IN A REAL RUN, NOT HERE. A model returned a part response that would not parse; the format
+# repair then succeeded and produced a readable envelope with two nodes. The index carried the
+# ORIGINAL row — `node_count: 0`, empty title type and coverage summary — and reported the part as
+# terminal. A FALSE EMPTY: content that exists, reported as absent. That is the inverse of the
+# failure mode this project guards against and exactly as untrue.
+
+
+class MalformsOnePart(ScriptedProvider):
+    """Returns unparseable YAML for one part, then a good envelope when asked to repair it."""
+
+    def __init__(self, victim: str) -> None:
+        super().__init__()
+        self.victim = victim
+        self.malformed_once = True
+
+    def invoke(self, request: ModelRequest) -> ModelResponse:
+        brief = parse_yaml(request.user_content)
+        if brief.get("brief") == "part":
+            part_id = str(brief["requested_part"]["part_id"])
+            if part_id == self.victim and self.malformed_once:
+                self.malformed_once = False
+                self.requests.append(request)
+                # A colon-space inside an unquoted plain scalar: the exact defect measured on a
+                # real run, eight times in one parse.
+                text = (
+                    f'parse_plan_id: "plan-alpha"\n'
+                    f'part_id: "{part_id}"\n'
+                    "status: complete\n"
+                    "nodes:\n"
+                    "  - id: n9\n"
+                    "    content: State of Incorporation: Delaware\n"
+                )
+                return ModelResponse(
+                    text=text,
+                    input_tokens=estimate_tokens(request.user_content),
+                    output_tokens=estimate_tokens(text),
+                    model_id=request.model_id,
+                    provider=self.name,
+                    stop_reason="end_turn",
+                    truncated=False,
+                )
+        if brief.get("brief") == "format_repair":
+            self.requests.append(request)
+            text = _generic_part(self.victim, "Repaired Title")
+            return ModelResponse(
+                text=text,
+                input_tokens=estimate_tokens(request.user_content),
+                output_tokens=estimate_tokens(text),
+                model_id=request.model_id,
+                provider=self.name,
+                stop_reason="end_turn",
+                truncated=False,
+            )
+        return super().invoke(request)
+
+
+def _repaired_harness(tmp_path: Path) -> tuple[Harness, str, str]:
+    harness = _harness(tmp_path, provider=MalformsOnePart("front"))
+    run_id, job_id = _run(harness)
+    return harness, run_id, job_id
+
+
+def test_the_scripted_malformed_response_really_is_unreadable(tmp_path: Path) -> None:
+    """ANTI-VACUITY. If the scripted response parsed, every assertion below would be about nothing."""
+    harness, run_id, job_id = _repaired_harness(tmp_path)
+    original = next(
+        t
+        for t in harness.store.load_tasks(run_id, job_id)
+        if t.task_type is TaskType.PARSE_PART
+        and t.part_id == "front"
+        and (t.envelope or {}).get("readable") is False
+    )
+    assert "not one YAML" in (original.error or ""), original.error
+
+
+def test_a_successful_repair_supplies_the_part_the_index_shows(tmp_path: Path) -> None:
+    harness, run_id, job_id = _repaired_harness(tmp_path)
+    assembly = harness.store.load_assembly(run_id, job_id)
+    assert assembly is not None
+    row = next(p for p in assembly["parts"] if p["part_id"] == "front")
+    assert row["node_count"] > 0, "the repaired nodes never reached the index"
+    assert row["title"] == "Repaired Title"
+    assert row["nodes"], "the row carries counts but not the model's own nodes"
+
+
+def test_the_row_names_both_artifacts_so_neither_is_lost(tmp_path: Path) -> None:
+    """The malformed original is preserved and still reachable; it is not replaced or rewritten."""
+    harness, run_id, job_id = _repaired_harness(tmp_path)
+    tasks = harness.store.load_tasks(run_id, job_id)
+    original = next(
+        t
+        for t in tasks
+        if t.task_type is TaskType.PARSE_PART
+        and t.part_id == "front"
+        and (t.envelope or {}).get("readable") is False
+    )
+    repair = next(t for t in tasks if t.task_type is TaskType.FORMAT_REPAIR)
+    assembly = harness.store.load_assembly(run_id, job_id)
+    assert assembly is not None
+    row = next(p for p in assembly["parts"] if p["part_id"] == "front")
+    assert row["task_id"] == repair.task_id, "the row does not point at the artifact it displays"
+    assert row["repaired_from_task_id"] == original.task_id
+    assert harness.store.load_task(run_id, job_id, original.task_id).envelope == original.envelope
+
+
+def test_a_repaired_part_appears_exactly_once(tmp_path: Path) -> None:
+    """A duplicate part identifier is a defect validate_assembly reports. One row, not two."""
+    harness, run_id, job_id = _repaired_harness(tmp_path)
+    assembly = harness.store.load_assembly(run_id, job_id)
+    assert assembly is not None
+    ids = [p["part_id"] for p in assembly["parts"]]
+    assert ids.count("front") == 1, ids
+    assert assembly["validation"]["consistent"], assembly["validation"]
+
+
+def test_the_row_carries_what_both_calls_cost(tmp_path: Path) -> None:
+    """The malformed response was bought too. A row showing only the repair understates the part."""
+    harness, run_id, job_id = _repaired_harness(tmp_path)
+    tasks = harness.store.load_tasks(run_id, job_id)
+    original = next(
+        t
+        for t in tasks
+        if t.task_type is TaskType.PARSE_PART
+        and t.part_id == "front"
+        and (t.envelope or {}).get("readable") is False
+    )
+    repair = next(t for t in tasks if t.task_type is TaskType.FORMAT_REPAIR)
+    assembly = harness.store.load_assembly(run_id, job_id)
+    assert assembly is not None
+    row = next(p for p in assembly["parts"] if p["part_id"] == "front")
+    expected = (original.actual_cost_usd or Decimal(0)) + (repair.actual_cost_usd or Decimal(0))
+    assert Decimal(row["actual_cost_usd"]) == expected
+    assert expected > Decimal(0), "both calls were free; this test proves nothing"
+
+
+def test_an_unrepaired_part_is_untouched_by_any_of_this(tmp_path: Path) -> None:
+    """MUTATION PROOF. Substitution must happen only where a readable repair actually exists."""
+    harness, run_id, job_id = _repaired_harness(tmp_path)
+    assembly = harness.store.load_assembly(run_id, job_id)
+    assert assembly is not None
+    others = [p for p in assembly["parts"] if p["part_id"] != "front"]
+    assert others, "no other parts exist; the mutation proof is vacuous"
+    assert all(p["repaired_from_task_id"] is None for p in others)
+
+
+def test_a_repair_that_is_itself_unreadable_does_not_displace_the_original(
+    tmp_path: Path,
+) -> None:
+    """Swapping one unreadable artifact for another loses the original's place and gains nothing."""
+
+    class RepairAlsoMalforms(MalformsOnePart):
+        def invoke(self, request: ModelRequest) -> ModelResponse:
+            if parse_yaml(request.user_content).get("brief") == "format_repair":
+                self.requests.append(request)
+                text = "nodes:\n  - id: n9\n    content: still broken: yes\n"
+                return ModelResponse(
+                    text=text,
+                    input_tokens=estimate_tokens(request.user_content),
+                    output_tokens=estimate_tokens(text),
+                    model_id=request.model_id,
+                    provider=self.name,
+                    stop_reason="end_turn",
+                    truncated=False,
+                )
+            return super().invoke(request)
+
+    harness = _harness(tmp_path, provider=RepairAlsoMalforms("front"))
+    run_id, job_id = _run(harness)
+    tasks = harness.store.load_tasks(run_id, job_id)
+    original = next(
+        t
+        for t in tasks
+        if t.task_type is TaskType.PARSE_PART
+        and t.part_id == "front"
+        and (t.envelope or {}).get("readable") is False
+    )
+    assembly = harness.store.load_assembly(run_id, job_id)
+    assert assembly is not None
+    row = next(p for p in assembly["parts"] if p["part_id"] == "front")
+    assert row["task_id"] == original.task_id
+    assert row["repaired_from_task_id"] is None
+
+
+def test_a_format_repair_is_never_itself_repaired(tmp_path: Path) -> None:
+    """FOUND IN A REAL RUN: a FORMAT_REPAIR whose parent was a FORMAT_REPAIR.
+
+    `max_format_repairs_per_artifact` counts repairs of a GIVEN task, so an unreadable repair
+    became a new artifact with its own allowance. One repair per artifact has to mean one repair,
+    not one per link.
+    """
+
+    class RepairAlsoMalforms(MalformsOnePart):
+        def invoke(self, request: ModelRequest) -> ModelResponse:
+            if parse_yaml(request.user_content).get("brief") == "format_repair":
+                self.requests.append(request)
+                text = "nodes:\n  - id: n9\n    content: still broken: yes\n"
+                return ModelResponse(
+                    text=text,
+                    input_tokens=estimate_tokens(request.user_content),
+                    output_tokens=estimate_tokens(text),
+                    model_id=request.model_id,
+                    provider=self.name,
+                    stop_reason="end_turn",
+                    truncated=False,
+                )
+            return super().invoke(request)
+
+    harness = _harness(tmp_path, provider=RepairAlsoMalforms("front"))
+    run_id, job_id = _run(harness)
+    tasks = harness.store.load_tasks(run_id, job_id)
+    repairs = [t for t in tasks if t.task_type is TaskType.FORMAT_REPAIR]
+    assert len(repairs) == 1, f"a repair chain formed: {[t.task_id for t in repairs]}"
+    assert repairs[0].parent_task_id is not None
+    parent = harness.store.load_task(run_id, job_id, repairs[0].parent_task_id)
+    assert parent.task_type is TaskType.PARSE_PART

@@ -1024,6 +1024,24 @@ class MultipartParseService:
             task, TaskState.SUCCEEDED, message=f"unreadable envelope: {error[:200]}"
         )
 
+        # A REPAIR IS NEVER REPAIRED. The limit is one repair per ARTIFACT, and counting only the
+        # repairs of THIS task let a chain evade it: an unreadable repair became a new artifact
+        # with its own allowance, and the next one after that. Measured on a real run — a
+        # FORMAT_REPAIR whose parent was itself a FORMAT_REPAIR. A model that cannot produce one
+        # readable document from an explicit repair brief is not going to produce one from a
+        # repair of the repair; it just spends money and buries the original two links back.
+        if task.task_type is TaskType.FORMAT_REPAIR:
+            self._store.append_event(
+                run_id,
+                kind="repair.not_repaired",
+                job_id=job_id,
+                task_id=task.task_id,
+                message=(
+                    "a format repair returned an unreadable document. It is preserved and "
+                    "reported; a repair is never itself repaired."
+                ),
+            )
+            return
         repairs = [
             t
             for t in self._store.load_tasks(run_id, job_id)
@@ -1673,6 +1691,51 @@ class MultipartParseService:
         part = self._part_of(task)
         return part.unresolved if part is not None else ()
 
+    @staticmethod
+    def _repairs_by_original(tasks: list[MultipartTask]) -> dict[str, MultipartTask]:
+        """Map a part task to the successful format repair that carries its content, if any.
+
+        A REPAIR IS ONLY SUBSTITUTED WHEN IT ACTUALLY PRODUCED A PART. Two ways it may not have.
+        A repair whose own response would not parse is recorded with `readable: False` and is no
+        improvement on the original; substituting it would swap one unreadable artifact for
+        another and lose the first one's place in the index. A repair of something that is not a
+        part carries a bookkeeping envelope with no `node_count` at all. Requiring the key that
+        `_interpret_part` writes admits only the case that means anything here. Measured on a real
+        run: 8 repairs were attempted and exactly ONE returned a readable part envelope.
+
+        CHAINS ARE STILL FOLLOWED, BECAUSE PRESERVED RUNS CONTAIN THEM. `_on_unreadable` now
+        refuses to repair a repair, so no new chain can start — but a run recorded before that
+        must still resolve to the artifact holding its content rather than to the middle of a
+        chain, and the walk costs nothing.
+        """
+        by_id = {t.task_id: t for t in tasks}
+        repairs = [t for t in tasks if t.task_type is TaskType.FORMAT_REPAIR]
+        resolved: dict[str, MultipartTask] = {}
+        for repair in repairs:
+            if repair.state is not TaskState.SUCCEEDED:
+                continue
+            envelope = repair.envelope or {}
+            if envelope.get("readable") is False or "node_count" not in envelope:
+                continue
+            # Walk back to the PART task this repair ultimately descends from.
+            origin = by_id.get(repair.parent_task_id or "")
+            seen = {repair.task_id}
+            while origin is not None and origin.task_type is TaskType.FORMAT_REPAIR:
+                if origin.task_id in seen:  # a cycle cannot happen; refusing to loop is free
+                    origin = None
+                    break
+                seen.add(origin.task_id)
+                origin = by_id.get(origin.parent_task_id or "")
+            if origin is None or origin.task_type not in {
+                TaskType.PARSE_PART,
+                TaskType.PARSE_SUBPART,
+            }:
+                continue
+            existing = resolved.get(origin.task_id)
+            if existing is None or repair.order >= existing.order:
+                resolved[origin.task_id] = repair
+        return resolved
+
     def _finish(self, run_id: str, job_id: str) -> JobRecord:
         """Assemble mechanically, validate the index, and stop at READY_FOR_REVIEW."""
         job = self._store.load_job(run_id, job_id)
@@ -1680,18 +1743,32 @@ class MultipartParseService:
         plan = self._load_plan(job)
         context = self._context(job)
 
+        repairs = self._repairs_by_original(tasks)
         parts: list[AssembledPart] = []
         for task in tasks:
             if task.task_type not in {TaskType.PARSE_PART, TaskType.PARSE_SUBPART}:
                 continue
-            envelope = task.envelope or {}
-            coverage = (task.validation or {}).get("coverage") or {}
-            last = task.attempts[-1].to_mapping() if task.attempts else {}
+            # THE ROW CARRIES THE ARTIFACT THAT ACTUALLY HOLDS THE CONTENT. A part whose response
+            # would not parse, and whose format repair then succeeded, has TWO preserved artifacts:
+            # the malformed original and the readable repair. The original is never replaced or
+            # rewritten — but indexing it and ignoring the repair reported a FALSE EMPTY, which is
+            # the inverse of the failure mode this project guards against and just as untrue.
+            # Measured: part_024 of a real run held 2 nodes in its repair and read `node_count: 0`.
+            #
+            # ONE ROW PER PART, NOT TWO. A duplicate part_id is a defect `validate_assembly`
+            # reports, and the repair carries the same model-created identifier by construction.
+            # Both task ids stay on the row so a reviewer can open either artifact.
+            source = repairs.get(task.task_id, task)
+            repaired_from = task.task_id if source is not task else None
+            envelope = source.envelope or {}
+            coverage = (source.validation or {}).get("coverage") or {}
+            last = source.attempts[-1].to_mapping() if source.attempts else {}
             parts.append(
                 AssembledPart(
                     part_id=task.part_id,
                     storage_token=task.storage_token,
-                    task_id=task.task_id,
+                    task_id=source.task_id,
+                    repaired_from_task_id=repaired_from,
                     parent_part_id=task.parent_part_id,
                     order=task.order,
                     title=str(envelope.get("title") or (task.part_spec or {}).get("title") or ""),
@@ -1699,8 +1776,12 @@ class MultipartParseService:
                         envelope.get("type") or (task.part_spec or {}).get("type") or ""
                     ),
                     declared_status=str(envelope.get("declared_status") or ""),
-                    task_state=task.state.value,
-                    terminal=task.state is TaskState.SUCCEEDED,
+                    task_state=source.state.value,
+                    terminal=source.state is TaskState.SUCCEEDED,
+                    # TRUNCATION IS READ FROM THE ORIGINAL, NOT THE REPAIR. A repair is never
+                    # queued for a truncated response — a truncated attempt is preserved and
+                    # replanned, never repaired or continued — so the two can never disagree here.
+                    # Reading the original keeps that true even if the repair path ever widens.
                     truncated=task.state is TaskState.TRUNCATED,
                     node_count=int(envelope.get("node_count") or 0),
                     table_count=int(envelope.get("table_count") or 0),
@@ -1720,16 +1801,20 @@ class MultipartParseService:
                     input_tokens=int(last.get("input_tokens") or 0),
                     output_tokens=int(last.get("output_tokens") or 0),
                     latency_ms=int(last.get("latency_ms") or 0),
-                    actual_cost_usd=task.actual_cost_usd or Decimal(0),
+                    # BOTH CALLS WERE PAID FOR. A repaired part cost the malformed response AND
+                    # the repair, and a row showing only one of them would understate what the
+                    # part actually cost. The job total is unaffected either way: it sums tasks.
+                    actual_cost_usd=(task.actual_cost_usd or Decimal(0))
+                    + (source.actual_cost_usd or Decimal(0) if source is not task else Decimal(0)),
                     stop_reason=str(last.get("stop_reason") or ""),
-                    prompt_identity=f"{task.prompt.prompt_id}@{task.prompt.version}",
+                    prompt_identity=f"{source.prompt.prompt_id}@{source.prompt.version}",
                     # READ BACK FROM THE PRESERVED RESPONSE, NOT FROM A CACHED COPY. The envelope
                     # record is the compact scheduling view and deliberately carries counts rather
                     # than content; the nodes in the index have to be the model's own mapping,
                     # sourced from the bytes it returned, or the assembled view would be showing a
                     # second-hand rendering of the thing it claims to index.
-                    nodes=self._nodes_of(task),
-                    unresolved=self._unresolved_of(task),
+                    nodes=self._nodes_of(source),
+                    unresolved=self._unresolved_of(source),
                     coverage_summary=str(envelope.get("coverage_summary") or ""),
                 )
             )

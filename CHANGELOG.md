@@ -99,6 +99,34 @@ substituted, or lost. `docs/sprints/PHASE-0201-model-directed-multipart-parsing.
   The narrowing is demonstrated: a fence-wrapped document cannot parse as a YAML mapping, so it
   cannot reach that branch. Mutation proofs assert that fenced and JSON documents are both still
   refused.
+- **The YAML serializer wrote documents this repository could not read back.** Found by a real
+  filing: a 1996 10-K405 table quoted by a parsing model contained `U+0085 NEXT LINE`. Forcing a
+  literal block scalar bypasses the emitter's own scalar analysis — the analysis that would have
+  refused block style for that string — so the character went out raw, and the reader counts
+  `U+0085`, `U+2028` and `U+2029` as line breaks. Silently, a preserved quote stopped matching the
+  bytes it cited; loudly, an assembly this repository had just written became one it could not
+  load. A string carrying any character a block scalar cannot return unchanged is now
+  double-quoted, where the emitter escapes it and the reader restores it exactly. Tab and newline
+  stay out of that set deliberately — EDGAR text tables are made of them, and an ordinary table is
+  still a readable block scalar.
+- **A repaired part never reached the index, so the assembly reported a FALSE EMPTY.** Found in a
+  real run: a model returned a part response that would not parse, the format repair then succeeded
+  and produced a readable envelope with two nodes, and the index carried the ORIGINAL row —
+  `node_count: 0`, empty title, empty coverage summary — while reporting the part terminal. Content
+  that exists, reported as absent, which is the inverse of the failure mode this project guards
+  against and exactly as untrue. The row now carries the artifact that actually holds the content,
+  names BOTH task ids so the malformed original stays one click away, and sums what both calls
+  cost. The original is still never replaced or rewritten. Re-assembling the affected run moved it
+  from 178 to 180 nodes and 210/227 to 212/229 references, and bought nothing.
+- **A format repair could itself be repaired, and a real run did it.** `max_format_repairs_per_artifact`
+  counted repairs of a GIVEN task, so an unreadable repair became a new artifact with its own
+  allowance and the limit of one meant one per link rather than one per artifact. A repair is now
+  never repaired: the unreadable document is preserved and reported.
+- **A resumed multipart parse could not reach review.** A restart parks both the tasks and the
+  child job in `INTERRUPTED`; `resume` reopened only the tasks. A real run then completed every
+  one of its 47 parts and had nowhere to go, because `INTERRUPTED` was terminal in the execution
+  machine. It now reopens to `RUNNING` through an explicit user action and nothing else — the same
+  shape `TaskState.INTERRUPTED -> READY` already had one level down.
 
 ### Operational changes
 
