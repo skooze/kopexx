@@ -18,15 +18,19 @@ run of rejections walk straight past the ceiling.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from pathlib import Path
+from typing import IO, Any
 
 from packages.llm_gateway import parse_yaml, require_mapping, to_yaml
 from packages.model_catalog import CostCeilingExceededError, PriceInputs
 from packages.storage import ObjectStore
 
 _JOURNAL_KEY = "spend-journal.yaml"
+_LOCK_KEY = "spend-journal.lock"
 
 
 @dataclass(frozen=True)
@@ -152,6 +156,40 @@ class SpendJournal:
             return []
         document = require_mapping(parse_yaml(self._objects.get_text(_JOURNAL_KEY)))
         return [SpendEntry.from_mapping(e) for e in (document.get("entries") or ())]
+
+    @contextmanager
+    def _exclusive(self) -> Iterator[None]:
+        """Hold the journal lock for one read-modify-write.
+
+        THE CEILING IS A MONEY GUARD AND IT WAS NOT CONCURRENCY-SAFE. Every entry was appended to
+        an in-memory list loaded at construction, and `_save` wrote that whole list back. Two
+        processes reserving at once each wrote their own view, and whichever finished second
+        silently erased the other's entries — so the cumulative total under-reported real spend and
+        the ceiling could be walked straight past by running two parses.
+
+        AN ADVISORY FILE LOCK, AND ADVISORY IS ENOUGH. Every writer of this file is this class.
+        The lock is held across re-read, append and write, so an entry can never be lost to a
+        stale read; it is not held while a provider call is in flight, so one parse never blocks
+        another for the length of a request.
+        """
+        import fcntl  # noqa: PLC0415 - POSIX only, and this application is POSIX only
+
+        path = Path(getattr(self._objects, "root", ".")) / _LOCK_KEY
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle: IO[str] = path.open("a+")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
+    def _append(self, entry: SpendEntry) -> None:
+        """Add one entry under the lock, re-reading first so no concurrent write is lost."""
+        with self._exclusive():
+            self._entries = self._load()
+            self._entries.append(entry)
+            self._save()
 
     def _save(self) -> None:
         self._objects.put_text(
@@ -295,7 +333,7 @@ class SpendJournal:
                 spent_usd=str(self.spent_usd),
                 estimate_usd=str(estimate),
             )
-        self._entries.append(
+        self._append(
             SpendEntry(
                 at=at,
                 kind="RESERVATION",
@@ -309,7 +347,6 @@ class SpendJournal:
                 phase=self._phase,
             )
         )
-        self._save()
         return estimate
 
     def settle(
@@ -327,7 +364,7 @@ class SpendJournal:
     ) -> Decimal:
         """Replace a reservation with the measured cost, recording both halves."""
         actual = price.cost(input_tokens, output_tokens)
-        self._entries.append(
+        self._append(
             SpendEntry(
                 at=at,
                 kind="SETTLEMENT",
@@ -341,7 +378,6 @@ class SpendJournal:
                 phase=self._phase,
             )
         )
-        self._save()
         return actual
 
     def release(
@@ -387,7 +423,7 @@ class SpendJournal:
                 "a release must record the evidence that no provider transport occurred; a "
                 "release with no evidence is indistinguishable from un-charging a real failure"
             )
-        self._entries.append(
+        self._append(
             SpendEntry(
                 at=at,
                 kind="RELEASE",
@@ -401,7 +437,6 @@ class SpendJournal:
                 phase=self._phase,
             )
         )
-        self._save()
         return reserved
 
     def unsettled(self) -> tuple[UnsettledReservation, ...]:

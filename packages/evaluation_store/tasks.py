@@ -145,6 +145,18 @@ class MultipartTask:
     started_at: str | None = None
     finished_at: str | None = None
     error: str | None = None
+    #: Which process currently holds this task, as "host:pid", and when it last said so.
+    #:
+    #: A LEASE, NOT A LOCK. It grants nothing and prevents nothing; it exists so a DIFFERENT
+    #: process can tell an abandoned task from one that is running right now.
+    #:
+    #: THE DEFECT IT CLOSES COST A REAL RUN. `mark_interrupted_tasks` ran at every application
+    #: start and parked EVERY mid-flight task in the store, on the assumption that one process
+    #: owns everything. Phase 2.1 measured 46 live tasks parked that way when a second process
+    #: started; Phase 2.2 did it again to a Nemotron parse 14 parts in. Without an owner there is
+    #: no way to ask "is anyone still working on this", so the sweep had to assume nobody was.
+    owner: str = ""
+    heartbeat: str = ""
     blocked_reason: str | None = None
     truncation: dict[str, Any] | None = None
     validation: dict[str, Any] | None = None
@@ -206,6 +218,8 @@ class MultipartTask:
             "estimated_input_tokens": self.estimated_input_tokens,
             "output_target_tokens": self.output_target_tokens,
             "error": self.error,
+            "owner": self.owner,
+            "heartbeat": self.heartbeat,
             "blocked_reason": self.blocked_reason,
             "truncation": self.truncation,
             "validation": self.validation,
@@ -263,6 +277,8 @@ class MultipartTask:
             started_at=_optional_text(raw, "started_at"),
             finished_at=_optional_text(raw, "finished_at"),
             error=_optional_text(raw, "error"),
+            owner=str(raw.get("owner") or ""),
+            heartbeat=str(raw.get("heartbeat") or ""),
             blocked_reason=_optional_text(raw, "blocked_reason"),
             truncation=raw.get("truncation"),
             validation=raw.get("validation"),

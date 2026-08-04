@@ -312,6 +312,22 @@ def test_a_restart_interrupts_mid_flight_tasks_and_leaves_completed_ones_alone(
     store.set_task_state(inflight, TaskState.RESERVED)  # type: ignore[arg-type]
     store.set_task_state(inflight, TaskState.RUNNING)  # type: ignore[arg-type]
 
+    # A LIVE OWNER'S TASK IS LEFT ALONE, and this half of the test is new.
+    #
+    # The sweep used to park every mid-flight task in the store, which is correct on a machine
+    # running one process and destructive on one running two: it parked 46 live tasks in Phase 2.1
+    # and a 14-part Nemotron parse in Phase 2.2, both times reaching across a process boundary to
+    # cancel work somebody was paying for. `set_task_state` has just written THIS process's lease
+    # onto `inflight`, so the sweep must decline to touch it.
+    assert store.mark_interrupted_tasks() == []  # type: ignore[attr-defined]
+    assert store.load_task(RUN_ID, JOB_ID, inflight.task_id).state is TaskState.RUNNING  # type: ignore[attr-defined]
+
+    # ABANDONED WORK IS STILL PARKED, which is what the sweep is for. A pid that cannot exist
+    # stands in for the process that died.
+    inflight.owner = "nonexistent-host:999999999"
+    inflight.heartbeat = "2000-01-01T00:00:00+00:00"
+    store.save_task(inflight)  # type: ignore[arg-type]
+
     touched = store.mark_interrupted_tasks()
     assert [t[2] for t in touched] == [inflight.task_id]  # type: ignore[attr-defined]
     assert store.load_task(RUN_ID, JOB_ID, done.task_id).state is TaskState.SUCCEEDED  # type: ignore[attr-defined]

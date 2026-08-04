@@ -253,3 +253,59 @@ def dependencies_satisfied(
     if policy is DependencyPolicy.ALL_SUCCEEDED:
         return all(state is TaskState.SUCCEEDED for state in states)
     return all(state in TERMINAL_TASK_STATES for state in states)
+
+
+#: How long a task may go without its owner saying anything before another process may treat it as
+#: abandoned. Generous on purpose: a single provider call against a 250,000-token filing has been
+#: measured at over 150 seconds, and reclaiming a task that is merely SLOW would double-charge it.
+LEASE_STALE_AFTER_SECONDS: Final[int] = 1800
+
+
+def process_token() -> str:
+    """This process's identity, as `host:pid`. Written onto a task it is actively working."""
+    import os  # noqa: PLC0415 - a leaf helper; the module stays import-light
+    import socket  # noqa: PLC0415
+
+    return f"{socket.gethostname()}:{os.getpid()}"
+
+
+def owner_is_alive(owner: str, heartbeat: str, *, now: str) -> bool:
+    """Whether the process named by a lease is plausibly still working on it.
+
+    TWO WAYS TO BE ABANDONED, AND BOTH ARE POSITIVE EVIDENCE. An owner on THIS host whose pid is
+    gone. An owner whose heartbeat is older than the stale window, which covers a crashed process
+    on another host and a process that hung. Absence of a lease is NOT one of them.
+
+    IT ERRS TOWARD LEAVING WORK ALONE. An owner it cannot evaluate is treated as ALIVE, because
+    parking a task somebody is working on is what this function exists to stop, and the cost of
+    being wrong the other way is one task waiting for an explicit resume.
+    """
+    if not owner:
+        # A TASK WITH NO LEASE PREDATES LEASES, AND IT IS NOT EVIDENCE OF ABANDONMENT. Treating it
+        # as abandoned parked a GPT OSS parse 28 parts in the first time this shipped: every task
+        # written before the field existed carries an empty owner, so the sweep read the entire
+        # existing store as dead work. An unknown owner is treated as ALIVE, in the same direction
+        # as every other branch here, and such a task is parked only by an explicit user action.
+        return True
+    if heartbeat:
+        try:
+            from datetime import datetime  # noqa: PLC0415
+
+            age = (datetime.fromisoformat(now) - datetime.fromisoformat(heartbeat)).total_seconds()
+            if age > LEASE_STALE_AFTER_SECONDS:
+                return False
+        except ValueError:
+            return True
+    host, _, pid = owner.partition(":")
+    import os  # noqa: PLC0415
+    import socket  # noqa: PLC0415
+
+    if host != socket.gethostname() or not pid.isdigit():
+        return True
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True

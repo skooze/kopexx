@@ -26,11 +26,12 @@ import json
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 
 from packages.evaluation_store import (
+    RESUMABLE_TASK_STATES,
     EvaluationStore,
     ExecutionState,
     TaskState,
@@ -930,6 +931,11 @@ def test_the_phase_ceiling_is_tracked_separately_from_the_cumulative_one(
 # --- restart and partial retry -------------------------------------------------------------------------
 
 
+def restarted_targets(tasks: list[Any]) -> list[Any]:
+    """The tasks a crashed process would have left mid-flight."""
+    return [t for t in tasks if t.state in RESUMABLE_TASK_STATES]
+
+
 def test_a_restart_marks_in_flight_tasks_interrupted_and_reruns_nothing(tmp_path: Path) -> None:
     class StopsAfterPlan(ScriptedProvider):
         def invoke(self, request: ModelRequest) -> ModelResponse:
@@ -947,6 +953,15 @@ def test_a_restart_marks_in_flight_tasks_interrupted_and_reruns_nothing(tmp_path
     before = harness.store.load_tasks(run_id, job_id)
     succeeded_before = {t.task_id for t in before if t.state is TaskState.SUCCEEDED}
     assert succeeded_before, "nothing succeeded before the crash; the test proves nothing"
+
+    # A CRASH MEANS THE PROCESS IS GONE, and the test has to say so because it is still running.
+    # `mark_interrupted_tasks` now parks only work whose owning process is dead — that is what lets
+    # several parses share one store — so a restart test that leaves a LIVE lease on its tasks is
+    # simulating a restart nobody had. The dead pid stands in for the process that crashed.
+    for stranded in restarted_targets(before):
+        stranded.owner = "crashed-host:999999999"
+        stranded.heartbeat = "2000-01-01T00:00:00+00:00"
+        harness.store.save_task(stranded)
 
     restarted = _harness(tmp_path, provider=ScriptedProvider())
     restarted.store.mark_interrupted_tasks()

@@ -37,7 +37,8 @@ FOUR THINGS THIS SERVICE NEVER DOES, EACH OF WHICH WOULD BE EASIER THAN WHAT IT 
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any, Final
 
@@ -172,6 +173,17 @@ class MultipartSettings:
     #: stops. One, because a cycle that finds nothing new has already told us what it knows.
     no_progress_tolerance: int = 1
 
+    #: How many INDEPENDENT tasks of one parse may be in flight at once.
+    #:
+    #: MEASURED: a 34-part parse of Apple's 10-Q spent 25 minutes of wall clock waiting on 38
+    #: provider calls of median 29 seconds, one after another, for work that has no ordering
+    #: constraint between its parts. Eight-wide turns that into roughly three.
+    #:
+    #: IT IS NOT A THROUGHPUT KNOB FOR ITS OWN SAKE. The ceiling is enforced per call under the
+    #: journal's cross-process lock, so width does not weaken it; what width does change is how
+    #: much a single refusal leaves half-done, which is why it is bounded rather than unlimited.
+    max_parallel_tasks: int = 8
+
     #: How the filing reaches the model. "intact" sends the bytes SEC published; "projected" sends
     #: the lossless YAML projection of everything human-readable in them.
     #:
@@ -198,6 +210,8 @@ class MultipartSettings:
             )
         if self.no_progress_tolerance < 0:
             raise ValueError("no_progress_tolerance cannot be negative")
+        if self.max_parallel_tasks < 1:
+            raise ValueError("max_parallel_tasks must be at least 1")
         if self.source_input_mode not in ("intact", "projected"):
             raise ValueError(
                 f"{self.source_input_mode!r} is not a source input mode. Choose intact or "
@@ -470,8 +484,7 @@ class MultipartParseService:
             context.job = self._store.load_job(run_id, job_id)
             if context.plan is None:
                 context.plan = self._load_plan(context.job)
-            self._execute(context, runnable[0])
-            steps += 1
+            steps += self._execute_batch(context, runnable, remaining=max_steps - steps)
         if steps >= max_steps:
             self._store.append_event(
                 run_id,
@@ -483,6 +496,49 @@ class MultipartParseService:
                 ),
             )
         return self._finish(run_id, job_id)
+
+    def _execute_batch(
+        self, context: _Context, runnable: list[MultipartTask], *, remaining: int
+    ) -> int:
+        """Run as many INDEPENDENT tasks as the concurrency allows, and return how many ran.
+
+        WHY THIS IS SAFE TO PARALLELISE AND WHY IT WAS NOT DONE SOONER. Phase 2.1 ran one task at a
+        time because "a pool racing over shared budget would make the ceiling advisory". That was
+        the right call then and it is no longer the constraint: the spend journal takes a
+        cross-process lock across re-read, append and write, so a reservation is atomic whoever
+        takes it, and the ceiling refuses correctly under any number of workers.
+
+        WHAT IT BOUGHT. Measured on the GLM 5 parse of Apple's 10-Q: 38 provider calls, median 29
+        seconds, 25 MINUTES of wall clock spent waiting one call at a time. The parts are
+        independent by construction — every one receives the complete source intact and returns a
+        standalone document, and `runnable_tasks` has already resolved every declared dependency —
+        so the only thing serialising them was this loop.
+
+        THE BUDGET IS STILL CHECKED BEFORE EVERY CALL, inside `_execute`, under the journal lock.
+        A batch that crosses the ceiling has some members refused and paused with the reason
+        visible, exactly as a serial run would; nothing is shrunk or dropped to fit.
+
+        DURABILITY IS UNCHANGED. Every task writes its own record before the next pass reads the
+        queue, so a crash mid-batch leaves the finished ones finished and the rest resumable —
+        which is what the one-at-a-time rule was actually protecting.
+        """
+        width = max(1, min(self._settings.max_parallel_tasks, len(runnable), remaining))
+        if width == 1:
+            self._execute(context, runnable[0])
+            return 1
+        # A SEPARATE CONTEXT PER WORKER. `_Context` carries mutable per-call state, and sharing one
+        # across threads would let two tasks interleave on it. Rebuilding is cheap beside a
+        # 29-second provider call and the source-set guard has already run for this pass.
+        with ThreadPoolExecutor(max_workers=width) as pool:
+            futures = [
+                pool.submit(self._execute, replace(context), task) for task in runnable[:width]
+            ]
+            for future in futures:
+                # An exception is re-raised here rather than swallowed: `_execute` already records
+                # a provider failure durably on the task, so anything reaching this point is a
+                # defect in the orchestrator and hiding it would lose the only report of it.
+                future.result()
+        return width
 
     # --- context ----------------------------------------------------------------------------------
 

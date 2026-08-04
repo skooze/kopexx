@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -53,6 +55,8 @@ from .queue_states import (
     TaskState,
     assert_task_transition,
     dependencies_satisfied,
+    owner_is_alive,
+    process_token,
 )
 from .records import (
     Comment,
@@ -320,6 +324,15 @@ class EvaluationStore:
         """Move a task's queue state, refusing an illegal move, and record the event."""
         assert_task_transition(task.state, requested)
         task.state = requested
+        # THE LEASE IS TAKEN AND RELEASED BY THE STATE MACHINE, so no executor has to remember to.
+        # A task moving into a mid-flight state is claimed by this process; a task reaching any
+        # other state is released, because a finished task nobody owns is exactly right.
+        if requested in RESUMABLE_TASK_STATES:
+            task.owner = process_token()
+            task.heartbeat = utc_now()
+        else:
+            task.owner = ""
+            task.heartbeat = ""
         if requested is TaskState.RUNNING and task.started_at is None:
             task.started_at = utc_now()
         if requested in {
@@ -390,17 +403,30 @@ class EvaluationStore:
         )
 
     def mark_interrupted_tasks(self) -> list[tuple[str, str, str]]:
-        """Move every mid-flight multipart task to INTERRUPTED. Returns (run, job, task) triples.
+        """Park every ABANDONED mid-flight task. Returns (run, job, task) triples.
 
-        Called once at server start, beside `mark_interrupted_jobs`. NOTHING IS RE-INVOKED and
+        Called once at application start, beside `mark_interrupted_jobs`. NOTHING IS RE-INVOKED and
         NOTHING COMPLETED IS TOUCHED: a parse whose plan and four parts succeeded keeps all five,
-        and only the branch that was in flight waits for a person.
+        and only the branch that was genuinely abandoned waits for a person.
+
+        ABANDONED IS NOW A TEST RATHER THAN AN ASSUMPTION. This used to park every mid-flight task
+        in the store, which is correct on a machine running one process and destructive on one
+        running two. `owner_is_alive` asks whether anybody still holds the lease, so several parses
+        can run at once and a restart still recovers whatever really died.
         """
         touched: list[tuple[str, str, str]] = []
+        now = utc_now()
         for run_id in self.list_run_ids():
             for job in self.load_jobs(run_id):
                 for task in self.load_tasks(run_id, job.job_id):
                     if task.state not in RESUMABLE_TASK_STATES:
+                        continue
+                    # ONLY ABANDONED WORK IS PARKED. A task whose owning process is still alive
+                    # belongs to that process; parking it would reach across a process boundary and
+                    # cancel work somebody is paying for right now. That is not hypothetical: this
+                    # sweep parked 46 live tasks in Phase 2.1 and a 14-part Nemotron parse in
+                    # Phase 2.2, both times because it assumed one process owns the whole store.
+                    if owner_is_alive(task.owner, task.heartbeat, now=now):
                         continue
                     task.state = TaskState.INTERRUPTED
                     task.error = (
@@ -598,7 +624,7 @@ class EvaluationStore:
         the other.
         """
         require_run_id(run_id)
-        with self._sequence_lock:
+        with self._sequence_lock, self._event_file_lock(run_id):
             sequence = self._next_sequence(run_id)
             event = RunEvent(
                 sequence=sequence,
@@ -614,6 +640,39 @@ class EvaluationStore:
                 content_type="text/plain",
             )
         return event
+
+    @contextmanager
+    def _event_file_lock(self, run_id: str) -> Iterator[None]:
+        """Hold a cross-process lock while allocating and writing one event number.
+
+        `threading.Lock` COORDINATES THREADS AND NOTHING ELSE. It was the only guard here, and its
+        docstring claimed two concurrent appends could not collide on a number — true within one
+        process and false the moment a second one runs. Five parses appending at once produced
+        `FileNotFoundError: .../events/00000200.txt.partial`: two writers allocated 200, the first
+        renamed its temporary file into place, and the second found its own gone.
+
+        THE SAME SHAPE AS THE SPEND JOURNAL'S LOCK, and for the same reason: every writer of these
+        files is this class, so advisory is enough, and the lock is held for a filename allocation
+        rather than for any real work.
+        """
+        import fcntl  # noqa: PLC0415 - POSIX only, as this application is
+
+        # `root` exists on the filesystem store and on nothing else. A store without one is an
+        # in-memory test double that no second process can reach, so the thread lock above is
+        # already sufficient for it and this degrades to a no-op rather than to a crash.
+        root = getattr(self._objects, "root", None)
+        if root is None:
+            yield
+            return
+        path = Path(root) / "runs" / run_id / "events.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = path.open("a+")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
 
     def _next_sequence(self, run_id: str) -> int:
         keys = self._objects.list_keys(f"{_RUNS}/{run_id}/events/")
