@@ -21,7 +21,20 @@ from typing import Final
 # Mean characters per token for English prose with embedded identifiers and numbers. Measured
 # ratios for frontier tokenizers cluster between 3.5 and 4.2; 3.8 is a deliberately conservative
 # midpoint that slightly over-estimates, which is the safe direction for a budget guard.
-CHARS_PER_TOKEN: Final[float] = 3.8
+#: MEASURED 2026-08-04 AND CORRECTED IN THE SAFE DIRECTION. 3.8 was a planning ratio with no
+#: provider count behind it, and on modern inline XBRL it is wrong the DANGEROUS way round.
+#:
+#: Apple's 10-Q accession 0000320193-25-000008 carries 915,890 characters of human-readable text.
+#: This estimator called the complete request 248,176 tokens; Bedrock refused it at "at least
+#: 262,017 input tokens" — an under-count of at least 13,840, or 5.3 percent. The real ratio on
+#: that filing is roughly 3.60 characters per token.
+#:
+#: R-24 SAID THIS ESTIMATE WAS AN UPPER BOUND. It is not. `packages/source_transport/compatibility`
+#: still describes it that way in a docstring written before anything had been measured, and a
+#: guard that runs BEFORE the money is spent must err high, not low. 3.5 is below the 3.60
+#: measured here so the estimate comes out above the real count, which is the direction that
+#: refuses a run that would have fitted rather than buying one that will not.
+CHARS_PER_TOKEN: Final[float] = 3.5
 
 
 def estimate_tokens(text: str) -> int:

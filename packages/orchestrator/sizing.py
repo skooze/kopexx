@@ -68,9 +68,31 @@ MAXIMUM_COMPACT_TARGET_TOKENS: Final[int] = 4000
 REPAIR_HEADROOM_MULTIPLE: Final[float] = 1.6
 
 #: Context reserved on every call so that an under-counting input estimate does not silently turn
-#: into a provider rejection. R-24 is measured, not closed: Phase 2 recorded a character-ratio
-#: estimate 17 percent BELOW the provider's own count on the modern inline-XBRL filing.
+#: into a provider rejection.
+#:
+#: A FLAT RESERVE CANNOT COVER A PROPORTIONAL ERROR, AND THAT IS WHAT R-24 IS. The estimator is a
+#: character ratio, so its error scales with the document: 4,000 tokens is generous against a
+#: 40,000-token filing and is nothing against a 250,000-token one.
+#:
+#: MEASURED 2026-08-04, TO THE TOKEN. Apple's 10-Q estimated at 244,708 input tokens and Bedrock
+#: counted 254,145 — an under-count of 9,437, or 3.86 percent. With the flat 4,000 reserve the
+#: request asked for 8,000 output tokens against a 262,144 limit and was refused at 262,145. ONE
+#: TOKEN over, on a filing that fits.
+#:
+#: THE ESTIMATOR UNDER-COUNTS AND R-24 SAID IT OVER-COUNTS. The compatibility guard's docstring
+#: calls the character ratio "an upper bound", and on inline XBRL it is a LOWER one. Phase 2
+#: measured 17 percent low on a modern filing; this phase measured 3.86 percent low on another.
+#: The direction is consistent and the magnitude is not, so the reserve is sized above the larger
+#: of the two measurements this filing produced rather than at either observation.
+CONTEXT_SAFETY_FRACTION: Final[float] = 0.05
+
+#: The floor, for a filing small enough that five percent is negligible.
 CONTEXT_SAFETY_TOKENS: Final[int] = 4000
+
+
+def context_safety_tokens(estimated_input_tokens: int) -> int:
+    """The reserve for one request, proportional to what is being estimated."""
+    return max(CONTEXT_SAFETY_TOKENS, int(estimated_input_tokens * CONTEXT_SAFETY_FRACTION))
 
 
 @dataclass(frozen=True)
@@ -137,7 +159,7 @@ def _cap(capability: ModelCapability, estimated_input_tokens: int) -> int:
     context_left = (
         capability.effective_context_tokens(images_submitted=capability.multimodal)
         - estimated_input_tokens
-        - CONTEXT_SAFETY_TOKENS
+        - context_safety_tokens(estimated_input_tokens)
     )
     room = max(0, min(capability.max_output_tokens, context_left))
     return 0 if room < MINIMUM_USABLE_OUTPUT_TOKENS else room
