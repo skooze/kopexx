@@ -1,0 +1,57 @@
+# Benchmark filings — the reviewed contract the completeness surface is SUPPLIED with.
+#
+# WHY THIS FILE EXISTS AND WHY IT IS NOT THE RESEARCH CORPUS. `packages/orchestrator.
+# CorpusFilingCatalog` answers which filings this project can process, from the 613-filing research
+# corpus manifest under `var/`. A BENCHMARK filing is a different thing: it is one fixed filing,
+# chosen deliberately, that every candidate model is measured against and that a human classifies
+# span by span and table by table. Apple's 10-Q `0000320193-25-000008` is not in that corpus — it is
+# a preserved Sprint 3 fixture — and a benchmark whose reachability depended on which filings a
+# sampling run happened to draw would be a benchmark nobody could reproduce.
+#
+# SUPPLIED, NEVER HARDCODED. The same discipline as `docs/llm/bedrock-capability-snapshot.yaml` and
+# `tests/fixtures/form_family.yaml`, and for the same reason: a guessed allowlist in runtime source
+# produced a confident, precise and inverted conclusion once already (ADR-0017 section 8). No
+# accession, CIK, form string or date below appears in `packages/`.
+#
+# IDENTITY IS TRANSCRIBED FROM THE FILING INDEX, NOT INFERRED. Every field carries what EDGAR
+# published. `report_period` is the period the filing covers and is NOT the filing date; getting
+# those two the wrong way round is a financial-accuracy defect, not a cosmetic one.
+#
+# THE BYTES ARE NOT HERE. This file carries identity only. The preserved package is resolved through
+# the ordinary source inventory, hash-verified on every read, and a member that is missing is
+# FETCHED under the normal raw-first rules rather than assumed.
+
+schema_version: "benchmark-filings-v1"
+reviewed_on: "2026-08-04"
+reviewed_from: >-
+  The EDGAR filing index page preserved at var/inventory/0000320193-25-000008-index.html, read
+  field by field. The declared document table on that page lists 6 human-readable documents,
+  2 GRAPHIC members and 6 machine-readable XBRL members, which is what the mechanical disposition
+  of the preserved package independently reproduces.
+
+filings:
+
+  - cik: "0000320193"
+    accession: "0000320193-25-000008"
+    form_as_filed: "10-Q"
+    filing_date: "2025-01-31"
+    report_period: "2024-12-28"
+    issuer_label: "Apple Inc."
+    transport_era: inline_xbrl
+    is_amendment: false
+    is_annual: false
+    note: >-
+      THE FIXED SINGLE-FILING COMPLETENESS BENCHMARK, chosen by the user and not substituted.
+      Apple's first filed 10-Q of calendar 2025.
+
+      IT IS A FIXTURE AND NOT A SPECIFICATION. rules.md section 21 rule 14: one issuer is never a
+      specification, and nothing measured against this filing generalises to another issuer, form
+      or era without being measured there too. Its value is that it is FIXED — every candidate
+      meets the same 915,890 characters, the same 41 table elements and the same 2 images, so a
+      difference between two runs is a difference between two models rather than between two
+      filings.
+
+      IT IS ALSO THE FIRST FILING THIS PROJECT HAS BENCHMARKED THAT DOES NOT FIT EVERY CANDIDATE.
+      At an estimated 243,507 input tokens for its complete human-readable source set it exceeds
+      GPT OSS 120B's entire 128,000-token context by a factor of about 1.9. That is R-21, and it is
+      a property of the filing rather than a defect in anything.

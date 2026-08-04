@@ -116,6 +116,10 @@ class ReviewSettings:
     prompt_directory: str = "./prompts/parser"
     capability_snapshot: str = "./docs/llm/bedrock-capability-snapshot.yaml"
     corpus_manifest: str = "./var/research-corpus/meta/filings.json"
+    #: The SUPPLIED benchmark-filing contract. Empty means no benchmark catalog is composed,
+    #: which is an ABSENT OPTIONAL SOURCE and not a fallback: nothing substitutes a different
+    #: filing, the benchmark surface simply answers 404 for a filing nobody supplied.
+    benchmark_manifest: str = "./docs/benchmark/benchmark-filings.yaml"
     author_label: str = "local-developer"
     cost_ceiling_usd: str = "5.00"
     max_concurrent_invocations: int = 1
@@ -204,6 +208,9 @@ class Settings:
                 ),
                 corpus_manifest=source.get(
                     "CORPUS_MANIFEST", "./var/research-corpus/meta/filings.json"
+                ),
+                benchmark_manifest=source.get(
+                    "BENCHMARK_MANIFEST", "./docs/benchmark/benchmark-filings.yaml"
                 ),
                 author_label=source.get("REVIEW_AUTHOR", "local-developer"),
                 cost_ceiling_usd=source.get("COST_CEILING_USD", "5.00"),

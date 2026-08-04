@@ -11,6 +11,8 @@ violation rather than a missing feature.
 """
 
 from .catalog import (
+    BenchmarkFilingCatalog,
+    CompositeFilingCatalog,
     CorpusFilingCatalog,
     EntityRecord,
     FilingCatalog,
@@ -61,6 +63,8 @@ __all__ = [
     "STRATEGIES",
     "BoundedWorker",
     "CeilingReachedError",
+    "BenchmarkFilingCatalog",
+    "CompositeFilingCatalog",
     "CorpusFilingCatalog",
     "EntityRecord",
     "FilingCatalog",

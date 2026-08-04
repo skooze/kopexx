@@ -31,7 +31,9 @@ from packages.llm_gateway.providers.base import ModelProvider
 from packages.llm_gateway.providers.mock import MockProvider
 from packages.model_catalog import load_snapshot
 from packages.orchestrator import (
+    BenchmarkFilingCatalog,
     BoundedWorker,
+    CompositeFilingCatalog,
     CorpusFilingCatalog,
     MultipartSettings,
     ParserReviewService,
@@ -131,7 +133,15 @@ def build(settings: Settings, *, provider: ModelProvider | None = None) -> Appli
     )
     snapshot = load_snapshot(Path(review.capability_snapshot).read_text(encoding="utf-8"))
     prompts = PromptRegistry.from_directory(review.prompt_directory)
-    catalog = CorpusFilingCatalog.from_manifest(review.corpus_manifest)
+    catalog: Any = CorpusFilingCatalog.from_manifest(review.corpus_manifest)
+    if review.benchmark_manifest and Path(review.benchmark_manifest).is_file():
+        # THE BENCHMARK FILING IS NOT IN THE SAMPLED CORPUS AND MUST STILL BE REACHABLE.
+        # Apple's 10-Q 0000320193-25-000008 is a preserved Sprint 3 fixture, not one of the 613
+        # filings a Phase 0 sampling run happened to draw. A benchmark whose reachability
+        # depended on that draw would be a benchmark nobody could reproduce.
+        catalog = CompositeFilingCatalog(
+            catalog, BenchmarkFilingCatalog.from_manifest(review.benchmark_manifest)
+        )
     inventory = CompositeInventory(
         ObjectStoreInventory(objects), _corpus_inventory(review.corpus_manifest)
     )
