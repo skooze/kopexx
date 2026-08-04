@@ -20,8 +20,15 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from packages.completeness import (
+    BenchmarkTruth,
+    BenchmarkTruthError,
+    Judgement,
+    suggest,
+)
 from packages.coverage_validation import read as read_parsed
 from packages.evaluation_store import (
+    BenchmarkTruthVersionExistsError,
     ExecutionState,
     IllegalTransitionError,
     JobNotFoundError,
@@ -32,11 +39,14 @@ from packages.evaluation_store import (
     permitted_review_transitions,
     summarise_run,
     summarise_tasks,
+    utc_now,
 )
 from packages.evaluation_store.errors import InvalidIdentifierError
 from packages.multipart import PART_ENVELOPE_KEYS
 from packages.orchestrator import (
     STRATEGIES,
+    FilingNotInCatalogError,
+    InventoriedFiling,
     NoParsingModelError,
     ParserReviewService,
     RunRequest,
@@ -53,11 +63,16 @@ from packages.orchestrator.multipart_service import (
     RESPONSE_EVIDENCE as TASK_RESPONSE_EVIDENCE,
 )
 from packages.review_web import (
+    KIND_CLASSIFICATIONS,
     SCRIPT,
     STYLESHEET,
     assembled_page,
+    base_path,
+    benchmark_index,
     esc,
     home,
+    images_page,
+    inventory_page,
     job_page,
     join,
     layout,
@@ -65,14 +80,26 @@ from packages.review_web import (
     preflight_page,
     run_page,
     search_panel,
+    spans_page,
+    tables_page,
     tag,
     task_page,
+    url,
 )
+from packages.source_transport import SourceTransportError
 
 from .router import Request, Response, Router, as_json, html, redirect, text
 from .security import CSRF_FIELD, SecurityPolicy, set_cookie
 
 _VIEWS = {"raw", "parsed", "side-by-side"}
+
+#: The `at` a MECHANICAL SUGGESTION carries when it is derived for one page render.
+#:
+#: A suggestion is never stored: the durable truth document holds what people decided, and the two
+#: byte-level proposals are recomputed from the inventory on every read. There is therefore no
+#: moment at which one was recorded, and stamping the current clock onto it would manufacture a
+#: provenance for a judgement nobody made.
+_DERIVED_ON_READ: str = ""
 
 
 class ReviewApp:
@@ -265,6 +292,56 @@ class ReviewApp:
             "/runs/{run_id}/jobs/{job_id}/queue",
             self.queue_control,
             name="controlMultipartQueue",
+        )
+        # --- the completeness benchmark surface, added in Phase 2.2 --------------------------
+        #
+        # SCOPED TO A FILING RATHER THAN TO A RUN, AND THAT IS THE WHOLE POINT. A reviewer's
+        # classification of one filing's inventory is the DENOMINATOR every parse of that filing is
+        # measured against. It outlives every run, it is what a second run is compared with, and
+        # hanging it off whichever run happened to exist first would make the denominator depend on
+        # scheduling.
+        r.add("GET", "/benchmark/{cik}/{accession}", self.benchmark_html, name="benchmarkPage")
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/inventory",
+            self.benchmark_inventory_html,
+            name="benchmarkInventoryPage",
+        )
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/spans",
+            self.benchmark_spans_html,
+            name="benchmarkSpansPage",
+        )
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/tables",
+            self.benchmark_tables_html,
+            name="benchmarkTablesPage",
+        )
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/images",
+            self.benchmark_images_html,
+            name="benchmarkImagesPage",
+        )
+        r.add(
+            "POST",
+            "/benchmark/{cik}/{accession}/judgements",
+            self.record_judgement,
+            name="recordBenchmarkJudgement",
+        )
+        r.add(
+            "GET",
+            "/api/benchmark/{cik}/{accession}/inventory",
+            self.benchmark_inventory_json,
+            name="getBenchmarkInventory",
+        )
+        r.add(
+            "GET",
+            "/api/benchmark/{cik}/{accession}/truth",
+            self.benchmark_truth_json,
+            name="getBenchmarkTruth",
         )
 
     # --- health and assets ------------------------------------------------------------------
@@ -920,6 +997,298 @@ class ReviewApp:
             return redirect(f"/runs/{run_id}/jobs/{job_id}/multipart")
         return as_json(result)
 
+    # --- the completeness benchmark for one filing --------------------------------------------
+    #
+    # NOTHING ON THIS SURFACE INVOKES A MODEL OR SPENDS ANYTHING. The inventory is measured from
+    # the preserved bytes; the classification is a person's. The one state-changing route records
+    # a judgement, and it is a POST with a CSRF token like every other one.
+
+    def _stored_truth(self, found: InventoriedFiling) -> tuple[BenchmarkTruth, list[int]]:
+        """The newest stored truth for this filing and every version on disk.
+
+        An absent document is `BenchmarkTruth.empty` rather than an error: "nobody has classified
+        this filing yet" is the state every filing starts in.
+
+        THE VERSION LIST IS RESOLVED ONCE AND HANDED DOWN. `load_benchmark_truth` enumerates the
+        stored keys itself when it is not told which version to read, so asking it for the newest
+        after listing them would scan the store twice on every page load.
+        """
+        store = self.service.store
+        cik, accession = found.filing.cik, found.filing.accession
+        versions = store.benchmark_truth_versions(cik, accession)
+        document = (
+            store.load_benchmark_truth(cik, accession, version=versions[-1]) if versions else None
+        )
+        if document is None:
+            return (
+                BenchmarkTruth.empty(
+                    cik=cik,
+                    accession=accession,
+                    source_set_sha256=found.inventory.source_set_sha256,
+                ),
+                versions,
+            )
+        return BenchmarkTruth.from_mapping(document), versions
+
+    @staticmethod
+    def _displayed_truth(found: InventoriedFiling, stored: BenchmarkTruth) -> BenchmarkTruth:
+        """The stored judgements, with the two mechanical proposals filled in behind them.
+
+        THE PROPOSALS ARE NEVER STORED AND NEVER WIN. `completeness.suggest` observes that a table
+        element carries no non-whitespace character, or that its source slice is byte-identical to
+        an earlier one, and proposes a classification with that evidence attached. A recorded
+        judgement always takes precedence, and a proposal counts as neither reviewed nor excluded —
+        it is displayed as an unaccepted suggestion and it still blocks the gate.
+        """
+        proposals = suggest(found.inventory, at=_DERIVED_ON_READ)
+        return BenchmarkTruth(
+            cik=stored.cik,
+            accession=stored.accession,
+            source_set_sha256=stored.source_set_sha256,
+            version=stored.version,
+            spans={**proposals.spans, **stored.spans},
+            tables={**proposals.tables, **stored.tables},
+            images={**proposals.images, **stored.images},
+        )
+
+    def _for_display(self, request: Request) -> tuple[InventoriedFiling, BenchmarkTruth, list[int]]:
+        """Everything all five pages open with: the measurement, the merged truth, the versions.
+
+        RESOLVED IN ONE PLACE SO EVERY PAGE SHOWS THE SAME TRUTH. Repeating the four steps per page
+        is four chances for one of them to render the STORED document instead of the merged one —
+        and a page that did would call an item unreviewed while the page beside it showed the
+        mechanical proposal for it.
+
+        A filing this project does not hold raises `FilingNotInCatalogError`, which `handle` turns
+        into an ordinary 404. A malformed CIK or accession lands there too: the catalog's own
+        contract promises `FilingRecord | None`, and a browser typing nonsense into a path is a miss
+        rather than a fault.
+        """
+        found = self.service.inventoried_filing(request.params["cik"], request.params["accession"])
+        if found is None:
+            raise FilingNotInCatalogError(
+                "no preserved filing with that identity is in the catalog. A completeness "
+                "benchmark is measured from bytes this project actually holds; nothing is fetched "
+                "to answer a page view."
+            )
+        stored, versions = self._stored_truth(found)
+        return found, self._displayed_truth(found, stored), versions
+
+    @staticmethod
+    def _readable_member(found: InventoriedFiling, requested: str) -> str:
+        """The requested member if this filing has it, otherwise the first human-readable one.
+
+        CHECKED AGAINST THE INVENTORY BEFORE IT IS USED, which keeps an arbitrary browser-supplied
+        string out of every href and hidden field the span page renders. Falling back rather than
+        rendering nothing also matters: a page that answered a nonsense member with an empty table
+        would read as a filing that contains no text.
+        """
+        readable = found.inventory.human_readable_members
+        if any(record.member == requested for record in readable):
+            return requested
+        return readable[0].member if readable else ""
+
+    def _benchmark_page(self, request: Request, *, title: str, main: str) -> Response:
+        """A benchmark page carries NO run identifier, because it belongs to no run.
+
+        `_page` anchors the parent run bar to the viewport, and a filing-scoped page showing the
+        identifier of whichever run was last opened would invite exactly the wrong reading: that
+        this classification describes that run.
+        """
+        return html(
+            layout(
+                title=title,
+                panel=self._panel(request),
+                main=main,
+                run_id=None,
+                collapsed=request.q("panel") == "closed",
+                https=self.policy.https,
+            )
+        )
+
+    def benchmark_html(self, request: Request) -> Response:
+        found, truth, versions = self._for_display(request)
+        return self._benchmark_page(
+            request,
+            title=f"Completeness benchmark {found.filing.accession}",
+            main=benchmark_index(
+                inventory=found.inventory,
+                truth=truth,
+                truth_versions=versions,
+                issuer_label=found.filing.issuer_label,
+            ),
+        )
+
+    def benchmark_inventory_html(self, request: Request) -> Response:
+        found, truth, _ = self._for_display(request)
+        return self._benchmark_page(
+            request,
+            title=f"Source inventory {found.filing.accession}",
+            main=inventory_page(inventory=found.inventory, truth=truth),
+        )
+
+    def benchmark_spans_html(self, request: Request) -> Response:
+        found, truth, _ = self._for_display(request)
+        offset = request.q("start")
+        return self._benchmark_page(
+            request,
+            title=f"Spans {found.filing.accession}",
+            main=spans_page(
+                inventory=found.inventory,
+                truth=truth,
+                member=self._readable_member(found, request.q("member")),
+                start=int(offset) if offset.isdigit() else 0,
+                csrf=self._csrf(request),
+            ),
+        )
+
+    def benchmark_tables_html(self, request: Request) -> Response:
+        found, truth, _ = self._for_display(request)
+        # THE SLICE IS CUT FROM THE DECODED MEMBER, WHICH IS THE SAME COORDINATE SYSTEM THE
+        # ELEMENT'S OFFSETS ARE IN. Cutting it from the raw bytes instead would be off by however
+        # much the decoding changed, and a table's source slice would drift further into the
+        # document the further down the filing it sits.
+        texts = {m.filename: (m.text or "") for m in found.source_set.members if m.text}
+        return self._benchmark_page(
+            request,
+            title=f"Tables {found.filing.accession}",
+            main=tables_page(
+                inventory=found.inventory,
+                truth=truth,
+                slices={
+                    table.table_id: texts.get(table.member, "")[table.start : table.end]
+                    for table in found.inventory.tables
+                },
+                csrf=self._csrf(request),
+            ),
+        )
+
+    def benchmark_images_html(self, request: Request) -> Response:
+        found, truth, _ = self._for_display(request)
+        return self._benchmark_page(
+            request,
+            title=f"Images {found.filing.accession}",
+            main=images_page(inventory=found.inventory, truth=truth, csrf=self._csrf(request)),
+        )
+
+    def benchmark_inventory_json(self, request: Request) -> Response:
+        found, _, _ = self._for_display(request)
+        return as_json(found.inventory.to_mapping())
+
+    def benchmark_truth_json(self, request: Request) -> Response:
+        found, _, versions = self._for_display(request)
+        stored, _ = self._stored_truth(found)
+        return as_json({**stored.to_mapping(), "stored_versions": versions})
+
+    @staticmethod
+    def _item_exists(found: InventoriedFiling, kind: str, item_id: str) -> bool:
+        """Whether this filing's inventory contains the item a judgement names.
+
+        EVERY KIND IS NAMED AND AN UNKNOWN ONE IS FALSE. Letting the image branch be the fall-
+        through would mean that a fourth kind added to `KIND_CLASSIFICATIONS` was silently looked
+        up among the images — and would be reported as absent for a reason having nothing to do
+        with the filing.
+        """
+        inventory = found.inventory
+        if kind == "span":
+            return inventory.span(item_id) is not None
+        if kind == "table":
+            return inventory.table(item_id) is not None
+        if kind == "image":
+            return any(image.filename == item_id for image in inventory.images)
+        return False
+
+    def record_judgement(self, request: Request) -> Response:
+        """Record ONE human classification of ONE inventory item, at a NEW truth version.
+
+        THE STORED DOCUMENT NEVER CARRIES A SUGGESTION. The new version is built from the stored
+        one, so the two mechanical proposals stay derived — a suggestion that persisted itself the
+        first time anybody classified anything would become indistinguishable from a judgement.
+        """
+        found, _, _ = self._for_display(request)
+        form = request.form()
+        kind = form.get("kind", "")
+        if kind not in KIND_CLASSIFICATIONS:
+            return as_json(
+                {
+                    "code": "bad_request",
+                    "message": (
+                        f"{kind!r} is not an inventory item kind. A judgement attaches to a span, "
+                        "a table or an image, and to nothing else."
+                    ),
+                },
+                status=400,
+            )
+        item_id = form.get("item_id", "").strip()
+        if not self._item_exists(found, kind, item_id):
+            return as_json(
+                {
+                    "code": "not_found",
+                    "message": (
+                        f"no {kind} {item_id!r} is in this filing's mechanical inventory. A "
+                        "judgement about an item the filing does not contain has nothing to "
+                        "attach to and is refused rather than stored."
+                    ),
+                },
+                status=404,
+            )
+        classification = form.get("classification", "")
+        stored, _ = self._stored_truth(found)
+        try:
+            updated = stored.with_judgement(
+                kind,
+                Judgement(
+                    item_id=item_id,
+                    classification=classification,
+                    reviewer=form.get("author") or self.service.author,
+                    at=utc_now(),
+                    note=form.get("note", ""),
+                    suggested=False,
+                ),
+            )
+        except BenchmarkTruthError as error:
+            return as_json({"code": "bad_request", "message": str(error)}, status=400)
+        try:
+            self.service.store.save_benchmark_truth(updated.to_mapping())
+        except BenchmarkTruthVersionExistsError as error:
+            return as_json({"code": "conflict", "message": str(error)}, status=409)
+
+        if request.wants_html():
+            return redirect(self._judgement_location(found, kind, form))
+        return as_json(
+            {
+                "kind": kind,
+                "item_id": item_id,
+                "classification": classification,
+                "version": updated.version,
+                "note": (
+                    "the previous version is unchanged on disk. A truth version is superseded, "
+                    "never overwritten."
+                ),
+            },
+            status=201,
+        )
+
+    def _judgement_location(self, found: InventoriedFiling, kind: str, form: dict[str, str]) -> str:
+        """Where a browser goes after recording a judgement.
+
+        BUILT FROM THE ITEM KIND, NEVER FROM ANYTHING THE BROWSER SENT. A `return_to` field taken
+        from a form would be an open redirect on an origin that holds a session able to spend
+        money. The two values that DO come from the form — which member and which page of it the
+        reviewer was reading — are checked against the inventory and against `str.isdigit` before
+        they are used, so the worst a hostile post achieves is being returned to the first member.
+        """
+        base = base_path(found.filing.cik, found.filing.accession)
+        if kind != "span":
+            return url(*base, "tables" if kind == "table" else "images")
+        start = form.get("start", "")
+        return url(
+            *base,
+            "spans",
+            member=self._readable_member(found, form.get("member", "")),
+            start=start if start.isdigit() else "",
+        )
+
     # --- dispatch ---------------------------------------------------------------------------
 
     def handle(self, request: Request) -> Response:
@@ -961,9 +1330,19 @@ class ReviewApp:
             JobNotFoundError,
             TaskNotFoundError,
             InvalidIdentifierError,
+            FilingNotInCatalogError,
         ) as error:
             return self.policy.decorate(
                 as_json({"code": "not_found", "message": str(error)}, status=404)
+            )
+        except SourceTransportError as error:
+            # A SOURCE SET THAT CANNOT BE ASSEMBLED IS A 409, NOT A 500 AND NOT A 404. The filing
+            # is in the catalog; a member of it is missing, its hash has moved, or its transport
+            # role could not be justified from its bytes. Every one of those is a state of this
+            # host's preserved objects that a person has to resolve, and answering 404 would say
+            # the filing does not exist while it sits in the manifest.
+            return self.policy.decorate(
+                as_json({"code": "source_unavailable", "message": str(error)}, status=409)
             )
         except ValueError as error:
             return self.policy.decorate(

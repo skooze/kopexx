@@ -582,6 +582,19 @@ def job_page(
             ),
         ),
         multipart_link,
+        # THE COMPLETENESS BENCHMARK IS SCOPED TO THE FILING, NOT TO THIS RUN, AND THE LINK SAYS SO.
+        # The classification behind it is the denominator every parse of this accession is measured
+        # against; reading it as a property of one run is exactly the misreading that would make two
+        # runs of the same filing measurable against two different denominators.
+        tag(
+            "p",
+            tag(
+                "a",
+                "completeness benchmark for this filing — the mechanical inventory and its human "
+                "classification, shared by every run of this accession",
+                href=url("benchmark", filing["cik"], filing["accession"]),
+            ),
+        ),
         tag(
             "p",
             join(

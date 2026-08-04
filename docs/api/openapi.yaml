@@ -900,6 +900,239 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
 
   # ------------------------------------------------------------------------------------------
+  # IMPLEMENTED — the completeness benchmark surface, added by Phase 2.2.
+  #
+  # SCOPED TO A FILING AND NOT TO A RUN. Every operation below is keyed by (CIK, accession)
+  # because a reviewer's classification of one filing's mechanical inventory is the DENOMINATOR
+  # every parse of that filing is measured against. It outlives every run, it is what a second run
+  # is compared with, and hanging it off whichever run happened to exist first would make a
+  # benchmark's denominator depend on scheduling.
+  #
+  # NOTHING HERE INVOKES A MODEL OR SPENDS ANYTHING. The inventory is measured from preserved
+  # bytes; the classification is a person's. No operation on this surface reaches a provider.
+  # ------------------------------------------------------------------------------------------
+  /benchmark/{cik}/{accession}:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkPage
+      summary: One filing's completeness benchmark — what was measured, and what has been classified.
+      description: |
+        Shows the mechanical totals, the benchmark-truth version, and the reviewed and unreviewed
+        counts for spans, table elements and images.
+
+        NO COMPLETENESS LEDGER IS SHOWN. A ledger measures ONE PARSE against this truth; no model
+        has parsed the benchmark filing, so there is nothing to measure and nothing is displayed
+        rather than a ledger computed against an absent parse.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /benchmark/{cik}/{accession}/inventory:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkInventoryPage
+      summary: Every package member with its transport role, size, hash, span count and table count.
+      description: |
+        The transport role was decided from byte evidence by `packages/source_transport` and is not
+        revisited. The SEC-declared type beside it is what the FILER typed into EDGAR's envelope:
+        one is a measurement, the other is a claim, and they are displayed apart.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /benchmark/{cik}/{accession}/spans:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkSpansPage
+      summary: One member's visible text spans, with the control that classifies each one.
+      description: |
+        Paginated, and the window is STATED on the page. A silently shortened view of a denominator
+        is the same defect as a silently shortened request.
+
+        A `member` this filing does not contain falls back to its first human-readable member
+        rather than rendering an empty page that looks like a filing with no content.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+        - name: member
+          in: query
+          description: The package member whose spans are listed. Defaults to the first readable one.
+          schema: { type: string }
+        - name: start
+          in: query
+          description: Index of the first span shown. A non-numeric value reads as 0.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /benchmark/{cik}/{accession}/tables:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkTablesPage
+      summary: Every table element, its raw source slice beside its extracted grid, and its class.
+      description: |
+        NOTHING DECIDES WHAT A TABLE IS FOR. Financial statement, layout scaffold, navigation strip
+        or duplicate rendering — the inventory cannot tell them apart and does not try. Two
+        BYTE-LEVEL suggestions are displayed with their evidence and neither is applied until a
+        person records a judgement.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /benchmark/{cik}/{accession}/images:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkImagesPage
+      summary: Each filed image with its hash, dimensions, media type and where it is referenced.
+      description: |
+        The media type is read from the image's own signature bytes rather than from its filename
+        or its declared type, so a member named one thing and encoded as another is visible rather
+        than silently mislabelled.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /benchmark/{cik}/{accession}/judgements:
+    post:
+      tags: [review]
+      operationId: reviewRecordBenchmarkJudgement
+      summary: Record one human classification of one inventory item, at a new truth version.
+      description: |
+        A FORM POST WITH A CSRF TOKEN, NEVER A LINK. Recording a judgement changes the denominator
+        of a benchmark, and a link is something a browser can be made to follow.
+
+        The request body is `application/x-www-form-urlencoded` and carries `kind` (`span`, `table`
+        or `image`), `item_id`, `classification`, an optional `note`, and — for a span — the
+        `member` and `start` the reviewer was reading, so the redirect returns them to the same
+        window. Those two are NOT a redirect target: the location is built from the item kind, so
+        nothing a browser sends can point the redirect off the origin.
+
+        THE STORED DOCUMENT IS SUPERSEDED, NEVER OVERWRITTEN. The judgement lands at
+        `version + 1` and every earlier version stays readable. A version already on disk is
+        refused with 409 rather than replaced, so a lost update is reported instead of silent.
+
+        A judgement about an item this filing's inventory does not contain has nothing to attach to
+        and is refused with 404.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "201":
+          description: The judgement, and the truth version it created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecordedJudgement" }
+        "303":
+          description: A browser is redirected back to the page it recorded the judgement from.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            That benchmark-truth version is already stored. Reload the current version and record
+            the judgement against it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/benchmark/{cik}/{accession}/inventory:
+    get:
+      tags: [review]
+      operationId: reviewGetBenchmarkInventory
+      summary: The mechanical inventory of one filing's preserved bytes.
+      description: |
+        Members, text spans, table elements and images, measured with no model involved. Every
+        value is a transport measurement — an offset, a length, a hash, an element name, a grid
+        position, an image header field — and nothing in it says what any of them MEANS.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: The inventory.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SourceInventory" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  /api/benchmark/{cik}/{accession}/truth:
+    get:
+      tags: [review]
+      operationId: reviewGetBenchmarkTruth
+      summary: The stored human classification of one filing's inventory, newest version.
+      description: |
+        RECORDED JUDGEMENTS ONLY. The two byte-level suggestions are derived on read for display
+        and are never stored, so a proposal can never become indistinguishable from a decision.
+
+        An empty document with `version` 0 means no person has classified this filing yet, which is
+        the state every filing starts in and is not an error.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.2
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: The stored truth document and every version on disk.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BenchmarkTruth" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
+  # ------------------------------------------------------------------------------------------
   # PLANNED — the beta API. None of the following is implemented.
   # ------------------------------------------------------------------------------------------
   /entities/search:
@@ -1334,6 +1567,18 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Incompatibility" }
+    SourceUnavailable:
+      description: |
+        The filing is in the catalog and its source set could not be assembled: a filed member is
+        not held locally and could not be fetched, a preserved object no longer matches its
+        recorded SHA-256, or a member's transport role could not be justified from its bytes.
+
+        DELIBERATELY NOT 404. Answering "no such filing" for a filing that sits in the manifest
+        would send a reader looking for the wrong defect. Each of these is a state of this host's
+        preserved objects that a person resolves.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     BudgetExhausted:
       description: The cost ceiling for this job or session would be exceeded.
       content:
@@ -1346,6 +1591,133 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+
+    SourceInventory:
+      type: object
+      description: |
+        Every mechanically observable unit of one filing's preserved bytes: members, text spans,
+        table elements and images. THE DENOMINATOR Phase 2.1 lacked — a reference rate counts a
+        model's own citations, and a region the model never mentioned never entered the count.
+
+        EVERY FIELD IS A TRANSPORT MEASUREMENT. Offsets, lengths, hashes, element names, grid
+        positions and image header fields. Nothing here says what any span, table or image MEANS;
+        that judgement belongs to the selected parsing model and to a human reviewer.
+      additionalProperties: true
+      properties:
+        schema_version: { type: string }
+        cik: { type: string }
+        accession: { type: string }
+        form_as_filed: { type: string }
+        filing_date: { type: string }
+        report_period: { type: [string, "null"] }
+        source_set_sha256:
+          type: string
+          description: |
+            The identity of exactly this submitted set of bytes, in this order. A benchmark truth
+            recorded against a different value describes a different filing.
+        member_count: { type: integer }
+        human_readable_member_count: { type: integer }
+        span_count: { type: integer }
+        visible_span_count: { type: integer }
+        visible_character_count: { type: integer }
+        table_count: { type: integer }
+        image_count: { type: integer }
+        members:
+          type: array
+          items: { type: object, additionalProperties: true }
+        spans:
+          type: array
+          description: |
+            One maximal run of character data between two BLOCK-level markup boundaries. Offsets
+            are characters into the decoded preserved member, which is the same coordinate system
+            a resolved source reference is reported in.
+          items: { type: object, additionalProperties: true }
+        tables:
+          type: array
+          items: { type: object, additionalProperties: true }
+        images:
+          type: array
+          items: { type: object, additionalProperties: true }
+        findings:
+          type: array
+          items: { type: string }
+        semantic_note: { type: string }
+
+    BenchmarkTruth:
+      type: object
+      description: |
+        Every RECORDED human judgement about one filing's mechanical inventory, at one version,
+        plus the versions on disk. Superseded, never overwritten.
+
+        SCOPED TO ONE FILING AT ONE SOURCE HASH. It is evidence about this accession and is never a
+        rule about filings — `rules.md` section 21 rule 14. One issuer is a fixture, never a
+        specification.
+
+        The two byte-level suggestions are NOT here. They are derived on read for display, so a
+        proposal nobody accepted can never become indistinguishable from a decision somebody made.
+      additionalProperties: true
+      properties:
+        schema_version: { type: string }
+        cik: { type: string }
+        accession: { type: string }
+        source_set_sha256: { type: string }
+        version:
+          type: integer
+          description: 0 means no person has classified this filing yet. That is a state, not an error.
+        reviewed_count: { type: integer }
+        suggestion_count: { type: integer }
+        stored_versions:
+          type: array
+          description: Every version on disk, ascending. Earlier ones stay readable.
+          items: { type: integer }
+        spans:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/BenchmarkJudgement" }
+        tables:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/BenchmarkJudgement" }
+        images:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/BenchmarkJudgement" }
+        scope_note: { type: string }
+
+    BenchmarkJudgement:
+      type: object
+      description: |
+        One reviewer's classification of one inventory item, with its provenance. A judgement
+        without a reviewer and a time is an opinion, not evidence.
+      additionalProperties: true
+      properties:
+        item_id: { type: string }
+        classification:
+          type: string
+          description: |
+            One of the closed set for that item kind. `REQUIRES_REVIEW` is in NEITHER the required
+            nor the excluded set: an unreviewed item is not excused and not demanded, it blocks the
+            mechanical gate until a person looks at it.
+        reviewer: { type: string }
+        at: { type: string }
+        note: { type: string }
+        is_unaccepted_suggestion:
+          type: boolean
+          description: |
+            True for a derived byte-level proposal that nobody has accepted. Such a judgement never
+            counts as reviewed and never appears in a stored document.
+        evidence: { type: string }
+
+    RecordedJudgement:
+      type: object
+      description: What was recorded, and the truth version it created.
+      required: [kind, item_id, classification, version]
+      properties:
+        kind:
+          type: string
+          enum: [span, table, image]
+        item_id: { type: string }
+        classification: { type: string }
+        version:
+          type: integer
+          description: The NEW version. The previous document stays on disk unchanged.
 
     MultipartTask:
       type: object
