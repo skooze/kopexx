@@ -44,7 +44,9 @@ PHASE 0    Corpus evidence                            COMPLETE
 PHASE 0.5  Repository cleanup and corpus reverify     COMPLETE
 PHASE 1    Secure AWS and model-access verification   COMPLETE  2026-08-03
 PHASE 2    Parser experiments + review UI, together   COMPLETE  2026-08-03
-PHASE 2.1  Model-directed multipart parsing           COMPLETE  2026-08-03
+PHASE 2.1  Model-directed multipart parsing           IMPLEMENTED AND PUBLISHED 2026-08-03;
+                                                      the five-model proof is BLOCKED on an
+                                                      expired AWS SSO session
 PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
                                                       BLOCKED on a user parser-selection decision
 PHASE 3    Optional model stages: image, summary, chat
@@ -332,7 +334,8 @@ EXPLICITLY OUT OF SCOPE. Any rigid database schema. Any universal semantic taxon
 
 ---
 
-# PHASE 2.1 — MODEL-DIRECTED MULTIPART PARSING (COMPLETE 2026-08-03)
+# PHASE 2.1 — MODEL-DIRECTED MULTIPART PARSING
+# IMPLEMENTED AND PUBLISHED 2026-08-03. THE FIVE-MODEL PROOF IS BLOCKED EXTERNALLY.
 
 Phase 2 sent a complete filing intact and then expected the complete parsed artifact back in ONE
 provider response. Thirty preserved invocations measured what that assumption costs: three of the
@@ -410,6 +413,23 @@ no prompt caching enabled                     nothing deployed
 The five candidates remain equally available for user-directed testing, and the single-response
 protocol remains runnable so the two can be compared. Measured results are in
 `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md`.
+
+## 2.1f — The proof that has NOT finished, and why
+
+**ONE CANDIDATE OF FIVE RAN.** `GPT OSS 120B` produced a valid, schedulable 24-part plan on the
+preserved 3M 10-K405 of 1996 and four completed parts resolving 65 of 66 source references
+against the preserved bytes. The AWS IAM Identity Center session then expired mid-run at
+`2026-08-04T02:18:20Z`, and every subsequent invocation failed with a non-retryable credential
+error.
+
+**IT IS AN EXTERNAL BLOCKER, NOT A DEFECT.** The orchestrator recorded the reason on the task,
+marked it FAILED, and stopped. Nothing was retried, nothing substituted, and no filing lost work
+that had succeeded. `aws sso login` on the host unblocks it; the runbook is
+`docs/runbooks/multipart-run-interrupted.md`.
+
+**WHAT THAT LEAVES UNMEASURED**: four candidates under this protocol, the multimodal filing
+entirely, truncation and replanning against a real model, reconciliation cycles against a real
+model, and a completed mechanical assembly.
 
 ---
 

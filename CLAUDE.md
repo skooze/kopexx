@@ -251,7 +251,10 @@ Phase 0    Representative filing corpus                  COMPLETE
 Phase 0.5  Repository cleanup and corpus reverification  COMPLETE
 Phase 1    Secure AWS and model-access verification      COMPLETE 2026-08-03
 Phase 2    Parser experiments AND the review UI, TOGETHER   COMPLETE 2026-08-03
-Phase 2.1  Model-directed multipart parsing                 COMPLETE 2026-08-03
+Phase 2.1  Model-directed multipart parsing                 IMPLEMENTED AND PUBLISHED
+                                                            2026-08-03; the five-model proof
+                                                            is BLOCKED on an expired AWS SSO
+                                                            session, not on a defect
 Phase 2.5  BREADTH across all 22 substantive form strings   BLOCKED on a user decision about
                                                             which parser and prompt version advances
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
