@@ -372,6 +372,10 @@ class RunEvent:
     kind: str
     job_id: str | None
     message: str
+    #: The multipart task this event is about, when it is about one. Added in Phase 2.1: a
+    #: multipart run emits many events per child job, and a stream that could only say WHICH FILING
+    #: something happened to would leave a reviewer unable to tell which part truncated.
+    task_id: str | None = None
 
     @property
     def event_id(self) -> str:
@@ -494,6 +498,19 @@ class JobRecord:
     report_period: str | None = None
     execution_state: ExecutionState = ExecutionState.CREATED
     review_state: ReviewState = ReviewState.EVALUATION
+    #: Which protocol produced this job's artifact. `single_response` is the Phase 2 protocol and
+    #: is what every stored historical job is; `multipart` is the model-directed protocol Phase 2.1
+    #: added. It is RECORDED rather than inferred from the presence of tasks, because a multipart
+    #: job that failed before its plan returned has no tasks and is still a multipart job.
+    strategy: str = "single_response"
+    #: The multipart session summary — plan identity, depth, cycles, budget, assembly status — as
+    #: an opaque mapping written by `packages/orchestrator`. Same discipline as `source_set` and
+    #: `validation`: this record stores and returns it and never reads inside it.
+    multipart: dict[str, Any] | None = None
+    #: The maximum this ONE filing's parse may spend, across every task it queues. Distinct from
+    #: the cumulative ceiling in the durable journal: a run must not be able to exhaust the whole
+    #: authorized budget on one filing merely because it planned a lot of parts.
+    budget_ceiling_usd: Decimal | None = None
     source_set_id: str | None = None
     source_set: dict[str, Any] | None = None
     validation: dict[str, Any] | None = None
@@ -507,8 +524,12 @@ class JobRecord:
     failure: str | None = None
 
     def to_mapping(self) -> dict[str, Any]:
+        # v2 ADDS FIELDS AND REMOVES NONE. A v1 document reads back through `from_mapping`
+        # unchanged, because every field Phase 2.1 introduced is optional with a default that
+        # describes what a Phase 2 job actually was: the single-response protocol, no multipart
+        # session, no per-filing budget.
         return {
-            "schema_version": "evaluation-job-v1",
+            "schema_version": "evaluation-job-v2",
             "job_id": self.job_id,
             "parent_run_id": self.parent_run_id,
             "created_at": self.created_at,
@@ -527,6 +548,11 @@ class JobRecord:
             "settings": self.settings.to_mapping(),
             "execution_state": self.execution_state.value,
             "review_state": self.review_state.value,
+            "strategy": self.strategy,
+            "multipart": self.multipart,
+            "budget_ceiling_usd": (
+                None if self.budget_ceiling_usd is None else str(self.budget_ceiling_usd)
+            ),
             "source_set_id": self.source_set_id,
             "source_set": self.source_set,
             "validation": self.validation,
@@ -579,6 +605,9 @@ class JobRecord:
             settings=ParserSettings.from_mapping(settings_raw),
             execution_state=ExecutionState(_text(raw, "execution_state", where)),
             review_state=ReviewState(_text(raw, "review_state", where)),
+            strategy=str(raw.get("strategy") or "single_response"),
+            multipart=raw.get("multipart"),
+            budget_ceiling_usd=_optional_decimal(raw, "budget_ceiling_usd"),
             source_set_id=_optional_text(raw, "source_set_id"),
             source_set=raw.get("source_set"),
             validation=raw.get("validation"),

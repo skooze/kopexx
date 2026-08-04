@@ -25,20 +25,35 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 > list did not grow. Decision:
 > `docs/adr/ADR-0019-parser-review-application-over-a-framework.md`.
 >
+> **PHASE 2.1 COMPLETED 2026-08-03.** The assumption that one filing's parse must fit one
+> provider response is WITHDRAWN. A model-directed multipart protocol exists and runs: the
+> selected parsing model plans the division, one call produces each part, subparts and
+> replanning after truncation are model-directed, reconciliation may create more work, and the
+> backend assembles a mechanical INDEX over the exact responses. Blind continuation is
+> prohibited and structurally impossible. One package was added; the runtime dependency list
+> did not grow. Decision: `docs/adr/ADR-0020-model-directed-multipart-parsing.md`.
+>
+> **THE FIVE-MODEL PROOF IS INCOMPLETE AND THE REASON IS EXTERNAL.** One candidate produced a
+> valid 24-part plan and four completed parts resolving 65 of 66 source references against the
+> preserved bytes; the AWS IAM Identity Center session then expired mid-run and the remaining
+> runs stopped. `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
+>
 > **STILL TRUE, AND THEY ARE NOT SMALL.** No application database exists. No Redis exists. No
-> summary artifact, no image artifact and no chat session exists — Phase 2 ran the PARSING stage
-> only, and invoking another raises. Approval exists as a recorded judgement and activates no
-> reuse. Nothing is deployed.
+> summary artifact, no image artifact and no chat session exists — Phase 2 and Phase 2.1 both ran
+> the PARSING stage only, and invoking another raises. Multipart multiplies the number of PARSER
+> calls and authorizes no other stage. Approval exists as a recorded judgement and activates no
+> reuse. No parser has been selected, ranked or promoted. Prompt caching was investigated and is
+> not available for any approved candidate. Nothing is deployed.
 
 Sections marked `PLANNED` describe work that does not exist. `roadmap.md` is authoritative for
 sequencing.
 
-LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 2.
+LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 2.1.
 
 VERIFICATION, measured locally on that date:
 
 ```
-375 tests passing, 0 skipped          coverage 92.14 percent against an 85 percent gate
+1,234 tests passing, 0 skipped        coverage 91.55 percent against an 85 percent gate
 ruff format and lint clean            across `packages tests`
 mypy clean                            `packages`
 wheel and sdist built and inspected   packages/ and dist-info only
@@ -50,11 +65,12 @@ gitleaks clean over history and tree  pip-audit clean
 
 # 1. CURRENT STATE
 
-## 1.1 Runtime packages — sixteen
+## 1.1 Runtime packages — seventeen
 
 None of them interprets meaning. That is the whole architecture, and it did not change when the
-first filing was parsed: the seven packages Phase 2 added transport, orchestrate, preserve, prove
-and display. Not one of them decides what a filing says.
+first filing was parsed, or when one parse became a dozen calls: the seven packages Phase 2 added
+transport, orchestrate, preserve, prove and display, and the one Phase 2.1 added carries a plan
+the MODEL wrote. Not one of them decides what a filing says.
 
 ```
 packages/sec_identity        CIK, accession and URL normalization — the single home       5 modules
@@ -69,20 +85,27 @@ packages/llm_gateway         the model chokepoint, boundary validator, YAML 1.2 
                              and the Bedrock Converse adapter — the ONLY AWS SDK import
 packages/model_catalog       verified capabilities, label mapping, cost ceiling, and the   6
                              FOUR-ROLE ROUTER. No AWS import, no ARN, no region literal.
-packages/evaluation_store    parent runs, child jobs, exact evidence, events, comments,    5
-                             two independent state machines. NOT the product database.
+packages/evaluation_store    parent runs, child jobs, exact evidence, events, comments,    7
+                             THREE independent state machines, and the durable hierarchical
+                             multipart task queue. NOT the product database.
 packages/source_transport    mechanical source-set assembly, local-first reuse, transport  7
                              disposition, lossless decoding, intact-source compatibility
 packages/coverage_validation elastic reader, source-reference resolution against the       5
                              preserved bytes, generic numeric signals. No COMPLETE verdict.
 packages/prompt_registry     versioned, SHA-256 hash-locked prompts. A used version is     3
                              never edited; the hash is what makes that impossible.
-packages/orchestrator        preflight, the DURABLE cumulative spend journal, parser-only  6
-                             execution, the catalog, and a bounded in-process worker
+packages/orchestrator        preflight, the THREE-CEILING durable spend journal, parser-   9
+                             only execution, the multipart scheduler, the synthetic brief
+                             compiler, the output-sizing policy, the catalog, and a
+                             bounded in-process worker
 packages/review_api          the review HTTP application on the standard library: router,  6
                              security policy, handlers, threaded server, assembly
-packages/review_web          server-rendered pages, escaping, and the two assets. No       5
+packages/review_web          server-rendered pages, escaping, the two assets, and the      6
+                             multipart hierarchy, per-call and assembled views. No
                              framework, no bundler, no npm, no build step.
+packages/multipart           the MODEL-DIRECTED multipart envelopes, their generic         6
+                             structural validation, safe carriage of a model-created
+                             identifier, and mechanical assembly. No filing taxonomy.
 ```
 
 ## 1.2 Dependency graph — measured, not asserted
@@ -547,6 +570,60 @@ apps/            api, worker, web                          PLANNED
 
 **There is no `scripts/` directory and no `migrations/` directory.** Every script was an entry
 point for the deterministic parser, the application database or the DERA loader.
+
+### 3.10 `packages/multipart` — IMPLEMENTED in Phase 2.1
+
+The model-directed multipart protocol: reading the envelopes a model returns, checking their
+STRUCTURE, carrying a model-created identifier safely, and assembling a mechanical index.
+
+```
+envelopes.py    read_plan, read_part, read_amendment, read_replan. Elastic: every unknown key
+                survives in `extra`, a missing envelope key is a FINDING and never a refusal,
+                and an unrecognised part status is preserved exactly and treated as unfinished.
+identity.py     a model-created identifier is returned UNCHANGED, or refused with a reason —
+                empty, over 200 characters, or carrying a control character. `storage_token`
+                derives a filesystem-safe rendering whose digest guarantees that two distinct
+                identifiers can never collide.
+validation.py   plan, part and assembly validation. THREE conditions stop work, because each
+                makes the QUEUE impossible: no schedulable part, a duplicate identifier, a
+                dependency cycle. Everything else is a finding on a result that still gets
+                scheduled, stored and reviewed.
+assembly.py     order by the model's `order`, nest by the model's `parent_part_id`, link, count,
+                aggregate, present. Never rename, merge, move, reassign or drop.
+```
+
+**WHAT IT WILL NEVER CONTAIN.** A vocabulary of part types. A required hierarchy. A minimum or
+maximum part count. A fixed set of node types, table shapes or relationship names. An architecture
+test fails the build if a filing-section name appears as an evaluated literal anywhere in the
+multipart surface.
+
+`AssemblyStatus` has three members and none of them is `COMPLETE`: `INCOMPLETE_WORK`,
+`RECONCILIATION_UNRESOLVED`, `MECHANICALLY_ASSEMBLED`. Mechanical assembly, model-declared
+completion, source-reference coverage and human approval are carried as four separate claims.
+
+### 3.11 The multipart queue and orchestration — IMPLEMENTED in Phase 2.1
+
+```
+evaluation_store/queue_states.py   11 task types, 14 durable states, and the transition table.
+                                   TRUNCATED is terminal by construction, so a truncated attempt
+                                   can never be reopened. FAILED and INTERRUPTED reopen only to
+                                   READY, and only through an explicit user action.
+evaluation_store/tasks.py          the durable task record: dependencies and their policy, the
+                                   model-created identifiers verbatim, the billable identity,
+                                   attempts, reservation, settled cost, evidence names.
+orchestrator/multipart_service.py  the scheduler and executor. One task at a time, synchronous,
+                                   every result durable before the next begins.
+orchestrator/briefs.py             the synthetic YAML brief. Every semantic word in one came
+                                   from a model on an earlier call.
+orchestrator/sizing.py             the cap handed to the provider, the target the model is told,
+                                   and the deliberate headroom between them.
+```
+
+**Operational limits, never statements about filings**: recursion depth 4, reconciliation cycles 3,
+format repairs per artifact 1, automatic retries per attempt 1.
+
+**Three cost ceilings, tightest wins**: cumulative, phase, and one filing's own parse. A refusal
+PAUSES the branch with the reason visible; nothing is shrunk, dropped or downgraded to fit.
 
 ## Build and packaging
 

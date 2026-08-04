@@ -27,6 +27,22 @@
 > is UNCHANGED and was honoured: every check in this benchmark compares a response to the PRESERVED
 > SOURCE BYTES, and no second parse exists to compare it to.
 >
+> **UPDATED 2026-08-03 BY PHASE 2.1. THE PHASE 2 RESULTS STAND AS HISTORY AND ARE NOT REWRITTEN.**
+> They measured the SINGLE-RESPONSE protocol, and the protocol was the thing under test as much as
+> the models were: three of the five candidates cap output at 8,000 tokens, four of that benchmark's
+> five truncation failures were that cap, and the deepest parse produced was itself truncated. A
+> MODEL-DIRECTED MULTIPART protocol now exists, and re-running the shared benchmark under it is what
+> would make the two comparable.
+>
+> **THAT RE-RUN IS INCOMPLETE.** One candidate, `GPT OSS 120B`, produced a valid 24-part plan and
+> four completed parts on the preserved 3M 10-K405; the AWS session then expired mid-run.
+> Four candidates and the multimodal filing have not run. The partial evidence is in
+> `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 3.
+>
+> **NOTHING HERE RANKS, SCORES, PROMOTES OR ELIMINATES A CANDIDATE, UNDER EITHER PROTOCOL.** All
+> five remain equally available for user-directed testing, and a comparison drawn from one candidate
+> is exactly the reasoning `rules.md` section 21 rule 14 forbids.
+>
 > Authoritative: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
 > `docs/adr/ADR-0019-parser-review-application-over-a-framework.md` and `roadmap.md`.

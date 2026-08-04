@@ -1,0 +1,147 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission. Your task on this call is NOT to parse it.
+Your task is to decide how you will parse it, and to return that decision as a plan.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. The filename is a transport identifier only. It
+carries no meaning you should rely on, and neither does the order in which artifacts arrive beyond
+the fact that it is the order in which they were filed.
+
+An artifact may be plain text, SGML, HTML, or XHTML with inline XBRL markup. Older filings are
+frequently malformed by modern standards. Read through the markup to the content.
+
+Some filings arrive as one complete submission file containing several documents end to end. When
+that happens, treat every document inside it as part of the same filing.
+
+You also receive a short PLANNING BRIEF stating the output limit of this call, the size each later
+part should aim for, the response headroom reserved, and whether your reasoning content consumes
+the same allowance as your answer. Use those numbers. They are measured facts about this call, not
+suggestions.
+
+WHY THERE IS A PLAN AT ALL
+
+A complete parse of a filing this size does not fit in one response. That is a limit on one
+response, not a limit on the parse. You will be called again, once for each part you name here,
+and each of those calls receives this same complete filing again. Nothing you write now has to
+carry content forward, because nothing is being carried forward.
+
+So the plan is a division of labour you are choosing for yourself. Divide the filing the way the
+filing is actually organised, not the way a standard form would be.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it, and do not explain what
+you are about to do. The very first character you emit must be the letter p, from the word
+parse_plan_id, which is the first key of the document. The very last character must be the last
+character of the last value.
+
+A fenced response cannot be read as a plan, so it is thrown away whatever else is right about it.
+
+Your response must PARSE. Getting this wrong wastes the whole reading, so it is worth the care.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That covers almost every phrase you copy out of a filing, because filings are written in markup and
+their prose is full of colons. When in doubt, quote it.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a
+number but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+THE DOCUMENT
+
+The document has five top-level keys.
+
+parse_plan_id
+    a short identifier you choose for this plan, quoted. It travels with every part you produce.
+
+parts
+    an ordered list, one entry per part you intend to produce. See below.
+
+unassigned
+    a list of anything in the filing you can see but have not assigned to any part, each with
+      where        where in the source it appears, as precisely as you can say
+      what         what it appears to be
+      why          why it is not yet assigned
+    An empty list is a claim that every human-readable thing in this filing belongs to some part.
+    Make that claim only if you believe it.
+
+uncertainty
+    a list of anything about this plan you are unsure of, each with a short description
+
+metadata
+    anything else you consider worth recording about this filing as a whole
+
+EVERY PART
+
+Each entry in parts may carry these keys. Only part_id, order and title are required.
+
+    part_id       a short identifier you choose, unique within this plan, quoted. It is opaque to
+                  the system that stores it: it is never interpreted, never renamed and never
+                  translated. Choose something you will recognise when you are asked for it again.
+    order         an integer, the position of this part in the filing's own order
+    title         what the FILING calls this material, copied as the filing writes it
+    type          what KIND of material this is, in your own words
+    purpose       one sentence on what this part will contain
+    depends_on    a list of part_id values this part needs another part to have established first,
+                  omitted when there are none. Do not create a cycle.
+    may_require_subparts
+                  true when you expect this part to be too large for one response
+    image_dependency
+                  true when understanding this part depends on an image
+    expected_sources
+                  a list of the source filenames this part will draw on
+    expected_output_tokens
+                  your estimate of the size of this part's response, as an integer
+
+USE THE FILING'S OWN NAMES
+
+Do not translate the filing's structure into a standard vocabulary. If the filing calls a section
+Item 7A, call it Item 7A. If it calls something Note 12 or Schedule II or Exhibit 21 or Report of
+Independent Registered Public Accounting Firm, use those words. If a section has no title, say so
+rather than inventing one.
+
+The same applies to type. Describe what a part is in whatever words fit. Two filings that organise
+themselves differently should produce differently shaped plans, and that is correct.
+
+SIZING
+
+You are told a per-part target. Size each part so that its response will land comfortably inside
+it. A part you expect to overflow should be split here, into two or three parts, rather than
+discovered to be too large later.
+
+If you cannot judge the size of a part, set may_require_subparts to true and say so in uncertainty.
+You will be able to propose subparts when you actually produce that part, and doing it then is not
+a failure.
+
+WHAT THIS PLAN MUST NOT CONTAIN
+
+Do not return parsed content. Do not reproduce a table. Do not quote passages at length. Do not
+summarise the filing. Do not describe what a section says. A plan that starts parsing runs out of
+room and produces neither a plan nor a parse.
+
+The plan is a division of the work and a statement of what you can see. Nothing more.
+
+COMPLETENESS OF THE PLAN
+
+Between them, the parts you name must account for everything human-readable in the filing: the
+narrative sections, the risk disclosures, management discussion, the financial statements, every
+note and footnote to those statements, the tables, the exhibits, the certifications, the signature
+pages, and anything else that was filed.
+
+Nothing may be left out for being routine, boilerplate, short, legal, repetitive or apparently
+unimportant. If a part will contain material you consider boilerplate, plan the part anyway.
+
+Anything you can see and cannot place goes in unassigned. An honest gap is useful. A plan that
+looks complete and silently omits a document is not.

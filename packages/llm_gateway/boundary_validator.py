@@ -184,8 +184,25 @@ def validate_plain_text(text: str) -> BoundaryReport:
 #: Violations that describe the SERIALIZATION rather than a value inside it.
 #:
 #: These are the ones that still apply to a document that parses as YAML. A response that starts
-#: `{"` is JSON whatever else is true of it; a fenced document is fenced; a native tool schema is a
-#: native tool schema. None of them can be a quoted scalar the way markup can.
+#: `{"` is JSON whatever else is true of it, because JSON is a YAML subset and therefore parses;
+#: a native tool schema is a native tool schema. Neither can be a quoted scalar the way markup can.
+#:
+#: MARKDOWN_FENCE WAS REMOVED FROM THIS SET IN PHASE 2.1, AND THE REMOVAL IS DEMONSTRATED RATHER
+#: THAN ARGUED. It was here on the stated ground that "a fenced document is fenced" — true of a
+#: document that IS fenced, and not true of the check, which is a textual search for three
+#: backticks at the start of any line. A YAML literal block scalar can contain such a line, and two
+#: real request shapes must:
+#:
+#:     the REPLANNING call carries the exact truncated response as evidence
+#:     the FORMAT-REPAIR call carries the exact malformed response, which is very often malformed
+#:     BECAUSE it is fenced — five of fifteen Phase 2 responses failed on serialisation alone
+#:
+#: Under the old rule those two requests could never be constructed, so the protocol that recovers
+#: a paid-for response would have been unbuildable. The narrowing is safe because a fenced document
+#: CANNOT reach this branch: `parse_yaml` raises on both "```yaml\nkey: value\n```" and
+#: "```\nkey: value\n```", so a document that parses as one mapping is not fence-wrapped. That is
+#: asserted directly in `tests/unit/test_llm_boundary.py`, together with mutation proofs that a
+#: fenced document and a JSON document are both still refused.
 _SERIALIZATION_VIOLATIONS: frozenset[Violation] = frozenset(
     {
         Violation.JSON_OBJECT,
@@ -193,7 +210,6 @@ _SERIALIZATION_VIOLATIONS: frozenset[Violation] = frozenset(
         Violation.JSON_LINES,
         Violation.JSON_SCHEMA,
         Violation.NATIVE_TOOL_SCHEMA,
-        Violation.MARKDOWN_FENCE,
     }
 )
 

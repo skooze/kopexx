@@ -18,6 +18,9 @@ from packages.llm_gateway import (
     Violation,
     compile_plain_text,
     compile_yaml,
+    parse_yaml,
+    to_yaml,
+    validate,
     validate_plain_text,
     validate_yaml_text,
 )
@@ -316,3 +319,66 @@ def test_gateway_enforces_budget_before_invocation() -> None:
             budget=Budget(max_input_tokens=1),
         )
     assert provider.invocations == [], "budget must be enforced before spend"
+
+
+# --- the Phase 2.1 narrowing, and the mutation proofs that make it safe --------------------------
+#
+# `MARKDOWN_FENCE` was removed from the SERIALIZATION set — the violations that still apply to a
+# document that PARSES as one YAML 1.2 mapping. It was there on the ground that "a fenced document
+# is fenced", which is true of a fenced document and not true of the CHECK, which is a textual
+# search for three backticks at the start of any line.
+#
+# Two real request shapes must carry such a line inside a block scalar: the replanning call carries
+# the exact truncated response as evidence, and the format-repair call carries the exact malformed
+# response — which is very often malformed BECAUSE it is fenced. Under the old rule neither request
+# could be constructed, so the protocol that recovers a paid-for response would have been
+# unbuildable.
+#
+# The narrowing is safe because a fenced document CANNOT reach that branch, and the three tests
+# below are the proof rather than the argument.
+
+
+def test_a_fence_wrapped_document_cannot_parse_as_a_yaml_mapping() -> None:
+    """THE LOAD-BEARING FACT. If this stopped holding, the narrowing below would be unsafe."""
+    from packages.llm_gateway.errors import YamlParseError
+
+    for wrapped in ("```yaml\nkey: value\n```", "```\nkey: value\n```"):
+        with pytest.raises(YamlParseError):
+            parse_yaml(wrapped)
+
+
+def test_a_fenced_document_is_still_refused() -> None:
+    """MUTATION PROOF. The narrowing must not have made a fenced response acceptable."""
+    report = validate("```yaml\nkey: value\n```", ContentFormat.YAML)
+    assert not report.ok
+    assert Violation.MARKDOWN_FENCE in report.violations
+
+
+def test_a_json_document_is_still_refused_although_it_parses_as_yaml() -> None:
+    """MUTATION PROOF. JSON is a YAML subset, so it DOES reach the narrowed branch."""
+    report = validate('{"a": 1}', ContentFormat.YAML)
+    assert not report.ok
+    assert Violation.JSON_OBJECT in report.violations
+
+
+def test_a_yaml_document_carrying_a_fence_inside_a_block_scalar_is_accepted() -> None:
+    """The shape a replanning or format-repair request must be able to take.
+
+    The document is one YAML 1.2 mapping. The backticks are DATA — the exact bytes a model returned
+    — and a request that could not carry them could not ask a model to repair its own output.
+    """
+    document = to_yaml(
+        {
+            "brief": "format_repair",
+            "malformed_response": "```yaml\nartifact: x\nnodes: []\n```",
+        }
+    )
+    report = validate(document, ContentFormat.YAML)
+    assert report.ok, f"a compiled repair brief was refused: {report.violations}"
+    assert isinstance(parse_yaml(document), dict)
+
+
+def test_a_yaml_document_carrying_filing_markup_in_a_scalar_is_still_accepted() -> None:
+    """The Phase 2 narrowing, re-asserted so the two cannot drift apart."""
+    document = to_yaml({"quote": "<TYPE>EX-27</TYPE> and <ix:nonFraction> in one sentence"})
+    assert validate(document, ContentFormat.YAML).ok

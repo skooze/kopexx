@@ -146,6 +146,31 @@ API envelope, while ADR-0013 governs what a MODEL sees.
 
 ---
 
+## Many responses, one parse — added 2026-08-03, Phase 2.1
+
+A provider output cap applies to ONE RESPONSE. It does not require one logical filing parse to use
+one response, and the adapter interface did not have to change for that to be true: a multipart
+parse is many ordinary invocations, each carrying the complete intact source set and each producing
+one complete standalone document.
+
+**WHAT THE PROVIDER LAYER IS RESPONSIBLE FOR HERE, AND WHAT IT IS NOT.**
+
+```
+IT REPORTS      the stop reason, exactly as the provider gave it. `max_tokens` is the fact the
+                whole truncation path turns on, and it is reported whatever the visible text
+                looks like — an empty answer at the cap is not an empty answer.
+IT REPORTS      reasoning characters separately from visible characters, which is what lets the
+                output-sizing policy give a reasoning model a smaller visible target.
+IT DECIDES      nothing about what happens next. Truncation handling, replanning, reconciliation
+                and assembly are the orchestrator's, and none of them is a provider concern.
+```
+
+**NO PROVIDER-SIDE CONVERSATION MEMORY IS USED, AND NONE MAY BE.** Every invocation must be
+independently reproducible from preserved inputs: the complete source set, the immutable prompt
+version, the model's own plan, and the exact part requested. A protocol that leaned on an
+ever-growing conversation would make a single part un-rerunnable and would make a late part cost
+the sum of every earlier one.
+
 ## AWS identity — binding on the Bedrock adapter
 
 The Bedrock provider uses the AWS SDK default credential provider chain. The client is constructed

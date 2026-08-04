@@ -20,7 +20,27 @@
 # tracked configuration and this repository is public. Where the account matters, the verification
 # runbook says so and the value stays on the host.
 
-snapshot_version: "1"
+# AMENDED 2026-08-03 BY PHASE 2.1. ONE FIELD WAS ADDED TO EVERY CANDIDATE AND NO EXISTING VALUE WAS
+# CHANGED, SO THE PHASE 1 VERIFICATION DATE ABOVE REMAINS TRUE FOR EVERYTHING IT COVERS.
+#
+# The field is `emits_reasoning_before_answer`. Its evidence is not the Phase 1 discovery run; it is
+# the Phase 2 benchmark of the same date, which recorded `reasoning_characters` separately from
+# visible characters on all 30 preserved invocations. Counted across those records:
+#
+#     GPT OSS 120B                    6 of 6 attempts returned reasoning content, up to 14,980
+#                                     characters, on filings of 23k to 41k input tokens
+#     NVIDIA Nemotron 3 Super 120B    0 of 6
+#     Qwen3 235B A22B                 0 of 6
+#     Llama 4 Maverick                0 of 6
+#     Qwen3 VL 235B                   0 of 6
+#
+# It is recorded here because model-directed multipart parsing has to size a per-part output target
+# against the answer a model will actually have room for, and reasoning content spends the same
+# allowance. Phase 1 already found this the hard way at 8 tokens; at part scale it is the difference
+# between a part that finishes and a part that truncates. There is exactly one home for a model
+# fact, and this is it.
+
+snapshot_version: "2"
 verified_on: "2026-08-03"
 verified_from_region: "us-east-1"
 verification_method: >-
@@ -83,6 +103,11 @@ candidates:
     max_output_tokens: 16000
     invocation_apis: [Converse, InvokeModel, ChatCompletions, Responses]
     streaming_supported: true
+    emits_reasoning_before_answer: true
+    reasoning_evidence: >-
+      Phase 2 measured reasoning content on 6 of 6 attempts, up to 14,980 characters. Phase 1
+      measured the same behaviour at an 8-token cap, where the whole budget went to reasoning and
+      the text block came back empty.
     price_input_per_1k: 0.00015
     price_output_per_1k: 0.0006
     price_image: none published; image input not supported
@@ -125,6 +150,9 @@ candidates:
     max_output_tokens: 32000
     invocation_apis: [Converse, InvokeModel, ChatCompletions]
     streaming_supported: true
+    emits_reasoning_before_answer: false
+    reasoning_evidence: >-
+      Phase 2 measured no reasoning content on 6 of 6 attempts.
     price_input_per_1k: 0.00015
     price_output_per_1k: 0.00065
     price_image: none published; image input not supported
@@ -161,6 +189,9 @@ candidates:
     max_output_tokens: 8000
     invocation_apis: [Converse, InvokeModel, ChatCompletions]
     streaming_supported: true
+    emits_reasoning_before_answer: false
+    reasoning_evidence: >-
+      Phase 2 measured no reasoning content on 6 of 6 attempts.
     price_input_per_1k: 0.00022
     price_output_per_1k: 0.00088
     price_image: none published; image input not supported
@@ -203,6 +234,9 @@ candidates:
     max_output_tokens: 8000
     invocation_apis: [Converse, InvokeModel]
     streaming_supported: true
+    emits_reasoning_before_answer: false
+    reasoning_evidence: >-
+      Phase 2 measured no reasoning content on 6 of 6 attempts.
     price_input_per_1k: 0.00024
     price_output_per_1k: 0.00097
     price_image: none published; image input billed as input tokens
@@ -241,6 +275,9 @@ candidates:
     max_output_tokens: 8000
     invocation_apis: [Converse, InvokeModel, ChatCompletions]
     streaming_supported: true
+    emits_reasoning_before_answer: false
+    reasoning_evidence: >-
+      Phase 2 measured no reasoning content on 6 of 6 attempts.
     price_input_per_1k: 0.00053
     price_output_per_1k: 0.00266
     price_image: none published; image input billed as input tokens

@@ -61,6 +61,20 @@ class ObjectStore(ABC):
         object access, and a caller that reaches past it also reaches past the traversal guard.
         """
 
+    def fingerprint(self, key: str) -> tuple[int, int] | None:
+        """A cheap value that CHANGES whenever the stored bytes change, or None when absent.
+
+        WHAT IT IS FOR. A caller that parses a stored manifest can memoise the parsed value against
+        this and skip the parse when nothing has moved. It is deliberately not a hash: the point is
+        to be cheaper than reading the object, and a hash is not.
+
+        WHY A DEFAULT OF `None` RATHER THAN AN ABSTRACT METHOD. A backend that cannot answer this
+        cheaply — a remote store where the answer is a network round trip — should say so by
+        returning None, and every caller then simply reads. An abstract method would force such a
+        backend to invent an answer, and an invented fingerprint is a stale cache.
+        """
+        return None
+
     def put_text(self, key: str, text: str, *, content_type: str = "text/plain") -> StoredObject:
         """Store UTF-8 text under a key."""
         return self.put_bytes(key, text.encode("utf-8"), content_type=content_type)
@@ -122,6 +136,21 @@ class FilesystemObjectStore(ObjectStore):
 
     def exists(self, key: str) -> bool:
         return self._path_for(key).exists()
+
+    def fingerprint(self, key: str) -> tuple[int, int] | None:
+        """(modification time in nanoseconds, size in bytes), or None when the key is absent.
+
+        BOTH FIELDS, NOT JUST THE TIMESTAMP. A filesystem can reuse an mtime for two writes inside
+        its own resolution, and `put_bytes` renames a temporary file into place, which sets the
+        mtime from the write rather than from the rename. Size alone is weaker still — a manifest
+        whose state changes from RUNNING to FAILED can be the same length. Together they are enough
+        for a read cache and cheap enough to be worth it.
+        """
+        try:
+            status = self._path_for(key).stat()
+        except (OSError, ValueError):
+            return None
+        return (status.st_mtime_ns, status.st_size)
 
     def uri_for(self, key: str) -> str:
         return f"file://{self._path_for(key)}"

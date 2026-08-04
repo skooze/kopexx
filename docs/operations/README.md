@@ -78,6 +78,11 @@ as the expected one.
 | `REVIEW_AUTHOR` | `local-developer` | The label recorded as the author of review-state transitions and comments. |
 | `COST_CEILING_USD` | `5.00` | The CUMULATIVE authorized spend ceiling, in one place, passed to the durable journal and shown before any run. |
 | `MAX_CONCURRENT_INVOCATIONS` | `1` | Billable invocations in flight at once. One by default: five expensive filings launched together multiply the worst case fivefold against the same ceiling. |
+| `SPEND_PHASE` | unset | A label attributing every reservation and settlement to the currently authorized task. Phase 2 spent against the same durable journal; a phase label is what makes "this task's ceiling" a computable fact rather than an arithmetic note. |
+| `PHASE_COST_CEILING_USD` | unset | What the labelled phase may spend. **No default on purpose** — a default here would be a spending limit nobody authorized. Unset means no phase ceiling and the cumulative one still binds. |
+| `MULTIPART_FILING_BUDGET_USD` | `1.00` | What ONE filing's multipart parse may spend across every call it queues. A parse can queue a dozen billable calls off one plan; without this, one ambitious filing could consume the whole authorization. |
+| `MULTIPART_MAX_DEPTH` | `4` | How deep a model may ask to decompose a part. An OPERATIONAL safety bound, never a statement about filings: a deeper branch is paused with its reason recorded, not divided again. |
+| `MULTIPART_RECONCILIATION_CYCLES` | `3` | How many times reconciliation may add work. On reaching it the run stops with everything preserved and the unresolved state carried into review. |
 | `ALLOW_SEC_FETCH` | `true` | When `false`, the assembler is given a fetcher that REFUSES with the missing member named rather than skipping it. A silent skip would produce an incomplete source set that looked complete. |
 
 Read from the same environment by `Settings.from_env`, outside `ReviewSettings` but load-bearing
@@ -215,6 +220,38 @@ and `source-set.yaml` maps each filed document to its evidence name. The executi
 machines are independent by design: `job.yaml` carries both, and an artifact stays an EVALUATION
 artifact until a person moves it. `ValidationStatus` has no `COMPLETE` member, deliberately —
 nothing in this tree can assert a clean parse on the model's own say-so.
+
+
+### Running a multipart parse, and what an operator sees
+
+The run form offers two protocols. **Multipart is preselected**; single response is one click away
+and is kept runnable so the two can be compared.
+
+```
+single response   one filing, one call. The Phase 2 protocol.
+multipart         one filing, a plan call plus one call per part the MODEL names, plus subparts,
+                  replanning after truncation, and reconciliation.
+```
+
+**A multipart run opens at its call hierarchy rather than at the single-response page**, because
+"which call are you asking about" is the first question a dozen-call parse raises.
+
+**THREE CEILINGS APPLY AND THE TIGHTEST REFUSES.** A refusal PAUSES the branch, records the reason
+on the task, emits a `budget.paused` event, and leaves everything already produced intact. It is not
+a failure and it is not a discard. Raising a ceiling and pressing **Re-arm budget-paused work** is
+what continues it, and it is deliberately a different control from **Resume interrupted work** — an
+interrupted task was in flight when a process died, and a blocked one was refused by a spending
+limit. Treating them as one action would let a restart quietly re-arm work a limit had stopped.
+
+**A RESTART RE-INVOKES NOTHING, AT EITHER LEVEL.** Start-up marks mid-flight child jobs AND mid-
+flight multipart tasks INTERRUPTED and stops. Completed parts are kept, and a resume reopens only
+the branch that was interrupted — a parse whose plan and four parts succeeded keeps all five.
+
+**A LONG PARSE CAN OUTLIVE AN SSO SESSION.** A twenty-four-part parse is tens of minutes of
+provider time. If the session expires mid-run, every subsequent call fails with a non-retryable
+provider error, the task records the reason, and the run stops with everything already produced
+preserved. `aws sso login` and then **Resume interrupted work** continues it. This is not
+hypothetical: it happened during the Phase 2.1 proof runs.
 
 ## Observability
 

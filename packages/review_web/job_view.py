@@ -549,6 +549,27 @@ def job_page(
         else ""
     )
 
+    # A MULTIPART JOB'S OWN REVIEW LIVES ONE LEVEL DOWN, AND THIS PAGE SAYS SO RATHER THAN
+    # PRETENDING THE JOB HAS ONE RESPONSE. Everything below still renders — the preserved filing,
+    # the invocation card, the review controls — because they are properties of the child job under
+    # either protocol. What a multipart job has no single answer for is "the exact model response",
+    # and the link is what leads to the dozen that exist.
+    multipart_link = (
+        tag(
+            "p",
+            join(
+                tag(
+                    "a",
+                    "this filing was parsed with the model-directed multipart protocol: open the "
+                    "call hierarchy",
+                    href=url("runs", run["run_id"], "jobs", job["job_id"], "multipart"),
+                ),
+            ),
+        )
+        if job.get("strategy") == "multipart"
+        else ""
+    )
+
     return join(
         tag(
             "h1", esc(f"{filing['form_as_filed']} {filing['accession']} - {filing['issuer_label']}")
@@ -560,6 +581,7 @@ def job_page(
                 tag("span", esc(f" child job {job['job_id']}"), class_="mono"),
             ),
         ),
+        multipart_link,
         tag(
             "p",
             join(

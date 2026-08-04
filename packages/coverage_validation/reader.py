@@ -176,12 +176,21 @@ def _node(raw: Any, fallback_order: int) -> ParsedNode | None:
     )
 
 
-def read(response_text: str) -> ParsedDocument:
+def read(
+    response_text: str, *, envelope_keys: tuple[str, ...] = PROVISIONAL_ENVELOPE_KEYS
+) -> ParsedDocument:
     """Read a parsed artifact from a model's exact response bytes.
 
     Raises only when the text is not one YAML document at all. Everything else — a missing
     envelope key, an empty node list, a node with no title — is a FINDING the validator records
     against a response that still gets reviewed.
+
+    `envelope_keys` IS SUPPLIED BECAUSE A PART IS NOT A WHOLE FILING. Phase 2.1 added a second
+    provisional envelope: a multipart PART response names its plan and itself and carries nodes,
+    and it has no reason to carry the whole-filing keys. Reporting `artifact` and `document`
+    missing from every part of every multipart parse would bury the findings that matter under a
+    finding that means nothing. The node reading below is IDENTICAL in both cases, which is the
+    point of parameterising the envelope rather than writing a second reader.
     """
     try:
         document = parse_yaml(response_text)
@@ -206,6 +215,6 @@ def read(response_text: str) -> ParsedDocument:
         documents=tuple(d for d in _as_list(document.get("document")) if isinstance(d, dict)),
         artifact=_as_mapping(document.get("artifact")),
         metadata=_as_mapping(document.get("metadata")),
-        missing_envelope_keys=tuple(k for k in PROVISIONAL_ENVELOPE_KEYS if k not in document),
+        missing_envelope_keys=tuple(k for k in envelope_keys if k not in document),
         raw=document,
     )

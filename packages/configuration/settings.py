@@ -120,6 +120,20 @@ class ReviewSettings:
     cost_ceiling_usd: str = "5.00"
     max_concurrent_invocations: int = 1
     allow_sec_fetch: bool = True
+    #: THREE CEILINGS, EACH ANSWERING A DIFFERENT QUESTION. `cost_ceiling_usd` is cumulative and
+    #: never resets. `spend_phase` plus `phase_cost_ceiling_usd` bound what the CURRENTLY AUTHORIZED
+    #: task may spend against the same durable journal — Phase 2 spent against it too, and a phase
+    #: total is what makes "this task's ceiling" a computable fact rather than an arithmetic note.
+    #: `multipart_filing_budget_usd` bounds ONE filing's parse across every call it queues, so a
+    #: filing that plans ambitiously cannot consume the whole authorization on its own.
+    spend_phase: str = ""
+    phase_cost_ceiling_usd: str | None = None
+    multipart_filing_budget_usd: str = "1.00"
+    #: OPERATIONAL SAFETY LIMITS, never statements about what filings contain. A depth limit does
+    #: not say a filing has at most four levels; it says this system stops spending on a branch
+    #: that keeps asking to go deeper and reports why.
+    multipart_max_depth: int = 4
+    multipart_reconciliation_cycles: int = 3
 
     @property
     def loopback_only(self) -> bool:
@@ -195,6 +209,16 @@ class Settings:
                 cost_ceiling_usd=source.get("COST_CEILING_USD", "5.00"),
                 max_concurrent_invocations=int(source.get("MAX_CONCURRENT_INVOCATIONS", "1")),
                 allow_sec_fetch=source.get("ALLOW_SEC_FETCH", "true").lower() != "false",
+                spend_phase=source.get("SPEND_PHASE", ""),
+                # No default. A phase ceiling with no value configured means no phase ceiling, and
+                # the cumulative one still binds; inventing a number here would be a spending limit
+                # nobody authorized.
+                phase_cost_ceiling_usd=source.get("PHASE_COST_CEILING_USD") or None,
+                multipart_filing_budget_usd=source.get("MULTIPART_FILING_BUDGET_USD", "1.00"),
+                multipart_max_depth=int(source.get("MULTIPART_MAX_DEPTH", "4")),
+                multipart_reconciliation_cycles=int(
+                    source.get("MULTIPART_RECONCILIATION_CYCLES", "3")
+                ),
             ),
             environment=source.get("ENVIRONMENT", "local"),
         )

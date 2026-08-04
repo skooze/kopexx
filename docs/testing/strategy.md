@@ -15,7 +15,16 @@
 > real provider, and not one test does: the catalog tests build their own synthetic snapshots, and
 > the architecture tests assert that no test, no package and no CI job can reach AWS at all.
 >
-> **NO SEC FILING HAS BEEN SENT TO ANY MODEL. NO DATABASE EXISTS.**
+> **UPDATED 2026-08-03 BY PHASE 2.1.** Six modules were added — five unit modules for the
+> multipart envelopes, their validation, the queue, the sizing policy and the review surface,
+> plus `tests/architecture/test_phase21_boundaries.py` — and one integration module for the
+> multipart sequence. The suite went from 1,049 to **1,234 tests at 91.55 percent coverage**,
+> still with ZERO skips and still with no environmental precondition: the multipart integration
+> test drives a scripted provider that answers by BRIEF KIND, so it also proves the orchestrator
+> asked for the part it thinks it asked for.
+>
+> **NO DATABASE EXISTS.** Filings HAVE now been sent to models — thirty single-response
+> invocations in Phase 2 and a multipart run in Phase 2.1 — and not one test reaches a provider.
 >
 > **UPDATED 2026-08-03 BY PHASE 2. HALF OF THE LINE ABOVE IS SUPERSEDED AND HALF OF IT STANDS.**
 > `roadmap.md` records that filings have now been parsed by real models. That happened OUTSIDE this
@@ -202,6 +211,35 @@ not. A gate wired to refuse everything passes half of these and breaks the produ
 **NO ARTIFACT CONTRACT IS ASSERTED THERE, DELIBERATELY.** The mock returns a well-formed YAML
 mapping with one node and one verbatim quote. It exercises the reader, the resolver and the audit
 path. It is not a response schema, and nothing in it claims a real model would produce that shape.
+
+## The Phase 2.1 architecture guards
+
+`tests/architecture/test_phase21_boundaries.py` guards the four doors the multipart protocol opens.
+Each is a door that would be EASIER to walk through than to keep shut, which is why each has a test
+rather than a paragraph.
+
+```
+1  NO BACKEND SEMANTIC CHUNKER   no function or attribute in the multipart surface names a
+                                 chunking, slicing, splitting or windowing operation; no
+                                 filing-section name appears as an evaluated literal
+2  NO BLIND CONTINUATION         no evaluated string in packages/ and no line in any prompt file
+                                 asks a model to continue, resume or carry on a response; the
+                                 TRUNCATED state has no outgoing transition; no module
+                                 concatenates response bodies
+3  NO WINNER                     no function, class or attribute anywhere in packages/ names a
+                                 best, winning, preferred, primary, scored or ranked model; no
+                                 multipart prompt names a model provider as a whole word; the
+                                 two historical single-response prompts are hash-verified untouched
+4  STILL PARSING ONLY            every billable task type resolves to a parsing prompt role, and
+                                 no multipart module names the image, summary or analysis role
+```
+
+Plus the two Phase 2 guards multipart makes MORE load-bearing: every semantic invocation carries
+the source-set identity and refuses a set that moved, and `_preserve` provably runs before
+`_interpret` so a crash between them cannot lose bytes that were bought.
+
+**THE ANTI-VACUITY GUARD NAMES ITS SCAN SET.** Seven modules must exist and carry code, or the guards
+above would be scanning nothing and passing.
 
 ## The Phase 2 architecture guards
 

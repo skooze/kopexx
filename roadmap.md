@@ -1,11 +1,12 @@
 # roadmap.md — Kopexx Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2, 2026-08-03)
-LAST UPDATED: 2026-08-03, after Phase 2 completed against published baseline `6976cc5`.
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2.1, 2026-08-03)
+LAST UPDATED: 2026-08-03, after Phase 2.1 completed against published baseline `be446fe`.
 ARCHITECTURE DECISIONS: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
 `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md` and
-`docs/adr/ADR-0019-parser-review-application-over-a-framework.md`
+`docs/adr/ADR-0019-parser-review-application-over-a-framework.md` and
+`docs/adr/ADR-0020-model-directed-multipart-parsing.md`
 SEQUENCING PRINCIPLE: evidence before architecture; architecture before schema; a working parser
 review loop before anything that depends on parsed data.
 
@@ -43,6 +44,7 @@ PHASE 0    Corpus evidence                            COMPLETE
 PHASE 0.5  Repository cleanup and corpus reverify     COMPLETE
 PHASE 1    Secure AWS and model-access verification   COMPLETE  2026-08-03
 PHASE 2    Parser experiments + review UI, together   COMPLETE  2026-08-03
+PHASE 2.1  Model-directed multipart parsing           COMPLETE  2026-08-03
 PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
                                                       BLOCKED on a user parser-selection decision
 PHASE 3    Optional model stages: image, summary, chat
@@ -95,6 +97,10 @@ blocked on a user decision about which parser and prompt version should advance.
 | Parent runs, child jobs, evaluation storage, comments, review states | IMPLEMENTED — Phase 2 |
 | Parser-review UI | IMPLEMENTED — Phase 2, built WITH the parser experiments |
 | Parsed evaluation artifacts | IMPLEMENTED — Phase 2, provisional and derived from real output |
+| Model-directed multipart protocol: plan, parts, subparts, replanning, reconciliation | IMPLEMENTED — Phase 2.1, `packages/multipart` |
+| Durable hierarchical task queue, per-attempt reservation, restart and resume | IMPLEMENTED — Phase 2.1, `evaluation_store` + `orchestrator` |
+| Multipart review surface: call hierarchy, per-call review, assembled index | IMPLEMENTED — Phase 2.1, `review_web/multipart_view.py` |
+| Prompt caching | INVESTIGATED and NOT AVAILABLE — Phase 2.1, `docs/llm/prompt-caching-investigation.md` |
 | Image / summary / chat artifacts | NOT STARTED — Phase 3 |
 | Persistence, approval gate, Redis cache | NOT STARTED — Phase 4 |
 | Background population | NOT STARTED — Phase 5, needs separate authorization |
@@ -229,7 +235,7 @@ patching one field into a document still carrying an older date.
 
 ---
 
-# PHASE 2 — PARSER EXPERIMENTS AND THE REVIEW UI, BUILT TOGETHER (NEXT)
+# PHASE 2 — PARSER EXPERIMENTS AND THE REVIEW UI, BUILT TOGETHER (COMPLETE 2026-08-03)
 
 The previous roadmap placed the UI at Phase 6, after images, summaries and chat. That is too late:
 **a parsed artifact cannot be evaluated without looking at it beside the filing it came from.**
@@ -323,6 +329,87 @@ against that exact string. Another form is never silently treated as equivalent.
 benchmark set. Neither level substitutes for the other.
 
 EXPLICITLY OUT OF SCOPE. Any rigid database schema. Any universal semantic taxonomy.
+
+---
+
+# PHASE 2.1 — MODEL-DIRECTED MULTIPART PARSING (COMPLETE 2026-08-03)
+
+Phase 2 sent a complete filing intact and then expected the complete parsed artifact back in ONE
+provider response. Thirty preserved invocations measured what that assumption costs: three of the
+five candidates cap output at 8,000 tokens, four of that benchmark's five truncation failures were
+that cap, and the deepest parse produced — 73 nodes with 69 of 72 references resolved — was itself
+truncated at 8,000 with no way to finish it.
+
+**The assumption is withdrawn.** An output cap applies to one provider RESPONSE. It does not require
+one logical filing PARSE to use one response. Decision record:
+`docs/adr/ADR-0020-model-directed-multipart-parsing.md`.
+
+```
+intact filing
+  ->  model-created parse plan
+  ->  model-created parts
+  ->  model-created subparts when needed
+  ->  model-created reconciliation
+  ->  mechanically assembled filing parse
+  ->  human review
+```
+
+## 2.1a — What the model owns, and what the backend owns
+
+The SELECTED PARSING MODEL creates the plan from the intact filing and owns every semantic decision
+in it: part boundaries, identifiers, titles, section names, node types, table labels, relationships,
+additional required parts, subparts and unresolved material.
+
+The backend sends intact source, carries model-created identifiers, queues work, preserves
+artifacts, validates generic structure, resolves references against the preserved bytes, tracks
+coverage and cost, detects truncation, requests model-directed reconciliation, and presents. It
+decides nothing about what a filing means. `rules.md` section 21 rules 1, 2, 18 and 19.
+
+## 2.1b — Blind continuation is prohibited
+
+No request asks a model to continue an interrupted response and no code concatenates response
+fragments. A response that hits the output cap is preserved exactly, marked TRUNCATED, and treated
+as EVIDENCE; its partial content never reaches the assembled parse. A model-directed REPLANNING call
+receives the intact filing again and proposes subparts covering the WHOLE original part.
+
+Enforced structurally: `TaskState.TRUNCATED` has no outgoing transition.
+
+## 2.1c — The input rule is unchanged
+
+Every semantic invocation — plan, part, subpart, replan, reconcile, gap repair — receives the
+COMPLETE compatible source set intact, in filed order, hash-verified, including the complete image
+set for a multimodal parser. `INTACT_SOURCE_ONLY` is untouched. What was authorized is multipart
+OUTPUT; mechanical multipart INPUT and visible-content projection remain unapproved.
+
+Prompt caching would have made that repetition nearly free. It is not available: AWS documents
+prompt caching for Claude, GPT-5.6 and Amazon Nova, and for none of the five approved candidates.
+See `docs/llm/prompt-caching-investigation.md`.
+
+## 2.1d — What was built
+
+```
+packages/multipart              the envelopes, their structural validation, mechanical assembly
+evaluation_store/tasks.py       durable task records with dependencies, identity and attempts
+evaluation_store/queue_states.py   a THIRD state machine, never derived from the other two
+orchestrator/multipart_service.py  the scheduler and executor
+orchestrator/briefs.py          the synthetic YAML brief compiled for one invocation
+orchestrator/sizing.py          the cap, the target, and the headroom between them
+review_web/multipart_view.py    call hierarchy, per-call review, assembled index
+prompts/parser/parser-multipart-*   six immutable prompt families
+```
+
+## 2.1e — What it does NOT do
+
+```
+no breadth run across the 22 form strings     no summary, image or chat call
+no application database                       no Redis
+no parser selected, ranked or promoted        no bulk background population
+no prompt caching enabled                     nothing deployed
+```
+
+The five candidates remain equally available for user-directed testing, and the single-response
+protocol remains runnable so the two can be compared. Measured results are in
+`docs/sprints/PHASE-0201-model-directed-multipart-parsing.md`.
 
 ---
 

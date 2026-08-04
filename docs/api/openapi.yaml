@@ -689,6 +689,217 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ------------------------------------------------------------------------------------------
+  # IMPLEMENTED — the model-directed multipart surface, added by Phase 2.1.
+  #
+  # A MULTIPART PARSE IS ONE CHILD JOB AND MANY CALLS. The child-job routes above still describe
+  # the job; these describe the calls under it, the exact bytes each one sent and received, and the
+  # MECHANICAL INDEX assembled from them. The thirty preserved single-response jobs have no tasks
+  # and no assembly, and these routes report that plainly rather than failing.
+  # ------------------------------------------------------------------------------------------
+  /runs/{run_id}/jobs/{job_id}/multipart:
+    get:
+      tags: [review]
+      operationId: reviewMultipartPage
+      summary: The call hierarchy of one model-directed multipart parse.
+      description: |
+        Plan, parts, subparts, replanned branches, reconciliation and gap repairs, in the order the
+        MODEL's own plan put them, each with its state, prompt version, output size, stop reason,
+        cost and validation.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/jobs/{job_id}/assembled:
+    get:
+      tags: [review]
+      operationId: reviewAssembledPage
+      summary: The mechanically assembled parse, in the model's order and under the model's titles.
+      description: |
+        AN INDEX, NOT A REWRITTEN PARSE. Nothing is renamed, merged, moved or dropped; every part
+        links back to the exact response that produced it.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/jobs/{job_id}/tasks/{task_id}:
+    get:
+      tags: [review]
+      operationId: reviewMultipartTaskPage
+      summary: One call of a multipart parse, reviewed beside the preserved filing.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+        - $ref: "#/components/parameters/MultipartTaskId"
+        - name: view
+          in: query
+          schema: { type: string, enum: [raw, parsed, side-by-side], default: side-by-side }
+        - name: artifact
+          in: query
+          schema: { type: string }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: length
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/tasks:
+    get:
+      tags: [review]
+      operationId: reviewListMultipartTasks
+      summary: Every queued call of one multipart parse, with a mechanical summary.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The tasks and their counts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MultipartTaskList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/tasks/{task_id}:
+    get:
+      tags: [review]
+      operationId: reviewGetMultipartTask
+      summary: One call, with its routing, prompt, dependencies, attempts, cost and validation.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+        - $ref: "#/components/parameters/MultipartTaskId"
+      responses:
+        "200":
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MultipartTask" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/tasks/{task_id}/request:
+    get:
+      tags: [review]
+      operationId: reviewGetExactTaskRequest
+      summary: The exact synthetic brief this call sent, as it was compiled.
+      description: |
+        The complete filing travelled beside it as preserved artifacts and is served by the
+        job-scoped source route.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+        - $ref: "#/components/parameters/MultipartTaskId"
+      responses:
+        "200":
+          description: The exact request brief.
+          content:
+            text/plain:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/tasks/{task_id}/response:
+    get:
+      tags: [review]
+      operationId: reviewGetExactTaskResponse
+      summary: The exact bytes this call returned, preserved before anything read them.
+      description: |
+        Served for a TRUNCATED call too. A truncated attempt is evidence: it is preserved exactly,
+        is never continued, and its partial content is not merged into the assembled parse.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+        - $ref: "#/components/parameters/MultipartTaskId"
+      responses:
+        "200":
+          description: The exact response.
+          content:
+            text/plain:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/runs/{run_id}/jobs/{job_id}/assembly:
+    get:
+      tags: [review]
+      operationId: reviewGetAssembledParse
+      summary: The mechanical index over one filing's multipart parse.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The assembled index.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssembledParse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{run_id}/jobs/{job_id}/queue:
+    post:
+      tags: [review]
+      operationId: reviewControlMultipartQueue
+      summary: Resume, unblock, retry, cancel a branch, advance, or run reconciliation.
+      description: |
+        EVERY ACTION IS EXPLICIT AND MAY SPEND MONEY. There is no default action: an unrecognised
+        one is refused rather than becoming the nearest thing that spends. A retry mints a new
+        billable identity; a cancelled branch touches nothing already issued.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.1
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: What the action did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueActionResult" }
+        "303":
+          description: A browser is redirected back to the call hierarchy.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The action is not permitted from this state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ------------------------------------------------------------------------------------------
   # PLANNED — the beta API. None of the following is implemented.
   # ------------------------------------------------------------------------------------------
   /entities/search:
@@ -1075,6 +1286,14 @@ components:
       in: path
       required: true
       schema: { type: string, pattern: "^job_[a-z2-7]{26}$" }
+    MultipartTaskId:
+      name: task_id
+      in: path
+      required: true
+      description: |
+        A task identifier ISSUED BY THIS STORE. The part identifier a model chose is carried
+        inside the record and never appears in a path.
+      schema: { type: string, pattern: "^tsk_[a-z2-7]{26}$" }
     Cik:
       name: cik
       in: path
@@ -1127,6 +1346,101 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+
+    MultipartTask:
+      type: object
+      description: |
+        One queued call of a model-directed multipart parse. The model-created identifiers are
+        carried VERBATIM under `model_created`; the storage token beside them is mechanically
+        derived and is never an identity.
+      additionalProperties: true
+      properties:
+        task_id: { type: string }
+        run_id: { type: string }
+        root_job_id: { type: string }
+        parent_task_id: { type: [string, "null"] }
+        task_type:
+          type: string
+          description: |
+            PLAN_PARSE, PARSE_PART, PLAN_SUBPARTS, PARSE_SUBPART, REPLAN_TRUNCATED_PART,
+            RECONCILE_PARSE, GAP_REPAIR, FORMAT_REPAIR, SOURCE_PREFLIGHT, VALIDATE_ASSEMBLY or
+            READY_FOR_REVIEW.
+        state:
+          type: string
+          description: |
+            The queue state machine, which is separate from execution state and review state and is
+            never derived from either.
+        depth: { type: integer }
+        order: { type: integer }
+        model_created:
+          type: object
+          additionalProperties: true
+          description: The plan, part and parent identifiers exactly as the model returned them.
+        depends_on:
+          type: array
+          items: { type: string }
+        dependency_policy: { type: string }
+        idempotency:
+          type: string
+          description: |
+            The billable identity of this call's inputs. Duplicate-schedule protection only; it
+            makes no provider exactly-once claim.
+        attempts:
+          type: array
+          items: { type: object, additionalProperties: true }
+        truncation:
+          type: [object, "null"]
+          additionalProperties: true
+          description: Present when the call reached the output limit. Evidence, never merged.
+        validation:
+          type: [object, "null"]
+          additionalProperties: true
+
+    MultipartTaskList:
+      type: object
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/MultipartTask" }
+        summary:
+          type: object
+          additionalProperties: true
+
+    AssembledParse:
+      type: object
+      description: |
+        A MECHANICAL INDEX over the exact model responses, built only from relations the model
+        itself declared. No title is renamed, no content merged, no table moved and no part dropped.
+        Its status is never COMPLETE: mechanical assembly, model-declared completion, source-
+        reference coverage and human approval are four separate claims and none implies another.
+      additionalProperties: true
+      properties:
+        status:
+          type: string
+          enum: [INCOMPLETE_WORK, RECONCILIATION_UNRESOLVED, MECHANICALLY_ASSEMBLED]
+        mechanically_assembled: { type: boolean }
+        model_declared_complete: { type: boolean }
+        reconciliation_unresolved: { type: boolean }
+        human_review_required: { type: boolean }
+        plan:
+          type: object
+          additionalProperties: true
+        parts:
+          type: array
+          items: { type: object, additionalProperties: true }
+        tasks:
+          type: array
+          items: { type: object, additionalProperties: true }
+        total_cost_usd: { type: string }
+        validation:
+          type: object
+          additionalProperties: true
+
+    QueueActionResult:
+      type: object
+      description: What an explicit queue action did. Every field is a list of task identifiers.
+      additionalProperties: true
+
     ReviewHealth:
       type: object
       required: [status, bind_mode, cost_ceiling_usd, cumulative_spend_usd]

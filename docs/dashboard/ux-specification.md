@@ -443,6 +443,50 @@ Whenever HTTPS is not configured the page prints a local-development-mode note s
 makes no production security claim, rather than implying a posture it does not have. This is not
 multi-user identity management and does not pretend to be; that stays deferred to Phase 6.
 
+## The multipart surface — IMPLEMENTED 2026-08-03, Phase 2.1
+
+A multipart parse is a dozen calls under one child filing job, and a list of runs is not a review
+surface for it. Three views, each answering a different question, and none of them collapsing into
+another.
+
+**THE CALL HIERARCHY** — `/runs/{run}/jobs/{job}/multipart`. Every call in the order the MODEL's own
+plan put them, indented by the model's own parent relationship, each row showing its kind, queue
+state, prompt version, output tokens, configured cap, stop reason, cost and validation. The header
+carries the plan identifier, the planned part count, the state counts, the three operational limits
+and all three spending ceilings with what remains of each.
+
+**THE PER-CALL REVIEW PAGE** — `/runs/{run}/jobs/{job}/tasks/{task}`. The Phase 2 review page one
+level down: raw, parsed and side-by-side over the preserved filing, every citation checked against
+the original bytes, plus the exact compiled request brief and the exact response. A truncated call
+additionally shows the cap it reached, the tokens it produced, its exact partial output, and that
+the partial output is EVIDENCE and is not merged into the parse.
+
+**THE ASSEMBLED VIEW** — `/runs/{run}/jobs/{job}/assembled`. The parts in the model's order, under
+the model's titles, each linking back to the response that produced it. **It says on the page that
+it is an index**: no title renamed, no content merged, no table moved, no part dropped.
+
+### Rules this surface follows
+
+```
+A TRUNCATED CALL IS SHOWN AS A BRANCH, NEVER AS A FAILED MODEL. Phase 2 labelled whole candidates
+truncated because one response hit a cap. A truncated call here shows its cap, its partial output,
+the replanning call it caused, the subparts that came out of that, and whether the branch finished.
+
+EVERY MODEL-CHOSEN STRING IS ESCAPED, NEVER INTERPRETED. A part identifier and a title are strings
+a language model wrote after reading an untrusted filing. They are rendered as text through the
+same escaping a filing gets, and a model-chosen identifier never reaches a storage key.
+
+EVERY QUEUE CONTROL IS A FORM POST WITH A TOKEN, NEVER A LINK. Resume, unblock, advance, run
+reconciliation, retry one call and cancel a branch each spend money or unblock something that will,
+and a link is something a browser can be made to follow.
+
+NOTHING ON THE PAGE SPENDS MONEY BY BEING OPENED. A restart marks interrupted work and stops; the
+page shows it and waits for a person.
+
+THE THIRTY HISTORICAL SINGLE-RESPONSE RUNS STILL OPEN, and the multipart pages report honestly
+that such a job has no plan and no assembly rather than failing.
+```
+
 ## What the parser-review UI deliberately does NOT do
 
 Every item here is a beta-UI requirement that the implemented surface does not satisfy. None is a

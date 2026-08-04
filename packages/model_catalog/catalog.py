@@ -271,6 +271,17 @@ def _candidate(
         disabled_reason=(
             str(mapping["disabled_reason"]) if mapping.get("disabled_reason") is not None else None
         ),
+        # OPTIONAL, AND ITS ABSENCE MEANS "NOT MEASURED" RATHER THAN "NO". It is not in
+        # `_REQUIRED_CANDIDATE_KEYS` because a snapshot written before this field existed is still
+        # a valid reviewed snapshot; defaulting it to the conservative answer is what makes reading
+        # one safe. See the field's own comment for why the conservative answer is `True`.
+        emits_reasoning_before_answer=(
+            _as_bool(
+                mapping["emits_reasoning_before_answer"], "emits_reasoning_before_answer", where
+            )
+            if "emits_reasoning_before_answer" in mapping
+            else True
+        ),
     )
 
 

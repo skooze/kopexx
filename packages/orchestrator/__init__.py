@@ -20,25 +20,44 @@ from .catalog import (
 from .errors import (
     CeilingReachedError,
     FilingNotInCatalogError,
+    MultipartProtocolError,
     NoParsingModelError,
     OrchestratorError,
     StageNotAuthorizedError,
+    UnknownStrategyError,
 )
+from .multipart_service import MultipartParseService, MultipartSettings
 from .service import (
     MINIMUM_PARSE_OUTPUT_TOKENS,
+    MULTIPART_STRATEGY,
     OUTPUT_RATIO_OF_INPUT,
+    SINGLE_RESPONSE_STRATEGY,
+    STRATEGIES,
     ParserReviewService,
     PreflightItem,
     RunPlan,
     RunRequest,
     sized_output_tokens,
 )
+from .sizing import (
+    MAXIMUM_PART_TARGET_TOKENS,
+    MINIMUM_PART_TARGET_TOKENS,
+    OutputSizing,
+    compact_sizing,
+    part_sizing,
+    repair_sizing,
+)
 from .spend_journal import SpendEntry, SpendJournal
 from .worker import BoundedWorker, InlineWorker
 
 __all__ = [
+    "MAXIMUM_PART_TARGET_TOKENS",
     "MINIMUM_PARSE_OUTPUT_TOKENS",
+    "MINIMUM_PART_TARGET_TOKENS",
+    "MULTIPART_STRATEGY",
     "OUTPUT_RATIO_OF_INPUT",
+    "SINGLE_RESPONSE_STRATEGY",
+    "STRATEGIES",
     "BoundedWorker",
     "CeilingReachedError",
     "CorpusFilingCatalog",
@@ -47,8 +66,12 @@ __all__ = [
     "FilingNotInCatalogError",
     "FilingRecord",
     "InlineWorker",
+    "MultipartParseService",
+    "MultipartProtocolError",
+    "MultipartSettings",
     "NoParsingModelError",
     "OrchestratorError",
+    "OutputSizing",
     "ParserReviewService",
     "PreflightItem",
     "PreservedFile",
@@ -57,5 +80,9 @@ __all__ = [
     "SpendEntry",
     "SpendJournal",
     "StageNotAuthorizedError",
+    "UnknownStrategyError",
+    "compact_sizing",
+    "part_sizing",
+    "repair_sizing",
     "sized_output_tokens",
 ]

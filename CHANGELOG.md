@@ -7,6 +7,114 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 `Data migrations` and `Operational changes`.
 
 
+## Phase 2.1 — model-directed multipart filing parsing (2026-08-03)
+
+**ONE FILING PARSE MAY NOW USE MANY PROVIDER RESPONSES.** Phase 2 sent a filing intact and then
+expected the whole parsed artifact back in ONE response. Thirty preserved invocations measured what
+that costs: three of five candidates cap output at 8,000 tokens, four of that benchmark's five
+truncation failures were that cap, and the deepest parse produced — 73 nodes, 69 of 72 references
+resolved — was itself truncated at 8,000 with no way to finish it. **An output cap applies to one
+response, not to a parse.** That assumption is withdrawn. Decision:
+`docs/adr/ADR-0020-model-directed-multipart-parsing.md`.
+
+**THE MODEL DIVIDES THE FILING; THE BACKEND DOES NOT.** Part boundaries, identifiers, titles,
+section names, node types, table labels, relationships, subparts and unresolved material are all
+model-created. Measured against a real model: `GPT OSS 120B` divided the preserved 3M 10-K405 of
+1996 into **24 parts it named itself** — `item-7-md&a`, `auditor-report`, `exhibit-27-1995` — and
+four completed parts resolved **65 of 66 source references** against the preserved bytes.
+
+**WHAT IS STILL NOT TRUE.** No application database. No Redis. No summary, image or chat artifact —
+Phase 2.1 multiplies the number of PARSER calls and authorizes no other stage. No parser has been
+selected, ranked or promoted; all five remain equally available. No breadth run across the 22 form
+strings. Prompt caching was investigated and is available for none of the candidates. Nothing is
+deployed.
+
+**THE FIVE-MODEL PROOF IS INCOMPLETE, AND THE REASON IS EXTERNAL.** The AWS IAM Identity Center
+session expired mid-run at `2026-08-04T02:18:20Z`. The orchestrator recorded a non-retryable
+provider error, marked the task FAILED with the reason, and stopped — nothing was retried,
+substituted, or lost. `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
+
+### Added
+
+- **`packages/multipart`** — the model-directed envelopes (plan, part, replan, amendment), their
+  GENERIC structural validation, safe carriage of a model-created identifier, and mechanical
+  assembly. Elastic by construction: every unknown key survives, a missing envelope key is a
+  finding rather than a refusal, and an unrecognised part status is preserved exactly and treated
+  as unfinished. **There is no vocabulary of part types anywhere in it**, and an architecture test
+  fails the build if a filing-section name appears as an evaluated literal.
+- **A durable hierarchical task queue** in `packages/evaluation_store` — eleven task types,
+  fourteen states, and a THIRD state machine that is never derived from the execution or review
+  machines. `TRUNCATED` is terminal by construction, so a truncated attempt cannot be reopened;
+  `FAILED` and `INTERRUPTED` reopen only through an explicit user action that takes a new
+  reservation. Dependencies are durable records rather than filesystem polling.
+- **Six immutable prompt families** — plan, part, replan, reconcile, gap and format-repair. The
+  semantic request is carried over from `parser-complete-filing@2` word for word where it applies,
+  so the multipart-versus-single-response comparison measures the protocol rather than the prompt.
+  The two single-response versions are untouched.
+- **A three-ceiling spend journal** — cumulative, phase, and one filing's own parse. Every provider
+  attempt reserves its conservative worst case before the call and settles after it; a failed
+  attempt's reservation is not released; a retry takes a second reservation. A refusal PAUSES the
+  branch with the reason visible.
+- **An output-sizing policy** — the cap handed to the provider and the target the model is told are
+  different numbers, and the gap between them is deliberate headroom. A model that spends output on
+  reasoning gets a materially smaller target, from a measured field in the capability snapshot
+  rather than a name test in code.
+- **The multipart review surface** — the call hierarchy in the model's own order, a per-call review
+  page with raw, parsed and side-by-side views, an assembled index that says it is an index, and
+  authenticated queue controls behind CSRF.
+- **`docs/llm/prompt-caching-investigation.md`** — the live control plane exposes no caching field
+  on any of 119 models; AWS documents prompt caching for Claude, GPT-5.6 and Amazon Nova and for
+  none of the five candidates. Recorded with its limits, including what could not be verified.
+
+### Changed
+
+- **`rules.md` section 21 gained three mandatory rules**, all prohibitions: blind continuation is
+  prohibited; the model owns every semantic decision in a multipart parse; no billable multipart
+  call without its own reservation. Rule 6 is CLARIFIED and not weakened — every semantic
+  invocation still receives the complete source set intact. Rule 7's required approval is recorded
+  for multipart OUTPUT only; mechanical multipart INPUT and visible-content projection remain
+  unapproved.
+- **The capability snapshot gained one measured field**, `emits_reasoning_before_answer`, from the
+  Phase 2 record: GPT OSS 120B returned reasoning content on 6 of 6 attempts, up to 14,980
+  characters; the other four returned none on 6 of 6. No existing value changed.
+- **`packages/coverage_validation`** takes a supplied envelope and an explicit
+  `require_every_artifact_referenced` flag, so one PART is not judged on whether it cited every
+  artifact in the filing. That question is asked at the assembly level, where it is meaningful.
+- **`packages/storage` gained `fingerprint()`**, letting the evaluation store memoise a parsed task
+  manifest against modification time and size. Measured: 460 manifest parses in one 41-second run,
+  27 seconds of it inside the YAML parser. The cache cannot serve a stale record.
+
+### Fixed
+
+- **A parse whose planning call never returned reported `MECHANICALLY_ASSEMBLED`.** Found by a live
+  run, not by an assertion: with zero parts and zero expected parts, `terminal < parts_expected`
+  was `0 < 0`. An emptiness that satisfies every count is the most dangerous shape a status check
+  can have. `parts_expected` now comes from the PLAN, and both "no readable plan" and "no parts at
+  all" are checked explicitly.
+- **The content boundary could not express a request the protocol requires.** `MARKDOWN_FENCE` was
+  among the violations still applied to a document proven to parse as one YAML mapping — correct
+  about a fenced document, wrong about the check, which is a textual search that a literal block
+  scalar can trip. The replanning call must carry an exact truncated response, and the format-repair
+  call must carry an exact malformed response that is very often malformed *because* it is fenced.
+  The narrowing is demonstrated: a fence-wrapped document cannot parse as a YAML mapping, so it
+  cannot reach that branch. Mutation proofs assert that fenced and JSON documents are both still
+  refused.
+
+### Operational changes
+
+- New environment variables, all with safe defaults: `SPEND_PHASE`, `PHASE_COST_CEILING_USD`
+  (no default — an unset phase ceiling means none), `MULTIPART_FILING_BUDGET_USD`,
+  `MULTIPART_MAX_DEPTH`, `MULTIPART_RECONCILIATION_CYCLES`.
+- A restart now marks in-flight work interrupted at BOTH levels — child jobs and multipart tasks —
+  and still re-invokes nothing. A resume reopens only the branch that was interrupted; completed
+  parts are kept.
+
+### Data migrations
+
+None. There is no database. The child-job manifest gained three optional fields and reads a Phase 2
+manifest back unchanged; the spend journal gained two optional entry fields with the same property.
+
+
 ## Phase 2 — intact-filing parser experiments and the parser-review UI (2026-08-03)
 
 **AN SEC FILING WAS PARSED BY A REAL MODEL FOR THE FIRST TIME IN THIS PROJECT'S HISTORY.** Phase 1

@@ -30,6 +30,10 @@ class JobNotFoundError(EvaluationStoreError):
     """No child job exists under that identifier."""
 
 
+class TaskNotFoundError(EvaluationStoreError):
+    """No multipart task exists under that identifier, inside that child job."""
+
+
 class RecordFormatError(EvaluationStoreError):
     """A stored manifest is missing a required field or carries the wrong shape.
 

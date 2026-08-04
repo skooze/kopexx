@@ -4,14 +4,37 @@ IMPLEMENTATION STATUS: IMPLEMENTED — the format machinery only
 OWNER PACKAGE: `packages/llm_gateway`
 DECISION RECORD: `docs/adr/ADR-0013-plain-text-or-yaml-llm-boundary.md`
 
-> **NO MODEL HAS EVER BEEN INVOKED, AND NO REQUEST OR RESPONSE CONTRACT IS DECLARED.** The
-> compiler, the validator, the safe parser, the budget guard and the audit record are implemented
-> and exercised against the mock provider. What a real model is *asked* and what it *returns* are
-> unknown, so this document specifies FORMAT and nothing else. The footnote-shaped request contract
-> it used to list — `compile_footnote_summary_request`, a canonical footnote with its source blocks
-> and tables — was deleted with the deterministic parser whose output it carried. The real contracts
-> are derived from observed model behaviour, not declared here in advance. Authoritative:
-> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md` and `roadmap.md`.
+> **CORRECTED 2026-08-03. THE BANNER THIS REPLACES SAID "NO MODEL HAS EVER BEEN INVOKED", AND THAT
+> STOPPED BEING TRUE IN PHASE 2.** Thirty single-response invocations and a model-directed multipart
+> run have crossed this boundary against real providers. What has NOT changed is the more important
+> half: **no request or response contract is declared here.** The compiler, the validator, the safe
+> parser, the budget guard and the audit record specify FORMAT and nothing else. The
+> footnote-shaped request contract this document used to list was deleted with the deterministic
+> parser whose output it carried, and the real contracts are still derived from observed model
+> behaviour rather than declared in advance. Authoritative:
+> `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
+> `docs/adr/ADR-0020-model-directed-multipart-parsing.md` and `roadmap.md`.
+>
+> **WHAT PHASE 2.1 ADDED TO THIS BOUNDARY.** A multipart brief is compiled as exactly one unfenced
+> YAML 1.2 document through `compile_yaml`, and carries filing identity, source-artifact filenames
+> and hashes, the model's own plan, the model's own part specification, and measured sizing numbers.
+> Every semantic word in one came from a model on an earlier call. The ORIGINAL-SOURCE EXCEPTION is
+> unchanged and is what carries the filing itself, intact, beside the brief on every semantic call.
+>
+> **ONE NARROWING, DEMONSTRATED RATHER THAN ARGUED.** `MARKDOWN_FENCE` no longer applies to a
+> document that PARSES as one YAML 1.2 mapping. It was there on the ground that "a fenced document
+> is fenced" — true of a fenced document, and not true of the CHECK, which is a textual search for
+> three backticks at the start of any line, and a YAML literal block scalar can contain such a line.
+> Two real request shapes must: the REPLANNING call carries the exact truncated response as
+> evidence, and the FORMAT-REPAIR call carries the exact malformed response, which is very often
+> malformed *because* it is fenced. Under the old rule neither request could be constructed at all.
+>
+> The narrowing is safe because a fence-wrapped document CANNOT reach that branch: `parse_yaml`
+> raises on both a language-tagged and a bare fenced document, so anything that parses as one
+> mapping is not fence-wrapped. JSON is a YAML subset and therefore DOES reach the branch, which is
+> why the JSON detectors stayed. `tests/unit/test_llm_boundary.py` asserts the load-bearing fact
+> directly and carries mutation proofs that a fenced document and a JSON document are both still
+> refused.
 
 ---
 

@@ -33,6 +33,7 @@ from packages.model_catalog import load_snapshot
 from packages.orchestrator import (
     BoundedWorker,
     CorpusFilingCatalog,
+    MultipartSettings,
     ParserReviewService,
     SpendJournal,
 )
@@ -123,6 +124,10 @@ def build(settings: Settings, *, provider: ModelProvider | None = None) -> Appli
     journal = SpendJournal(
         FilesystemObjectStore(review.evaluation_root),
         ceiling_usd=Decimal(review.cost_ceiling_usd),
+        phase=review.spend_phase,
+        phase_ceiling_usd=(
+            Decimal(review.phase_cost_ceiling_usd) if review.phase_cost_ceiling_usd else None
+        ),
     )
     snapshot = load_snapshot(Path(review.capability_snapshot).read_text(encoding="utf-8"))
     prompts = PromptRegistry.from_directory(review.prompt_directory)
@@ -153,11 +158,19 @@ def build(settings: Settings, *, provider: ModelProvider | None = None) -> Appli
         journal=journal,
         preferred_region=settings.llm.region or "",
         author=review.author_label,
+        multipart_settings=MultipartSettings(
+            max_depth=review.multipart_max_depth,
+            max_reconciliation_cycles=review.multipart_reconciliation_cycles,
+            filing_budget_usd=Decimal(review.multipart_filing_budget_usd),
+        ),
     )
 
     # A restart never resumes billable work. Anything mid-flight becomes INTERRUPTED and waits for
-    # a person; nothing is re-invoked.
+    # a person; nothing is re-invoked. BOTH LEVELS, because a multipart parse can be mid-flight
+    # at the task level while its child job sits perfectly still — and a completed part is kept,
+    # so a resume reruns only the branch that was actually interrupted.
     store.mark_interrupted_jobs()
+    store.mark_interrupted_tasks()
 
     worker = BoundedWorker(service, max_concurrency=review.max_concurrent_invocations)
     policy = SecurityPolicy(

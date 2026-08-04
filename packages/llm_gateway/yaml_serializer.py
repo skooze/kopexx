@@ -55,6 +55,18 @@ IDENTIFIER_KEYS: Final[frozenset[str]] = frozenset(
         "sequence_number",
         "id",
         "number",
+        # Added by Phase 2.1. Every one of these is an identifier a MODEL chose while reading a
+        # filing, and filings number things. A model that names a part `0405` or `12` produces an
+        # unquoted YAML integer, and the identifier the next request quotes back is then `405` or
+        # `12` — a part the model never named. The same class of defect as the CIK, one layer up.
+        "part_id",
+        "parse_plan_id",
+        "parent_part_id",
+        "plan_id",
+        "task_id",
+        "storage_token",
+        "root_job_id",
+        "parent_task_id",
         "fiscal_period",
         "fp",
         "fy",

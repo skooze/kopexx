@@ -90,23 +90,36 @@ The backend proves this against the preserved bytes. It doesn't take the model's
 | **Phase 0.5** — repository cleanup and corpus reverification | **COMPLETE** |
 | **Phase 1** — secure AWS access and model-capability verification | **COMPLETE** 2026-08-03 |
 | **Phase 2** — parser experiments *and* the review UI, built together | **COMPLETE** 2026-08-03 |
+| **Phase 2.1** — model-directed multipart parsing | **COMPLETE** 2026-08-03 |
 | Phases 3–8 — optional model stages, persistence, beta UI, Deep Dive | not started |
 
-**What exists today.** Sixteen small packages. The nine from before — SEC identity, the rate-limited
+**What exists today.** Seventeen small packages. The nine from before — SEC identity, the rate-limited
 SEC client, configuration, structured logging, object storage, filing discovery, byte-exact
 acquisition, the model gateway and the capability catalog — plus seven from Phase 2: durable
 evaluation storage, mechanical source-set assembly, output validation against the preserved bytes,
 hash-locked prompt versions, the orchestrator, and the review API and its pages. The model gateway
 now has a real Bedrock adapter, and the capability catalog now has the four-role router it was
-missing.
+missing. Phase 2.1 added one more: the model-directed multipart protocol.
 
 **And a UI you can actually open.** `make review` starts it on `127.0.0.1`. Pick a company, pick a
-parsing model, see what it would cost, run it, and read the parse beside the filing — raw, parsed,
-or both at once, with every citation checked against the original bytes.
+parsing model, choose a protocol, see what it would cost, run it, and read the parse beside the
+filing — raw, parsed, or both at once, with every citation checked against the original bytes.
+
+**One filing's parse no longer has to fit one model response.** Three of the five candidates cap
+output at 8,000 tokens, and Phase 2 measured what that costs: the deepest parse it produced was
+itself cut off with no way to finish. So a filing can now be parsed the way a person would read
+it — the model looks at the whole thing, says how it divides, and then produces one part at a
+time, with the complete filing in front of it every single time. If a part turns out too big, the
+model splits it. If a response gets cut off, that response is kept as evidence and the model is
+asked how to divide the part instead — never to "carry on", which is a thing no model can
+actually do reliably. At the end the backend puts the pieces in the order the model gave them,
+under the titles the model chose, and changes nothing.
 
 **What does not exist.** Any database. Any cache. Any summary. Any Deep Dive. Any deployment. Any
-image or chat capability — Phase 2 ran the parsing stage only, and the orchestrator refuses to run
-another. You can mark a parse approved; that records a judgement and nothing else happens.
+image or chat capability — Phase 2 and Phase 2.1 both ran the parsing stage only, and the
+orchestrator refuses to run another. You can mark a parse approved; that records a judgement and
+nothing else happens. **No parser has been picked.** All five are still on the table, and the
+single-response protocol still runs, so the two can be compared rather than assumed about.
 
 **What was deleted on 2026-08-03.** The deterministic footnote and table parser, the 24-table
 PostgreSQL schema and its migrations, the DERA mirror and fact loader, the accession document

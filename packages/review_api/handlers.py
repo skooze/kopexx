@@ -23,31 +23,50 @@ from typing import Any
 from packages.coverage_validation import read as read_parsed
 from packages.evaluation_store import (
     ExecutionState,
+    IllegalTransitionError,
     JobNotFoundError,
     ReviewState,
     RunNotFoundError,
+    TaskNotFoundError,
+    TaskType,
     permitted_review_transitions,
     summarise_run,
+    summarise_tasks,
 )
 from packages.evaluation_store.errors import InvalidIdentifierError
+from packages.multipart import PART_ENVELOPE_KEYS
 from packages.orchestrator import (
+    STRATEGIES,
     NoParsingModelError,
     ParserReviewService,
     RunRequest,
     StageNotAuthorizedError,
+    UnknownStrategyError,
+)
+from packages.orchestrator.multipart_service import (
+    REASONING_EVIDENCE as TASK_REASONING_EVIDENCE,
+)
+from packages.orchestrator.multipart_service import (
+    REQUEST_BRIEF_EVIDENCE as TASK_REQUEST_EVIDENCE,
+)
+from packages.orchestrator.multipart_service import (
+    RESPONSE_EVIDENCE as TASK_RESPONSE_EVIDENCE,
 )
 from packages.review_web import (
     SCRIPT,
     STYLESHEET,
+    assembled_page,
     esc,
     home,
     job_page,
     join,
     layout,
+    multipart_page,
     preflight_page,
     run_page,
     search_panel,
     tag,
+    task_page,
 )
 
 from .router import Request, Response, Router, as_json, html, redirect, text
@@ -114,6 +133,7 @@ class ReviewApp:
                 "from_date": request.q("from_date"),
                 "to_date": request.q("to_date"),
                 "accession": request.q("accession"),
+                "strategy": request.q("strategy"),
             },
             spend={
                 "spent_usd": str(self.service.journal.spent_usd),
@@ -133,6 +153,11 @@ class ReviewApp:
             image_label=form.get("image_label") or None,
             summary_label=form.get("summary_label") or None,
             analysis_label=form.get("analysis_label") or None,
+            # ABSENT MEANS THE PHASE 2 PROTOCOL, AND THAT IS BACKWARD COMPATIBILITY RATHER THAN A
+            # PREFERENCE. A request that names no strategy predates the choice existing; the UI
+            # form always sends one. `RunRequest` refuses anything it does not implement, so a
+            # misspelled value fails loudly instead of silently running the other protocol.
+            strategy=form.get("strategy") or STRATEGIES[0],
         )
 
     # --- registration -----------------------------------------------------------------------
@@ -186,6 +211,61 @@ class ReviewApp:
         )
         r.add("POST", "/runs/{run_id}/jobs/{job_id}/review", self.set_review, name="setReviewState")
         r.add("POST", "/runs/{run_id}/jobs/{job_id}/comments", self.add_comment, name="addComment")
+        # --- the model-directed multipart surface, added in Phase 2.1 -----------------------
+        r.add(
+            "GET",
+            "/runs/{run_id}/jobs/{job_id}/multipart",
+            self.multipart_html,
+            name="multipartPage",
+        )
+        r.add(
+            "GET",
+            "/runs/{run_id}/jobs/{job_id}/assembled",
+            self.assembled_html,
+            name="assembledPage",
+        )
+        r.add(
+            "GET",
+            "/runs/{run_id}/jobs/{job_id}/tasks/{task_id}",
+            self.task_html,
+            name="multipartTaskPage",
+        )
+        r.add(
+            "GET",
+            "/api/runs/{run_id}/jobs/{job_id}/tasks",
+            self.tasks_json,
+            name="listMultipartTasks",
+        )
+        r.add(
+            "GET",
+            "/api/runs/{run_id}/jobs/{job_id}/tasks/{task_id}",
+            self.task_json,
+            name="getMultipartTask",
+        )
+        r.add(
+            "GET",
+            "/api/runs/{run_id}/jobs/{job_id}/tasks/{task_id}/request",
+            self.task_request,
+            name="getExactTaskRequest",
+        )
+        r.add(
+            "GET",
+            "/api/runs/{run_id}/jobs/{job_id}/tasks/{task_id}/response",
+            self.task_response,
+            name="getExactTaskResponse",
+        )
+        r.add(
+            "GET",
+            "/api/runs/{run_id}/jobs/{job_id}/assembly",
+            self.assembly_json,
+            name="getAssembledParse",
+        )
+        r.add(
+            "POST",
+            "/runs/{run_id}/jobs/{job_id}/queue",
+            self.queue_control,
+            name="controlMultipartQueue",
+        )
 
     # --- health and assets ------------------------------------------------------------------
 
@@ -294,7 +374,7 @@ class ReviewApp:
         form = request.form()
         try:
             plan = self._plan(form)
-        except (NoParsingModelError, StageNotAuthorizedError) as error:
+        except (NoParsingModelError, StageNotAuthorizedError, UnknownStrategyError) as error:
             return html(
                 layout(
                     title="Preflight refused",
@@ -318,7 +398,7 @@ class ReviewApp:
         payload = request.json_body() or {}
         try:
             plan = self._plan({k: str(v) for k, v in payload.items()})
-        except (NoParsingModelError, StageNotAuthorizedError) as error:
+        except (NoParsingModelError, StageNotAuthorizedError, UnknownStrategyError) as error:
             return as_json({"code": "refused", "message": str(error)}, status=400)
         return as_json(plan.to_mapping())
 
@@ -341,7 +421,7 @@ class ReviewApp:
             run_request = self._request_from_form(form)
             plan = self.service.preflight(run_request)
             run = self.service.create_run(run_request, plan=plan)
-        except (NoParsingModelError, StageNotAuthorizedError) as error:
+        except (NoParsingModelError, StageNotAuthorizedError, UnknownStrategyError) as error:
             return as_json({"code": "refused", "message": str(error)}, status=400)
         self.worker.submit_run(run.run_id)
         if request.wants_html():
@@ -434,8 +514,15 @@ class ReviewApp:
                 events = store.read_events(run_id, after=cursor)
                 for event in events:
                     cursor = event.sequence
+                    # THE TASK IDENTIFIER IS THE ONLY THING PHASE 2.1 ADDED TO THE WIRE, and it is
+                    # an identifier this store issued. A multipart run emits many events per child
+                    # job — a plan, N parts, a truncation, a reconciliation — and a stream that
+                    # could name only the filing would leave a reviewer unable to tell which part
+                    # truncated. Still no provider payload, no credential and no filing text.
+                    attribution = f" [{event.task_id}]" if event.task_id else ""
                     yield (
-                        f"id: {event.event_id}\nevent: {event.kind}\ndata: {event.message}\n\n"
+                        f"id: {event.event_id}\nevent: {event.kind}\n"
+                        f"data: {event.message}{attribution}\n\n"
                     ).encode()
                 jobs = store.load_jobs(run_id)
                 if jobs and all(
@@ -638,6 +725,201 @@ class ReviewApp:
         comments = self.service.store.list_comments(request.params["run_id"])
         return as_json({"results": [c.to_mapping() for c in comments]})
 
+    # --- one multipart parse ----------------------------------------------------------------
+    #
+    # THE THIRTY HISTORICAL SINGLE-RESPONSE RUNS ARE UNAFFECTED BY EVERY ROUTE BELOW. A job that
+    # ran the Phase 2 protocol has no tasks and no assembly, so these pages report that plainly
+    # rather than failing — and the job page it already had is untouched.
+
+    def _tasks(self, run_id: str, job_id: str) -> list[dict[str, Any]]:
+        return [t.to_mapping() for t in self.service.store.load_tasks(run_id, job_id)]
+
+    def multipart_html(self, request: Request) -> Response:
+        run_id, job_id = request.params["run_id"], request.params["job_id"]
+        run = self.service.store.load_run(run_id)
+        job = self.service.store.load_job(run_id, job_id)
+        return self._page(
+            request,
+            title=f"Multipart parse {job.accession}",
+            panel=self._panel(request),
+            main=multipart_page(
+                run=run.to_mapping(),
+                job=job.to_mapping(),
+                tasks=self._tasks(run_id, job_id),
+                assembly=self.service.store.load_assembly(run_id, job_id),
+                csrf=self._csrf(request),
+            ),
+            run_id=run_id,
+        )
+
+    def assembled_html(self, request: Request) -> Response:
+        run_id, job_id = request.params["run_id"], request.params["job_id"]
+        assembly = self.service.store.load_assembly(run_id, job_id)
+        if assembly is None:
+            return as_json(
+                {"code": "not_found", "message": "no assembled parse is stored for this job"},
+                status=404,
+            )
+        return self._page(
+            request,
+            title=f"Assembled parse {request.params['job_id']}",
+            panel=self._panel(request),
+            main=assembled_page(
+                run=self.service.store.load_run(run_id).to_mapping(),
+                job=self.service.store.load_job(run_id, job_id).to_mapping(),
+                assembly=assembly,
+            ),
+            run_id=run_id,
+        )
+
+    def task_html(self, request: Request) -> Response:
+        run_id, job_id = request.params["run_id"], request.params["job_id"]
+        task_id = request.params["task_id"]
+        store = self.service.store
+        run = store.load_run(run_id)
+        job = store.load_job(run_id, job_id)
+        task = store.load_task(run_id, job_id, task_id)
+
+        view = request.q("view", "side-by-side")
+        if view not in _VIEWS:
+            view = "side-by-side"
+        artifacts = self._artifact_names(job)
+        artifact = request.q("artifact") or (artifacts[0] if artifacts else "")
+        offset, length = request.q("offset"), request.q("length")
+
+        def evidence(name: str) -> str:
+            return (
+                store.get_task_evidence_text(run_id, job_id, task_id, name)
+                if store.has_task_evidence(run_id, job_id, task_id, name)
+                else ""
+            )
+
+        raw_response = evidence(TASK_RESPONSE_EVIDENCE)
+        parsed = None
+        if raw_response:
+            try:
+                parsed = read_parsed(raw_response, envelope_keys=PART_ENVELOPE_KEYS).raw
+            except Exception:  # noqa: BLE001 - an unreadable response is shown raw, not hidden
+                parsed = None
+
+        return self._page(
+            request,
+            title=f"{task.task_type.value} {task.part_id or job.accession}",
+            panel=self._panel(request),
+            main=task_page(
+                run=run.to_mapping(),
+                job=job.to_mapping(),
+                task=task.to_mapping(),
+                view=view,
+                artifacts=artifacts,
+                artifact=artifact,
+                artifact_text=self._artifact_text(run_id, job, artifact),
+                focus=int(offset) if offset.isdigit() else None,
+                focus_length=int(length) if length.isdigit() else 1,
+                parsed=parsed if isinstance(parsed, dict) else None,
+                request_brief=evidence(TASK_REQUEST_EVIDENCE),
+                raw_response=raw_response,
+                reasoning=evidence(TASK_REASONING_EVIDENCE),
+                comments=[
+                    c.to_mapping()
+                    for c in store.list_comments(run_id, job_id=job_id)
+                    if c.target_id == task_id or c.target_type != "multipart_task"
+                ],
+                csrf=self._csrf(request),
+                permitted_reviews=sorted(
+                    s.value for s in permitted_review_transitions(job.review_state)
+                ),
+            ),
+            run_id=run_id,
+        )
+
+    def tasks_json(self, request: Request) -> Response:
+        run_id, job_id = request.params["run_id"], request.params["job_id"]
+        tasks = self.service.store.load_tasks(run_id, job_id)
+        return as_json(
+            {
+                "results": [t.to_mapping() for t in tasks],
+                "summary": summarise_tasks(tasks),
+            }
+        )
+
+    def task_json(self, request: Request) -> Response:
+        task = self.service.store.load_task(
+            request.params["run_id"], request.params["job_id"], request.params["task_id"]
+        )
+        return as_json(task.to_mapping())
+
+    def _task_evidence(self, request: Request, name: str) -> Response:
+        run_id, job_id = request.params["run_id"], request.params["job_id"]
+        task_id = request.params["task_id"]
+        if not self.service.store.has_task_evidence(run_id, job_id, task_id, name):
+            return as_json({"code": "not_found", "message": f"no {name} is stored"}, status=404)
+        return text(self.service.store.get_task_evidence_text(run_id, job_id, task_id, name))
+
+    def task_request(self, request: Request) -> Response:
+        return self._task_evidence(request, TASK_REQUEST_EVIDENCE)
+
+    def task_response(self, request: Request) -> Response:
+        return self._task_evidence(request, TASK_RESPONSE_EVIDENCE)
+
+    def assembly_json(self, request: Request) -> Response:
+        assembly = self.service.store.load_assembly(
+            request.params["run_id"], request.params["job_id"]
+        )
+        if assembly is None:
+            return as_json(
+                {"code": "not_found", "message": "no assembled parse is stored for this job"},
+                status=404,
+            )
+        return as_json(assembly)
+
+    def queue_control(self, request: Request) -> Response:
+        """Every control that resumes, retries, cancels or advances a multipart parse.
+
+        ONE ROUTE AND AN EXPLICIT ACTION NAME, rather than five routes. Each of these spends money
+        or unblocks something that will; keeping them together makes the CSRF requirement and the
+        authorization check impossible to apply to four of five by accident.
+        """
+        run_id, job_id = request.params["run_id"], request.params["job_id"]
+        form = request.form()
+        action = form.get("action", "")
+        multipart = self.service.multipart
+        try:
+            if action == "resume":
+                result: Any = {"resumed": multipart.resume(run_id, job_id)}
+            elif action == "unblock":
+                result = {"unblocked": multipart.unblock(run_id, job_id)}
+            elif action == "retry":
+                task = multipart.retry(run_id, job_id, form.get("task_id", ""))
+                result = {"retried": task.task_id}
+            elif action == "cancel_branch":
+                result = {
+                    "cancelled": multipart.cancel_branch(run_id, job_id, form.get("task_id", ""))
+                }
+            elif action == "advance":
+                result = {"ran": multipart.run_next(run_id, job_id)}
+            elif action == "reconcile":
+                # NARROWED TO RECONCILIATION, AND STILL SUBJECT TO THE DEPENDENCY RECORD. A
+                # reconciliation whose parts have not reached a terminal state does not run because
+                # a button was pressed; it reports that nothing was runnable.
+                result = {"ran": multipart.run_next(run_id, job_id, only=TaskType.RECONCILE_PARSE)}
+            else:
+                return as_json(
+                    {
+                        "code": "bad_request",
+                        "message": (
+                            "unknown queue action. There is no default: an unrecognised action "
+                            "must not quietly become one that spends money."
+                        ),
+                    },
+                    status=400,
+                )
+        except (TaskNotFoundError, IllegalTransitionError) as error:
+            return as_json({"code": "refused", "message": str(error)}, status=409)
+        if request.wants_html():
+            return redirect(f"/runs/{run_id}/jobs/{job_id}/multipart")
+        return as_json(result)
+
     # --- dispatch ---------------------------------------------------------------------------
 
     def handle(self, request: Request) -> Response:
@@ -674,7 +956,12 @@ class ReviewApp:
         )
         try:
             return self.policy.decorate(handler(bound))
-        except (RunNotFoundError, JobNotFoundError, InvalidIdentifierError) as error:
+        except (
+            RunNotFoundError,
+            JobNotFoundError,
+            TaskNotFoundError,
+            InvalidIdentifierError,
+        ) as error:
             return self.policy.decorate(
                 as_json({"code": "not_found", "message": str(error)}, status=404)
             )

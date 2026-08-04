@@ -32,7 +32,7 @@ from packages.llm_gateway import ContentFormat, validate
 
 from . import numbers as numeric
 from .errors import ResponseUnreadableError
-from .reader import ParsedDocument, read
+from .reader import PROVISIONAL_ENVELOPE_KEYS, ParsedDocument, read
 from .references import ArtifactIndex, ReferenceOutcome, Resolution
 
 
@@ -124,12 +124,24 @@ def validate_response(
     artifact_texts: dict[str, str],
     image_filenames: tuple[str, ...] = (),
     images_analysed: bool = False,
+    envelope_keys: tuple[str, ...] = PROVISIONAL_ENVELOPE_KEYS,
+    require_every_artifact_referenced: bool = True,
 ) -> tuple[ValidationResult, ParsedDocument | None]:
     """Validate one exact model response against the artifacts that were sent.
 
     `artifact_texts` is the DECODED text of each submitted artifact, keyed by the label the model
     was shown. Images have no text and are counted separately: an image is either analysed by a
     multimodal parser or reported unanalysed, and neither case is a citation target.
+
+    TWO PARAMETERS EXIST FOR ONE REASON: A PART IS NOT A WHOLE FILING.
+
+        `envelope_keys` names the provisional envelope this response was asked for.
+
+        `require_every_artifact_referenced` is what a SINGLE-RESPONSE parse is judged on and what a
+        PART must not be. One part of a multipart parse has no obligation to cite every submitted
+        artifact — it was asked for one part of the filing, and citing an exhibit it was not asked
+        about would be the defect, not the omission. Reported at the ASSEMBLY level instead, where
+        the question "did anything cite this artifact" is finally meaningful.
     """
     findings: list[str] = []
     boundary = validate(response_text, ContentFormat.YAML)
@@ -169,7 +181,7 @@ def validate_response(
         )
 
     try:
-        document = read(response_text)
+        document = read(response_text, envelope_keys=envelope_keys)
     except ResponseUnreadableError as error:
         findings.append(str(error))
         return (
@@ -224,7 +236,7 @@ def validate_response(
 
     referenced = {o.filename for o in outcomes if o.resolved}
     unreferenced = tuple(name for name in artifact_texts if name not in referenced)
-    if unreferenced:
+    if unreferenced and require_every_artifact_referenced:
         findings.append(
             f"{len(unreferenced)} submitted artifact(s) carry no resolved reference: "
             + ", ".join(unreferenced)
@@ -255,7 +267,7 @@ def validate_response(
         if (
             document.unresolved
             or unresolved_refs
-            or unreferenced
+            or (unreferenced and require_every_artifact_referenced)
             or image_filenames
             and not images_analysed
         )

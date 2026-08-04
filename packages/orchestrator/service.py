@@ -87,7 +87,10 @@ from .errors import (
     FilingNotInCatalogError,
     NoParsingModelError,
     StageNotAuthorizedError,
+    UnknownStrategyError,
 )
+from .multipart_service import MultipartParseService, MultipartSettings
+from .sizing import compact_sizing
 from .spend_journal import SpendJournal
 
 #: OUTPUT SIZING POLICY, documented because section 24.2 requires one rather than a habit.
@@ -105,6 +108,19 @@ from .spend_journal import SpendJournal
 #: output lengths from the first benchmark are what replace it.
 OUTPUT_RATIO_OF_INPUT: Final[float] = 0.6
 MINIMUM_PARSE_OUTPUT_TOKENS: Final[int] = 8000
+
+#: The two parsing protocols a user may choose between, and the reason both remain runnable.
+#:
+#: `single_response` is the Phase 2 protocol. It is not deprecated and is not removed: thirty
+#: preserved runs used it, and section 26 of the Phase 2.1 brief asks for a factual comparison
+#: between the two, which is impossible if one of them can no longer be run.
+#:
+#: THE DEFAULT IS `single_response`, AND THAT IS BACKWARD COMPATIBILITY RATHER THAN A PREFERENCE.
+#: A stored job with no `strategy` field is a Phase 2 job, and an API request that names no
+#: strategy predates the choice existing. The UI form always sends one explicitly.
+SINGLE_RESPONSE_STRATEGY: Final[str] = "single_response"
+MULTIPART_STRATEGY: Final[str] = "multipart"
+STRATEGIES: Final[tuple[str, ...]] = (SINGLE_RESPONSE_STRATEGY, MULTIPART_STRATEGY)
 
 #: Evidence file names. Fixed, lowercase and hyphenated so they satisfy the evaluation store's
 #: name guard and so a reviewer opening a job directory finds the same names every time.
@@ -143,6 +159,15 @@ class RunRequest:
     summary_label: str | None = None
     analysis_label: str | None = None
     temperature: float = 0.0
+    strategy: str = SINGLE_RESPONSE_STRATEGY
+
+    def __post_init__(self) -> None:
+        if self.strategy not in STRATEGIES:
+            raise UnknownStrategyError(
+                f"{self.strategy!r} is not a parsing strategy this repository implements. "
+                f"Choose one of: {', '.join(STRATEGIES)}. There is no default beyond the "
+                "backward-compatible one and no silent fallback."
+            )
 
     def selection(self) -> RoleSelection:
         # `.strip()` matters: a UI that sends a space for an unfilled field would otherwise slip
@@ -173,9 +198,11 @@ class PreflightItem:
     compatible: bool
     reason: str
     detail: str
+    strategy: str = SINGLE_RESPONSE_STRATEGY
+    first_call_worst_case_usd: Decimal | None = None
 
     def to_mapping(self) -> dict[str, Any]:
-        return {
+        mapping = {
             "filing": self.filing.to_mapping(),
             "source_set_id": self.source_set.source_set_id,
             "submitted_members": len(self.source_set.submitted_members),
@@ -188,7 +215,22 @@ class PreflightItem:
             "compatible": self.compatible,
             "reason": self.reason,
             "detail": self.detail,
+            "strategy": self.strategy,
         }
+        if self.strategy == MULTIPART_STRATEGY:
+            # A MULTIPART BOUND IS THE FILING'S OWN BUDGET, NOT A GUESS AT THE CALL COUNT. How many
+            # parts a filing has is exactly what the model decides in the first call, so any number
+            # this backend put here before that call would be an invented fact about the filing.
+            # What CAN be stated honestly before spending is the hard limit the parse cannot pass,
+            # and the cost of the one call that is certain to happen. The revised worst case
+            # arrives after the plan, when the part count is a measured thing.
+            mapping["first_call_worst_case_usd"] = str(self.first_call_worst_case_usd or 0)
+            mapping["bound_basis"] = (
+                "this filing's own budget ceiling. The number of part calls is decided by the "
+                "planning response and is not projected here; a revised worst case is computed "
+                "from the plan before any part is invoked."
+            )
+        return mapping
 
 
 @dataclass
@@ -200,6 +242,7 @@ class RunPlan:
     prompt: dict[str, Any] = field(default_factory=dict)
     ceiling_usd: Decimal = Decimal(0)
     already_spent_usd: Decimal = Decimal(0)
+    strategy: str = SINGLE_RESPONSE_STRATEGY
 
     @property
     def worst_case_total_usd(self) -> Decimal:
@@ -213,6 +256,14 @@ class RunPlan:
         return {
             "routing": self.routing,
             "prompt": self.prompt,
+            "strategy": self.strategy,
+            "strategy_note": (
+                "a model-directed multipart parse: a compact plan the model writes, one call per "
+                "part it names, subparts where it asks for them, and reconciliation. The complete "
+                "filing goes to the model intact on every one of those calls."
+                if self.strategy == MULTIPART_STRATEGY
+                else "one filing, one response. The Phase 2 protocol, kept runnable for comparison."
+            ),
             "filings": [i.to_mapping() for i in self.items],
             "compatible_filings": sum(1 for i in self.items if i.compatible),
             "incompatible_filings": sum(1 for i in self.items if not i.compatible),
@@ -244,6 +295,7 @@ class ParserReviewService:
         journal: SpendJournal,
         preferred_region: str,
         author: str,
+        multipart_settings: MultipartSettings | None = None,
     ) -> None:
         self._store = store
         self._catalog = catalog
@@ -255,6 +307,18 @@ class ParserReviewService:
         self._journal = journal
         self._region = preferred_region
         self._author = author
+        self._multipart_settings = multipart_settings or MultipartSettings()
+        self._multipart = MultipartParseService(
+            store=store,
+            snapshot=snapshot,
+            prompts=prompts,
+            inventory=inventory,
+            fetcher=fetcher,
+            provider=provider,
+            journal=journal,
+            settings=self._multipart_settings,
+            author=author,
+        )
 
     # --- read paths ------------------------------------------------------------------------------
 
@@ -269,6 +333,26 @@ class ParserReviewService:
     @property
     def journal(self) -> SpendJournal:
         return self._journal
+
+    @property
+    def multipart(self) -> MultipartParseService:
+        """The model-directed multipart workflow, sharing this service's store and journal."""
+        return self._multipart
+
+    @property
+    def multipart_settings(self) -> MultipartSettings:
+        return self._multipart_settings
+
+    def prompt_for_strategy(self, strategy: str) -> Any:
+        """The prompt a run of this strategy STARTS from.
+
+        A multipart run starts from the planning family and goes on to use four more; a
+        single-response run uses exactly one. The child job records the first, and every task
+        records its own, so the assembly can name all of them.
+        """
+        if strategy == MULTIPART_STRATEGY:
+            return self._prompts.active_for("parsing_multipart_plan")
+        return self._prompts.active_for(ModelRole.PARSING.value)
 
     @property
     def preferred_region(self) -> str:
@@ -344,14 +428,16 @@ class ParserReviewService:
         selection = request.selection()
         routed = route_selection(self._snapshot, selection, preferred_region=self._region)
         parsing = routed[ModelRole.PARSING]
-        prompt = self._prompts.active_for(ModelRole.PARSING.value)
+        prompt = self.prompt_for_strategy(request.strategy)
         capability = parsing.capability
+        multipart = request.strategy == MULTIPART_STRATEGY
 
         plan = RunPlan(
             routing={role.value: decision.to_mapping() for role, decision in routed.items()},
             prompt=prompt.to_mapping(),
             ceiling_usd=self._journal.ceiling_usd,
             already_spent_usd=self._journal.spent_usd,
+            strategy=request.strategy,
         )
 
         for filing in self._resolve_filings(request):
@@ -374,11 +460,18 @@ class ParserReviewService:
                 requested_output_tokens=0,
                 model_accepts_images=capability.multimodal,
             )
-            requested_output = sized_output_tokens(
-                estimated_input_tokens=probe.estimated_input_tokens,
-                model_max_output=capability.max_output_tokens,
-                model_context=capability.context_tokens,
-            )
+            if multipart:
+                requested_output = compact_sizing(
+                    capability,
+                    estimated_input_tokens=probe.estimated_input_tokens,
+                    kind="plan",
+                ).requested_output_tokens
+            else:
+                requested_output = sized_output_tokens(
+                    estimated_input_tokens=probe.estimated_input_tokens,
+                    model_max_output=capability.max_output_tokens,
+                    model_context=capability.context_tokens,
+                )
             report = assess(
                 source_set,
                 prompt_text=prompt.text + instruction,
@@ -386,20 +479,25 @@ class ParserReviewService:
                 requested_output_tokens=requested_output,
                 model_accepts_images=capability.multimodal,
             )
+            first_call = self._journal.bound(
+                capability.price,
+                max_input_tokens=report.estimated_input_tokens,
+                max_output_tokens=requested_output,
+            )
             plan.items.append(
                 PreflightItem(
                     filing=filing,
                     source_set=source_set,
                     compatibility=report.to_mapping(),
                     requested_output_tokens=requested_output,
-                    worst_case_cost_usd=self._journal.bound(
-                        capability.price,
-                        max_input_tokens=report.estimated_input_tokens,
-                        max_output_tokens=requested_output,
+                    worst_case_cost_usd=(
+                        self._multipart_settings.filing_budget_usd if multipart else first_call
                     ),
                     compatible=report.compatible,
                     reason=report.reason,
                     detail=report.detail,
+                    strategy=request.strategy,
+                    first_call_worst_case_usd=first_call,
                 )
             )
         return plan
@@ -420,7 +518,7 @@ class ParserReviewService:
 
         plan = plan or self.preflight(request)
         parsing = routed[ModelRole.PARSING]
-        prompt = self._prompts.active_for(ModelRole.PARSING.value)
+        prompt = self.prompt_for_strategy(request.strategy)
         entity = self._catalog.entity(request.cik)
 
         run = RunRecord(
@@ -476,6 +574,12 @@ class ParserReviewService:
                 settings=ParserSettings(
                     max_output_tokens=item.requested_output_tokens,
                     temperature=request.temperature,
+                ),
+                strategy=request.strategy,
+                budget_ceiling_usd=(
+                    self._multipart_settings.filing_budget_usd
+                    if request.strategy == MULTIPART_STRATEGY
+                    else None
                 ),
                 source_set_id=item.source_set.source_set_id,
                 source_set=item.source_set.to_mapping(),
@@ -590,10 +694,18 @@ class ParserReviewService:
         return tuple(blocks)
 
     def execute_job(self, run_id: str, job_id: str) -> JobRecord:
-        """Invoke the parser for one child job, preserve everything, validate, and stop."""
+        """Invoke the parser for one child job, preserve everything, validate, and stop.
+
+        DISPATCHES ON THE RECORDED STRATEGY, NOT ON A FLAG PASSED IN. The strategy is durable on
+        the job, so a worker that picks the job up minutes later, or after a restart, runs the
+        protocol the run was created with rather than whatever is configured now.
+        """
         job = self._store.load_job(run_id, job_id)
         if job.execution_state is not ExecutionState.QUEUED:
             return job
+        if job.strategy == MULTIPART_STRATEGY:
+            self._multipart.start(run_id, job_id)
+            return self._multipart.drive(run_id, job_id)
 
         filing = self._catalog.filing(job.cik, job.accession)
         assert filing is not None  # a job is never created for a filing the catalog lacks

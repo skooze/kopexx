@@ -130,6 +130,16 @@ class ModelCapability:
     smoke_instruction: SmokeInstruction
     blocker: str | None
     disabled_reason: str | None
+    #: Whether this model spends part of its OUTPUT allowance on reasoning content before its
+    #: answer. It changes how much visible content a caller may ask for and is therefore a sizing
+    #: input, not a curiosity.
+    #:
+    #: THE DEFAULT IS `True`, AND THE ASYMMETRY IS THE REASON. Assuming a model reasons when it
+    #: does not produces a smaller target: more parts, slightly more cost, no lost work. Assuming
+    #: it does not when it does produces a target sized for the answer alone — which Phase 1
+    #: measured as a well-formed response with no text in it, and which at multipart scale is a
+    #: truncated part and a replanning cycle. An unmeasured candidate gets the safe direction.
+    emits_reasoning_before_answer: bool = True
 
     def __post_init__(self) -> None:
         if self.multimodal and not (self.image_input and self.image_verified):

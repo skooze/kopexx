@@ -278,6 +278,46 @@ def search_panel(
             ),
         )
 
+    # THE PROTOCOL IS AN EXPLICIT CHOICE WITH BOTH OPTIONS VISIBLE, NEVER A HIDDEN DEFAULT.
+    # Phase 2.1 added model-directed multipart parsing and did NOT retire the single-response
+    # protocol: thirty preserved runs used it, and the comparison the phase exists to enable
+    # requires both to remain runnable. Multipart is preselected because it is the intended
+    # product behaviour; single response is one click away and says what it is.
+    strategy = chosen.get("strategy") or "multipart"
+    strategy_control = join(
+        tag("label", "Parsing protocol", for_="sel-strategy"),
+        tag(
+            "select",
+            join(
+                tag(
+                    "option",
+                    esc(
+                        "Multipart, model-directed — the model plans, then produces one part per "
+                        "call"
+                    ),
+                    value="multipart",
+                    selected=(strategy == "multipart"),
+                ),
+                tag(
+                    "option",
+                    esc("Single response — the Phase 2 protocol, kept for comparison"),
+                    value="single_response",
+                    selected=(strategy == "single_response"),
+                ),
+            ),
+            name="strategy",
+            id="sel-strategy",
+        ),
+        tag(
+            "p",
+            esc(
+                "The complete filing goes to the model intact under both. What differs is whether "
+                "the whole parse has to fit in one response."
+            ),
+            class_="hint",
+        ),
+    )
+
     can_run = bool(entity and parsing_label and parsing_entry and parsing_entry["available"])
     blocked = (
         ""
@@ -323,6 +363,7 @@ def search_panel(
                 tag("input", "", type="hidden", name="cik", value=entity["cik"] if entity else ""),
                 timeframe,
                 filing_options,
+                strategy_control,
                 _selector("parsing", roles["parsing"], parsing_label, disabled=False),
                 _selector(
                     "image", roles["image"], chosen.get("image_label", ""), disabled=multimodal
@@ -584,10 +625,20 @@ def run_page(
                     tag(
                         "a",
                         esc(j["job_id"]),
-                        href=url("runs", run["run_id"], "jobs", j["job_id"]),
+                        # A MULTIPART JOB OPENS AT ITS HIERARCHY, NOT AT THE SINGLE-RESPONSE PAGE.
+                        # Both pages exist for both kinds of job; what changes is which one answers
+                        # the first question a reviewer has about this job.
+                        href=url(
+                            "runs",
+                            run["run_id"],
+                            "jobs",
+                            j["job_id"],
+                            *(("multipart",) if j.get("strategy") == "multipart" else ()),
+                        ),
                     ),
                     class_="mono",
                 ),
+                tag("td", esc(j.get("strategy") or "single_response")),
                 tag("td", esc(j["filing"]["form_as_filed"])),
                 tag("td", esc(j["filing"]["accession"]), class_="mono"),
                 tag(
@@ -654,6 +705,7 @@ def run_page(
                                             tag("th", h)
                                             for h in (
                                                 "job",
+                                                "protocol",
                                                 "form",
                                                 "accession",
                                                 "execution",

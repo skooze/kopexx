@@ -1064,15 +1064,23 @@ def test_an_event_with_no_child_job_reads_back_as_none_not_an_empty_string(
 
 
 def test_an_event_carries_no_filing_text_and_no_provider_payload(store: EvaluationStore) -> None:
-    """An event has five fields and nothing else; large or untrusted content is referenced.
+    """An event has six fields and nothing else; large or untrusted content is referenced.
 
     Filing text may carry an instruction a prompt injection placed inside a filing, and provider
     payloads carry request identifiers a browser has no business seeing.
+
+    THE SIXTH FIELD IS `task_id`, ADDED IN PHASE 2.1, AND IT IS AN IDENTIFIER RATHER THAN CONTENT.
+    A multipart parse emits many events per child job — a plan, N parts, a truncation, a
+    reconciliation — and a stream that could only name the FILING would leave a reviewer unable to
+    tell which part truncated. The assertion stays an EXACT set for the reason it always was: the
+    thing this test protects against is a field quietly appearing that carries a filing or a
+    provider envelope, and only an exact set catches that.
     """
     run = make_run()
     store.save_run(run)
     event = store.append_event(run.run_id, kind="progress", job_id=None, message="working")
-    assert set(vars(event)) == {"sequence", "at", "kind", "job_id", "message"}
+    assert set(vars(event)) == {"sequence", "at", "kind", "job_id", "message", "task_id"}
+    assert event.task_id is None, "an event about no task must not invent one"
 
 
 # --- comments ------------------------------------------------------------------------------------

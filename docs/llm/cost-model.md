@@ -105,6 +105,73 @@ DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
 
 ---
 
+# WHAT PHASE 2.1 CHANGES ABOUT COST — added 2026-08-03
+
+**MULTIPART PARSING COSTS MORE PER FILING AND BUYS COVERAGE. THE SHAPE OF THE ARITHMETIC CHANGES,
+NOT JUST THE NUMBER.**
+
+Under the single-response protocol, one filing cost one call: one input charge for the intact
+filing, one output charge for whatever came back. Under model-directed multipart, one filing costs
+`1 + N + R` calls — one plan, N parts, R reconciliation and repair calls — **and every one of them
+re-sends the intact filing and pays the full uncached input rate for it.**
+
+```
+single response   cost  =  price_in x T_src              +  price_out x T_out
+multipart         cost  =  price_in x T_src x (1+N+R)    +  price_out x SUM(T_part)
+```
+
+**THE INPUT TERM IS THE ONE THAT GREW, AND IT GREW BY A FACTOR OF THE CALL COUNT.** There is no
+prompt-caching relief: AWS documents prompt caching for Claude, GPT-5.6 and Amazon Nova, and for
+none of the five approved candidates. See `prompt-caching-investigation.md`, which records the live
+control-plane evidence, the documentation evidence, and what could not be verified.
+
+## What was actually measured, and how little it is
+
+**ONE CANDIDATE, ONE FILING, FIVE CALLS.** `GPT OSS 120B` against the preserved 3M 10-K405 of 1996,
+`0000066740-96-000005`, 146,471 bytes. Provider-reported counts, not estimates.
+
+```
+planning call             36,414 input   3,093 output   USD 0.00731790
+part: cover-page          measured       4,006 output   USD 0.00815655
+part: item-1-business     measured       3,416 output   USD 0.00780405
+part: item-2-properties   measured       2,313 output   USD 0.00714000
+part: item-3-legal...     measured       2,941 output   USD 0.00751860
+```
+
+The model planned **24 parts**. At the observed per-call cost that implies roughly **USD 0.19** for
+this filing under multipart, against **USD 0.0078** measured for the same model and filing under
+single response in Phase 2 — very close to a factor of 24, which is what an input-dominated cost
+model predicts when the input is re-sent per call.
+
+**FOUR OF THE FIVE CANDIDATES HAVE NOT RUN**, twenty of the twenty-four parts have not run, and
+the multimodal filing has not run at all. The blocker is an expired AWS IAM Identity Center session
+and is recorded in `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
+
+**FIVE CALLS IS NOT A DENOMINATOR.** Nothing here extrapolates to a corpus, to another candidate, or
+to a filing of a different size. What it establishes is the SHAPE of the arithmetic and one
+data point inside it.
+
+## What the ceilings do about it
+
+Three, and the tightest refuses:
+
+```
+cumulative    everything this repository has ever authorized. Never resets.
+phase         what the currently authorized task may spend against the same durable journal.
+filing run    what ONE filing's parse may spend across every call it queues.
+```
+
+The filing-run ceiling exists because a multipart parse can queue a dozen billable calls off one
+plan, and without it a single filing that planned ambitiously could consume the whole authorization
+before another filing ran. A refusal PAUSES the branch with its reason visible; nothing is shrunk,
+dropped or downgraded to fit, and nothing already produced is discarded.
+
+Every provider attempt reserves its conservative worst case before the call and settles against
+measured usage after it. **A failed attempt's reservation is not released** — that request was
+issued and cost money — and a retry takes a second reservation.
+
+---
+
 # WHAT PHASE 2 ACTUALLY MEASURED — added 2026-08-03
 
 **THE PRICE INPUTS WERE ALREADY REAL. THE TOKEN COUNTS NOW ARE TOO.** Phase 1 verified official

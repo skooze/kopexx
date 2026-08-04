@@ -1,0 +1,192 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, together with a plan you produced earlier
+for parsing it. Your task on this call is to produce ONE part of that plan, completely.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. The filename is a transport identifier only. It
+carries no meaning you should rely on, and neither does the order in which artifacts arrive beyond
+the fact that it is the order in which they were filed.
+
+An artifact may be plain text, SGML, HTML, or XHTML with inline XBRL markup. Older filings are
+frequently malformed by modern standards. Read through the markup to the content.
+
+Some filings arrive as one complete submission file containing several documents end to end. When
+that happens, treat every document inside it as part of the same filing.
+
+You also receive a PART BRIEF stating the plan, which part_id you are being asked for now, what you
+said that part would contain, the output limit of this call, the size this part should aim for, the
+response headroom reserved, and whether your reasoning content consumes the same allowance as your
+answer.
+
+THIS CALL STANDS ALONE
+
+You are not continuing anything. No previous response is in front of you and none is expected to
+be. The other parts of this plan are being produced by other calls, each of which also receives
+this same complete filing. Nothing you write here needs to reference, complete, or avoid repeating
+the text of another response.
+
+That is why what you return must be a whole, valid document by itself. It will be read on its own,
+reviewed on its own, and re-run on its own if it needs to be.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it, and do not explain what
+you are about to do. The very first character you emit must be the letter p, from the word
+parse_plan_id, which is the first key of the document. The very last character must be the last
+character of the last value.
+
+A fenced response cannot be read as a parse, so it is thrown away whatever else is right about it.
+
+Your response must PARSE. Getting this wrong wastes the whole reading, so it is worth the care.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That covers almost every quote you copy out of a filing, because filings are written in markup and
+their prose is full of colons. When in doubt, quote it.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a
+number but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+THE DOCUMENT
+
+parse_plan_id
+    the identifier of the plan you were given, copied exactly, quoted
+
+part_id
+    the identifier of the part you were asked for, copied exactly, quoted
+
+parent_part_id
+    the identifier of the part this one belongs under, when you were asked for a subpart.
+    Omit this key otherwise.
+
+status
+    exactly one of these five words:
+
+      complete                        you produced this part in full
+      needs_subparts                  this part is too large for one response and you are
+                                      proposing how to divide it instead
+      source_ambiguity                you cannot tell which source material this part refers to
+      image_dependency_unavailable    this part depends on an image you were not given
+      unable_to_complete              you cannot produce this part, for a reason you state
+
+title
+    what the FILING calls this material, copied as the filing writes it
+
+type
+    what KIND of material this is, in your own words
+
+nodes
+    an ordered list representing this part's own structure, in the order the filing presents it.
+    Omit this key when status is needs_subparts.
+
+unresolved
+    a list of anything within this part you could not account for, each with
+      where        where in the source it appears, as precisely as you can say
+      what         what it appears to be
+      why          why you could not resolve it
+
+coverage_summary
+    one or two sentences on what this part covers and where it stops
+
+subparts_required
+    true when status is needs_subparts
+
+proposed_subparts
+    an ordered list, present only when you are proposing subparts, each with
+      part_id      a short identifier you choose, unique, quoted, and different from every
+                   part_id already in the plan
+      order        an integer
+      title        what the filing calls that material
+      type         what kind of material it is
+      purpose      one sentence on what that subpart will contain
+
+image_references
+    a list of the images this part depends on, each with a filename and a note, when any
+
+metadata
+    anything else worth recording about this part
+
+EVERY NODE
+
+Each entry in nodes may carry these keys. Only id, type, title and order are required.
+
+    id            a short identifier you choose, unique within this response, quoted
+    order         an integer, the position of this node among its siblings
+    type          what KIND of thing this is, in your own words
+    title         the title the FILING uses for it, copied as the filing writes it
+    parent_id     the id of the node this belongs to, omitted for a top-level node
+    content       your description of what this section says, in plain prose
+    tables        a list of tables that appear here, each with a caption and its rows
+    source        a list of references locating this node in the source, see below
+    confidence    high, medium or low
+    ambiguity     what is unclear about this node, when something is
+    image         true when understanding this node depends on an image you were shown or were
+                  not shown
+    children      omit this key; express the hierarchy with parent_id instead
+
+USE THE FILING'S OWN NAMES
+
+Do not translate the filing's structure into a standard vocabulary. If the filing calls a section
+Item 7A, call it Item 7A. If it calls something Note 12 or Schedule II or Exhibit 21 or Report of
+Independent Registered Public Accounting Firm, use those words. If a section has no title, say so
+rather than inventing one.
+
+The same applies to type. Describe what a node is in whatever words fit. Two filings that organise
+themselves differently should produce differently shaped responses, and that is correct.
+
+SOURCE REFERENCES
+
+Every substantive node should carry at least one entry under source. Each entry has
+
+    filename      which source artifact it came from
+    quote         a short verbatim string copied exactly from that artifact, long enough to be
+                  found by searching for it and short enough to be one line. ALWAYS write this
+                  one in double quotes, whatever it contains.
+
+The quote is what makes the reference checkable. Copy it character for character from the source.
+Do not paraphrase it, do not normalise its spacing, and do not construct one that seems likely.
+If you cannot produce an exact quote for a node, omit source for that node rather than supplying
+an approximate one.
+
+STAY INSIDE YOUR PART
+
+Represent everything human-readable that belongs to THIS part, and nothing that belongs to another
+one. You are not being judged on covering the whole filing here; the other parts are covering the
+rest, and material repeated across parts has to be reconciled later at a cost.
+
+If you find material inside your part that the plan assigned elsewhere, leave it there and say so
+in metadata. If you find material inside your part that the plan assigned to nobody, include it and
+say so in metadata.
+
+Nothing within your part may be dropped for being routine, boilerplate, short, legal, repetitive or
+apparently unimportant. If you believe a passage is boilerplate, represent it and say so in content.
+
+If part of your material depends on an image and you were not given that image, create the node
+anyway, set image to true, and record in unresolved that its content could not be read.
+
+Numbers you report must appear in the source exactly as you write them, including their sign,
+their scale and their currency or percentage marks.
+
+IF THIS PART IS TOO LARGE
+
+Decide that BEFORE you start writing content, not after you run out of room. Compare what this part
+actually contains against the size you were told to aim for.
+
+If it will not fit, set status to needs_subparts, omit nodes entirely, and return an ordered
+proposed_subparts list that divides this part completely. Each subpart will be requested as its own
+call, with this same complete filing in front of you again.
+
+A response that begins parsing and stops in the middle is worth less than a response that says the
+part is too big and how to divide it. The first has to be thrown away. The second is a plan.

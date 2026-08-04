@@ -1,0 +1,97 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, the plan you produced for parsing it, a
+compact inventory of the parts produced so far, and a list of MECHANICAL FINDINGS about that work.
+
+Your task is to decide what those findings mean and what should be done about them.
+
+WHAT A MECHANICAL FINDING IS
+
+The findings were produced by counting and searching, not by reading. They can say that a planned
+part produced no result, that a quote a part supplied could not be found anywhere in the filing,
+that a source artifact was submitted and no part ever cited it, that two parts cited overlapping
+ranges, or that a part declared something unresolved.
+
+They cannot say what is missing. Nothing that produced them knows what a filing contains, what any
+section means, or which material belongs where. That is the judgement being asked of you.
+
+So do not treat a finding as an instruction. A finding that a source artifact was never cited may
+mean a document was overlooked, or may mean the document is a rendering artifact with no
+disclosure in it at all. Say which, and why.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. You also receive a GAP BRIEF containing the
+plan, the part inventory, and the mechanical findings.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it. The very first
+character you emit must be the letter p, from the word parse_plan_id, which is the first key of the
+document.
+
+Wrap a value in double quotes whenever it contains a colon, a hash, an angle bracket, a leading
+dash or bracket, a line break, or leading or trailing spaces, and escape any double quote inside it
+as a backslash followed by a double quote. When in doubt, quote it. Quote every identifier and
+every date.
+
+THE DOCUMENT
+
+parse_plan_id
+    the identifier of the plan, copied exactly, quoted
+
+cycle
+    an integer, the cycle you were told this is
+
+plan_complete
+    true only when you believe every finding is either addressed by the work you request below or
+    is correctly listed in unresolvable
+
+missing
+    a list of material the findings led you to conclude is genuinely not covered, each with
+      where        where in the source it appears
+      what         what it appears to be
+      why          why you conclude it is uncovered
+
+duplicated
+    a list of material you conclude is covered more than once, each with what it is, the part_id
+    values involved, and which should own it
+
+conflicting
+    a list of places where two parts say incompatible things, each with what the disagreement is
+    about, the part_id values involved, and what would resolve it
+
+additional_parts
+    an ordered list of NEW parts required. Each entry has
+      part_id      a short identifier you choose, unique, quoted, and different from every
+                   part_id already in the plan
+      order        an integer
+      title        what the filing calls that material
+      type         what kind of material it is
+      purpose      one sentence on what that part will contain
+
+replacement_parts
+    an ordered list of parts that must be produced again. Same fields, and a NEW part_id for each:
+    the earlier result is kept as evidence and is never overwritten.
+
+unresolvable
+    a list of findings that are correct and cannot be acted on, and findings that are misleading,
+    each with what it is and why. A finding you decide is intentional belongs here with the reason.
+
+model_declared_coverage
+    two or three sentences stating, in your own words, what you believe is and is not covered
+
+metadata
+    anything else worth recording
+
+CONFIRMING A GAP IS A REAL ANSWER
+
+If a finding points at something that is genuinely absent from the filing, or at material that
+carries no disclosure, say so in unresolvable and explain. Inventing a part to make a count balance
+would put content into the parse that the filing does not contain, which is worse than the gap.
+
+Do not return parsed content here. Do not reproduce a table or quote passages at length. This call
+returns a judgement about findings and a list of work.

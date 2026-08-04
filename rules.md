@@ -17,6 +17,13 @@ the four-role routing row that Phase 1 had left RESERVED. Nothing was relaxed: e
 names a package that exists and carries code, and the rows for `packages/artifact_store` and
 `packages/deep_analysis` stay RESERVED because those packages still do not exist.
 
+AMENDED 2026-08-03 by Phase 2.1 (ADR-0020), which recorded the user's EXPLICIT APPROVAL of
+model-directed multipart OUTPUT under section 21 rule 7, added three new mandatory rules to section
+21 as rules 18, 19 and 20, and added five single-home rows in section 5. Nothing was relaxed: rule 6
+is untouched and every semantic invocation still receives the complete source set intact; the
+approval covers OUTPUT only, and mechanical multipart INPUT and visible-content projection remain
+unapproved. The three new rules are prohibitions.
+
 AMENDED 2026-08-03 by the cleanup commit (ADR-0017), which DELETED the deterministic semantic
 parser, the application persistence layer, its migrations, and the DERA mirror and fact loader.
 Every amendment made that day is a STRENGTHENING or a correction of a statement that had become
@@ -500,6 +507,11 @@ Before writing a new function:
 | Parent-run orchestration and the cumulative spend journal | `packages/orchestrator/` |
 | The parser-review HTTP surface | `packages/review_api/` |
 | HTML rendering and escaping of untrusted content | `packages/review_web/` |
+| The model-directed multipart envelopes, their structural validation, and mechanical assembly | `packages/multipart/` |
+| Carrying a model-created part identifier safely | `packages/multipart/identity.py` |
+| The durable hierarchical task queue and its state machine | `packages/evaluation_store/tasks.py` and `queue_states.py` |
+| Multipart output sizing: the cap, the target and the headroom between them | `packages/orchestrator/sizing.py` |
+| The synthetic brief compiled for one multipart invocation | `packages/orchestrator/briefs.py` |
 | Artifact approval and reuse | `packages/artifact_store/` — RESERVED, Phase 4 |
 | Scope validation | `packages/deep_analysis/scope.py` — RESERVED, Phase 7 |
 
@@ -1140,8 +1152,9 @@ first by narrowing scope to financial-statement footnotes, then by answering tha
 *more complete deterministic parser*. Both drifts were confident, well-tested, and wrong. This
 section exists so a future agent cannot repeat either one.
 
-These seventeen rules are mandatory. Like sections 15 to 20 they may be strengthened without an
-ADR and may never be weakened.
+These TWENTY rules are mandatory. Like sections 15 to 20 they may be strengthened without an
+ADR and may never be weakened. Rules 18 to 20 were ADDED on 2026-08-03 by Phase 2.1, and every
+one of them is a prohibition.
 
 ```
  1. THE BACKEND DOES NOT BECOME THE AUTHORITATIVE SEMANTIC PARSER.
@@ -1169,11 +1182,24 @@ ADR and may never be weakened.
  6. INTACT_SOURCE_ONLY IS THE CURRENT AUTHORIZED INPUT MODE.
     The complete relevant human-readable source set is sent intact in one invocation, or the
     filing/model pairing is INCOMPATIBLE and is refused with an explanation.
+    CLARIFIED 2026-08-03, NOT WEAKENED. "In one invocation" governs the INPUT of each semantic
+    invocation and always did. A model-directed multipart parse makes many invocations, and EVERY
+    ONE of them receives the complete compatible source set intact, in filed order, hash-verified,
+    including the complete image set for a multimodal parser. Backend code still never truncates,
+    slices, projects or omits a source member.
 
  7. PROJECTION AND MULTIPART REQUIRE SEPARATE EXPLICIT APPROVAL.
     Visible-content projection, mechanical multipart, and any hybrid of the two are unapproved
     research options. They must never be described as accepted architecture, and a lower token
     cost is not authorization.
+    APPROVAL GRANTED 2026-08-03 FOR EXACTLY ONE OF THEM, AND THE SCOPE IS THE POINT. The user
+    explicitly authorized MODEL-DIRECTED MULTIPART OUTPUT: one logical filing parse composed from a
+    model-created plan, model-created part responses, model-created subparts, model-created
+    reconciliation and mechanical backend assembly. See ADR-0020.
+        STILL UNAPPROVED, AND THIS RULE STILL BINDS THEM: mechanical multipart INPUT, in which
+        backend code divides a filing and sends the pieces; visible-content projection, in which
+        backend code decides what the model may see; and any hybrid. A lower token cost is still
+        not authorization for either.
 
  8. MODEL ROLES ARE INDEPENDENTLY SELECTED BY THE USER.
     Parsing, image, summary and analysis/chat. No role inherits another's model.
@@ -1217,6 +1243,35 @@ ADR and may never be weakened.
 
 17. NO SPRINT IS COMPLETE WHILE CODE, DOCUMENTATION, ROADMAP AND ACTUAL PRODUCT DIRECTION
     DISAGREE. A green suite over the wrong product is not completion.
+
+18. BLIND CONTINUATION IS PROHIBITED. ADDED 2026-08-03 BY PHASE 2.1.
+    No request may ask a model to continue, resume or carry on an interrupted response, and no code
+    may concatenate response fragments into one document. A response that stops at a provider's
+    output limit is preserved exactly, marked TRUNCATED, and treated as EVIDENCE: it is never
+    marked complete and its partial content is never merged into an accepted artifact. The work it
+    did not finish is picked up by a model-directed REPLANNING call that receives the intact source
+    again and covers the WHOLE original part.
+        WHY THIS IS A PROHIBITION AND NOT A PREFERENCE. Nothing about a language model guarantees
+        it can resume the exact scalar a cap cut, close a structure it cannot see, avoid duplicating
+        what it already wrote, remember where generation stopped, or preserve identifiers and source
+        references. A protocol built on `continue` produces documents that cannot be validated
+        against the preserved bytes, and validation against the preserved bytes is the only thing
+        this repository trusts.
+
+19. THE MODEL OWNS EVERY SEMANTIC DECISION IN A MULTIPART PARSE. ADDED 2026-08-03.
+    Part boundaries, part identifiers, part titles, section and subsection names, node types, table
+    labels, footnote labels, relationships, additional required parts, subparts and unresolved
+    material are all created by the SELECTED PARSING MODEL. The backend supplies no part names, no
+    section vocabulary, no minimum or maximum part count and no rule about where a filing divides.
+    A model-created identifier is carried VERBATIM; a mechanically derived storage token may travel
+    beside it and never replaces it.
+
+20. NO BILLABLE MULTIPART CALL WITHOUT ITS OWN RESERVATION. ADDED 2026-08-03.
+    Every provider attempt reserves its conservative worst case before the call and settles against
+    measured usage after it. A failed attempt's reservation is NOT released. A retry is a second
+    call and takes a second reservation. Three ceilings apply — cumulative, phase and filing-run —
+    and the tightest one refuses. A refusal PAUSES the branch with its reason visible; nothing is
+    shrunk, dropped, downgraded or deferred to fit, and nothing already produced is discarded.
 ```
 
 WHY THIS IS AN INVARIANT AND NOT A PREFERENCE. Both drifts passed every gate the repository had at

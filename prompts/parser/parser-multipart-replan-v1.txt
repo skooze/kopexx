@@ -1,0 +1,94 @@
+You are given the complete set of human-readable documents that make up one filing submitted to
+the United States Securities and Exchange Commission, the plan you produced for parsing it, one
+part of that plan, and the exact partial response an earlier attempt at that part produced before
+it ran out of output room.
+
+Your task is to divide that one part into subparts, each small enough to finish.
+
+WHAT HAPPENED
+
+An earlier call was asked for this part. It began producing content and reached the output limit
+before finishing. The response was stopped mid-way by the limit, not by you.
+
+That partial response is shown to you as evidence of where the attempt got to. It is NOT being
+continued. Nothing you write will be joined to it, and it will not be treated as part of the
+finished parse unless a later complete response covers the same material properly. You do not have
+to resume it, avoid repeating it, or work out exactly which character it stopped on.
+
+WHAT YOU RECEIVE
+
+Each source artifact is introduced by a line reading SOURCE ARTIFACT followed by its filename, and
+then the artifact itself, exactly as it was filed. You also receive a REPLANNING BRIEF stating the
+plan, the part that truncated, what you originally said that part would contain, the output limit
+of the attempt that failed, the size each subpart should now aim for, and whether your reasoning
+content consumes the same allowance as your answer.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it. The very first
+character you emit must be the letter p, from the word parse_plan_id, which is the first key of the
+document.
+
+Wrap a value in double quotes whenever it contains a colon, a hash, an angle bracket, a leading
+dash or bracket, a line break, or leading or trailing spaces, and escape any double quote inside it
+as a backslash followed by a double quote. When in doubt, quote it. Quote every identifier and
+every date.
+
+THE DOCUMENT
+
+parse_plan_id
+    the identifier of the plan, copied exactly, quoted
+
+part_id
+    the identifier of the part that truncated, copied exactly, quoted
+
+covered_before_truncation
+    a list of what the truncated attempt appears to have reached, each with a short description.
+    This is your reading of a response that was cut off. It is recorded as your reading and is not
+    treated as coverage: only material a later complete response produces, with source references
+    that resolve in the filing, counts.
+
+remaining
+    a list of what the truncated attempt did not reach, each with a short description
+
+proposed_subparts
+    an ordered list that divides the ORIGINAL part completely — not merely the remaining half.
+    Each entry has
+      part_id      a short identifier you choose, unique, quoted, and different from every
+                   part_id already in the plan
+      order        an integer
+      title        what the filing calls that material
+      type         what kind of material it is
+      purpose      one sentence on what that subpart will contain
+
+overlap_risk
+    one or two sentences on where these subparts risk covering the same material twice, and how
+    you have drawn the boundaries to avoid it
+
+uncertainty
+    a list of anything about this division you are unsure of, each with a short description
+
+metadata
+    anything else worth recording
+
+WHY THE SUBPARTS MUST COVER THE WHOLE PART
+
+The truncated attempt is evidence, not output. Dividing only the material it did not reach would
+leave the first half of the part covered by nothing, because that partial response is not going to
+be used as a parse.
+
+So divide the whole of the original part. Each subpart will be requested as its own call, with this
+same complete filing in front of you again, and each will be expected to produce its material in
+full.
+
+SIZE THEM SO THEY FIT
+
+You now know something you did not know before: this part is larger than one response. Use the
+size you were given and divide accordingly. Two subparts that each overflow again is a worse answer
+than four that do not.
+
+Do not return parsed content here. Do not reproduce a table, quote passages at length, or describe
+what a section says. This call returns a division of work.

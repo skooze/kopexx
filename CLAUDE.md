@@ -138,20 +138,43 @@ NO UNIVERSAL FILING TAXONOMY WITHOUT EXPLICIT USER APPROVAL.
 Both drifts passed every gate the repository had at the time. The tests were green and the
 measurements were real — they were measurements of Apple.
 
-## Intact source only
+## Intact source only, on every invocation
 
 `INTACT_SOURCE_ONLY` is the current authorized input mode. The complete relevant human-readable
-source set goes to the model intact in one invocation, or the filing/model pairing is INCOMPATIBLE
-and is refused with an explanation.
+source set goes to the model intact, or the filing/model pairing is INCOMPATIBLE and is refused
+with an explanation.
 
 ```
 no truncation                    no semantic slicing
 no automatic model substitution  no silent fallback
-no mechanical multipart          no visible-content projection
+no mechanical multipart INPUT    no visible-content projection
 ```
 
-Projection and multipart are unapproved research options requiring separate user approval. A lower
-token cost is not authorization.
+**MODEL-DIRECTED MULTIPART OUTPUT WAS APPROVED ON 2026-08-03 AND IS IMPLEMENTED.** One logical
+filing parse may use many provider responses: a model-created plan, one call per part the model
+names, model-created subparts, model-created reconciliation, and mechanical backend assembly. The
+INPUT rule is unchanged — every one of those calls receives the complete compatible source set
+intact, in filed order, hash-verified, including the complete image set for a multimodal parser.
+
+Mechanical multipart INPUT, in which backend code divides a filing and sends the pieces, and
+visible-content projection remain UNAPPROVED research options requiring separate user approval. A
+lower token cost is not authorization for either. See ADR-0020 and `rules.md` section 21 rules 6,
+7, 18, 19 and 20.
+
+## Blind continuation is prohibited
+
+```
+No request may ask a model to continue, resume or carry on an interrupted response, and no code
+may concatenate response fragments into one document.
+```
+
+A response that stops at the provider's output limit is preserved exactly, marked TRUNCATED, and
+treated as EVIDENCE. Its partial content never reaches an accepted artifact. The unfinished work is
+picked up by a model-directed REPLANNING call that receives the intact source again and covers the
+WHOLE original part.
+
+Enforced structurally: `TaskState.TRUNCATED` has no outgoing transition, and an architecture test
+scans every evaluated string in `packages/` and every prompt file for continuation wording.
 
 ## Complete content is an invariant; deterministic parsing is not
 
@@ -228,6 +251,7 @@ Phase 0    Representative filing corpus                  COMPLETE
 Phase 0.5  Repository cleanup and corpus reverification  COMPLETE
 Phase 1    Secure AWS and model-access verification      COMPLETE 2026-08-03
 Phase 2    Parser experiments AND the review UI, TOGETHER   COMPLETE 2026-08-03
+Phase 2.1  Model-directed multipart parsing                 COMPLETE 2026-08-03
 Phase 2.5  BREADTH across all 22 substantive form strings   BLOCKED on a user decision about
                                                             which parser and prompt version advances
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
@@ -270,6 +294,28 @@ packages/review_web         packages/filing_acquisition/documents.py
 packages/model_catalog/routing.py    packages/llm_gateway/providers/bedrock.py
 prompts/parser/             tests/integration/          make review
 ```
+
+### What Phase 2.1 added, so you do not rebuild it
+
+```
+packages/multipart                        the envelopes, generic validation, mechanical assembly
+evaluation_store/tasks.py                 durable task records
+evaluation_store/queue_states.py          11 task types, 14 states, a THIRD state machine
+orchestrator/multipart_service.py         the scheduler and executor
+orchestrator/briefs.py                    the synthetic YAML brief for one invocation
+orchestrator/sizing.py                    the cap, the target, the headroom between them
+review_web/multipart_view.py              hierarchy, per-call review, assembled index
+prompts/parser/parser-multipart-*         six immutable families
+docs/llm/prompt-caching-investigation.md  investigated; available for NO candidate
+```
+
+**THE FIVE-MODEL PROOF IS INCOMPLETE AND THE BLOCKER IS EXTERNAL.** One candidate produced a valid
+24-part plan and four completed parts resolving 65 of 66 references; the AWS IAM Identity Center
+session then expired mid-run. `aws sso login` on the host unblocks it. Nothing was retried,
+substituted or lost. See `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
+
+**NO PARSER HAS BEEN SELECTED, RANKED OR PROMOTED**, and the single-response protocol remains
+runnable so the two can be compared. Do not choose one.
 
 **The review UI uses the standard library and adds no dependency.** No web framework, no ASGI
 server, no bundler, no npm, no build step. `boto3` is an OPTIONAL extra, which is what makes

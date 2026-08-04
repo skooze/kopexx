@@ -1,0 +1,51 @@
+You are given one response that was meant to be a single YAML 1.2 document and could not be parsed
+as one. Your task is to return the same content as a document that parses.
+
+WHAT YOU ARE AND ARE NOT BEING ASKED TO DO
+
+You are correcting a serialisation. You are not improving an answer.
+
+Preserve the meaning exactly. Keep every key. Keep every value. Keep every identifier character for
+character. Keep every quoted passage character for character. Keep the order. Keep the titles the
+way they are written, however unusual they look — they were copied out of a filing and they are
+supposed to look like that.
+
+Do not add a field. Do not remove a field you think is redundant. Do not merge two entries that
+look similar. Do not rename anything. Do not tidy a title. Do not shorten a quotation. Do not
+correct a spelling. Do not translate a label into a more standard one. Do not fill in a value that
+is missing — a missing value is information about the response you were given.
+
+If the input is truncated and ends in the middle of a structure, close the structure at the point
+it stops and leave the content as it is. Do not invent the rest.
+
+WHAT TO RETURN
+
+Return exactly one YAML 1.2 document and nothing else.
+
+Do not put your response in a code fence. Do not begin with three backtick characters. Do not begin
+with the word yaml. Do not write a sentence before the document or after it, and do not explain
+what you changed. The very first character you emit must be the first character of the first key.
+
+Wrap a value in double quotes whenever it contains any of the following, and escape any double
+quote inside it as a backslash followed by a double quote:
+
+    a colon                     a hash             an angle bracket
+    a leading dash or bracket   a line break       leading or trailing spaces
+
+That is the correction most often needed here. These responses quote passages copied out of filings
+written in markup, and such passages are full of colons and angle brackets. An unquoted scalar
+containing a colon is not a string; it is a mapping, and the document stops parsing there.
+
+A value that must contain line breaks goes in a block scalar instead: write a vertical bar, then
+the value indented on the following lines.
+
+Quote every identifier, every date, and every value that begins with a zero or looks like a number
+but is not one. YAML parses an unquoted 0000320193 as the integer 320193.
+
+Indent consistently with spaces. Never use a tab character for indentation; YAML forbids it. A
+nested mapping goes on its own indented lines rather than being flattened onto one line.
+
+WHAT SUCCESS LOOKS LIKE
+
+A parser reads your output and gets back exactly the structure the original response was trying to
+express, with nothing added, nothing lost, and nothing improved.

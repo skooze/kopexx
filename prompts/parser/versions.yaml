@@ -74,3 +74,158 @@ prompts:
       change to what completeness means. Tuning a prompt until each model looks successful is
       prompt tuning with the measurement removed; correcting a document that will not parse is
       not. Version 1 and every result it produced are preserved.
+
+  # --- the MODEL-DIRECTED MULTIPART families, added by Phase 2.1 -----------------------------------
+  #
+  # THE TWO SINGLE-RESPONSE VERSIONS ABOVE ARE UNTOUCHED AND STAY THAT WAY. They are immutable
+  # historical prompts: thirty preserved invocations quote them by hash, and every measured result
+  # in docs/sprints/PHASE-0002 was produced by one of them. Nothing below supersedes either.
+  # `parser-complete-filing@2` remains the ACTIVE prompt for the single-response `parsing` role.
+  #
+  # WHY THESE ARE SEPARATE ROLES RATHER THAN NEW VERSIONS OF THE SAME PROMPT. A version supersedes.
+  # These do not: a multipart run and a single-response run are two protocols the user chooses
+  # between, and the comparison in section 26 of the Phase 2.1 brief requires both to remain
+  # runnable. `packages/prompt_registry.active_for` resolves ONE active prompt per role, so a
+  # distinct role per family is what keeps six active prompts from being a configuration error.
+  #
+  # THE SEMANTIC REQUEST IS CARRIED OVER FROM parser-complete-filing@2 WHERE IT APPLIES. The node
+  # contract, the source-reference contract, the use-the-filing's-own-names rule, the quoting rules
+  # and the completeness standard are the same words. That is deliberate and it is what makes the
+  # multipart-versus-single-response comparison honest: a multipart run that scored better because
+  # it had been asked an easier question would measure the prompt, not the protocol.
+
+  - prompt_id: parser-multipart-plan
+    version: "1"
+    file: parser-multipart-plan-v1.txt
+    sha256: "134e6b485cac8259e596025d3b0673a3f5c7fa7fe5b701ceaf7a4090ed4289b7"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing_multipart_plan
+    supersedes: null
+    superseded_by: null
+    note: >-
+      The first billable call of a multipart parse. It receives the complete intact filing and
+      returns a COMPACT plan — a division of labour the model chooses for itself — and nothing
+      else. It is told, in the synthetic brief the orchestrator compiles, the verified output limit
+      of the call, the configured per-part target, the reserved response headroom and whether
+      reasoning consumes the output allowance; those four numbers are measured facts about the
+      call and are supplied per model rather than written into the prompt.
+
+      IT IS FORBIDDEN TO RETURN CONTENT, and says so three times, because the failure mode is
+      obvious: a planning call that starts parsing runs out of room and produces neither.
+
+      THE BACKEND SUPPLIES NO PART NAMES. There is no list of sections here, no taxonomy, and no
+      minimum or maximum part count. The plan's shape is the model's reading of the filing.
+
+  - prompt_id: parser-multipart-part
+    version: "1"
+    file: parser-multipart-part-v1.txt
+    sha256: "0171a2c6a6993e67598c9f1d6fceeca93a344764761e9f76dd9fc8f99dbd7efc"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing_multipart_part
+    supersedes: null
+    superseded_by: null
+    note: >-
+      One part of the model's own plan, produced completely, as ONE STANDALONE YAML DOCUMENT. The
+      call receives the complete intact filing again — not a slice of it — plus the plan and the
+      part specification the model itself wrote.
+
+      "THIS CALL STANDS ALONE" IS A SECTION OF THE PROMPT AND IS THE POINT OF THE PROTOCOL. The
+      model is told plainly that it is not continuing anything, that no previous response is in
+      front of it, and that nothing it writes will be joined to another response. Phase 2.1
+      prohibits blind continuation, and a prompt that left the model guessing whether it was
+      resuming would produce exactly the half-documents that prohibition exists to prevent.
+
+      PROACTIVE SUBPARTS. The model is asked to decide a part is too large BEFORE it starts
+      writing, and told in plain words why: a response that stops mid-parse is thrown away, and a
+      response that says how to divide the part is a plan.
+
+  - prompt_id: parser-multipart-replan
+    version: "1"
+    file: parser-multipart-replan-v1.txt
+    sha256: "2132e2ca91de209bbabbed2eb4fcbf2ce80b915bc6302ee929935f02f5044f82"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing_multipart_replan
+    supersedes: null
+    superseded_by: null
+    note: >-
+      What runs INSTEAD OF a continuation when a part attempt stops at the output limit. It shows
+      the model the exact truncated bytes as EVIDENCE, states in the prompt that they are not being
+      continued and will not be joined to anything, and asks for subparts covering the WHOLE
+      original part rather than only the remainder — because the truncated response is not going to
+      be used as a parse, so dividing only the unreached half would leave the first half covered by
+      nothing.
+
+      THE MODEL'S CLAIM ABOUT WHAT IT COVERED IS RECORDED AND NOT BELIEVED. The prompt says so, and
+      the backend enforces it: coverage comes from quotes that resolve in the preserved bytes.
+
+  - prompt_id: parser-multipart-reconcile
+    version: "1"
+    file: parser-multipart-reconcile-v1.txt
+    sha256: "3e9ac8226f704a7de9d77bf908e9c90bafb3299098f92ec4cbcbbb98b3df2e54"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing_multipart_reconcile
+    supersedes: null
+    superseded_by: null
+    note: >-
+      A multipart parse is not complete because every planned part returned something. This call
+      receives the complete intact filing and a COMPACT DETERMINISTIC INVENTORY of what was
+      produced — identifiers, titles, declared statuses, node counts, resolved and unresolved
+      reference counts, declared unresolved items, truncation — and asks whether the plan was
+      actually carried out.
+
+      IT MAY CREATE WORK. Additional and replacement parts become new tasks with new identifiers;
+      an earlier result is never overwritten. Cycles are bounded, and the model is told which cycle
+      it is in.
+
+      THE PROMPT STATES THAT plan_complete IS A CLAIM AND NOT A VERDICT, and says why there is
+      nothing to gain by overstating it. rules.md section 21 rule 5: a false complete is a defect.
+
+  - prompt_id: parser-multipart-gap
+    version: "1"
+    file: parser-multipart-gap-v1.txt
+    sha256: "f6810da11a3734b598545e88c3cd0cc3b7b64d7b0d27770e39d62b994315b5f3"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing_multipart_gap
+    supersedes: null
+    superseded_by: null
+    note: >-
+      The backend reports MECHANICAL EVIDENCE and never names the missing semantic material. This
+      prompt is where that boundary is written down for the model: the findings were produced by
+      counting and searching, nothing that produced them knows what a filing contains, and a
+      finding is therefore not an instruction.
+
+      CONFIRMING A GAP IS AN ACCEPTED ANSWER, stated explicitly, because the alternative — a part
+      invented to make a count balance — puts content into the parse that the filing does not
+      contain.
+
+  - prompt_id: parser-multipart-format-repair
+    version: "1"
+    file: parser-multipart-format-repair-v1.txt
+    sha256: "c2fd5413eaf268e08816f8558c44144861b06e1b8b7f54fc3d1f547c519495b8"
+    created: "2026-08-03"
+    status: ACTIVE
+    role: parsing_multipart_format_repair
+    supersedes: null
+    superseded_by: null
+    note: >-
+      SECTION 6 OF THE PHASE 2.1 BRIEF PERMITS THIS FAMILY "ONLY IF OBJECTIVELY REQUIRED", AND THE
+      EVIDENCE IS IN THE PHASE 2 RECORD. Under prompt version 2, five of fifteen responses were
+      UNPARSEABLE for serialisation reasons alone, and one candidate produced zero readable
+      documents in six attempts while returning structures a reader could see were well formed. A
+      response that is semantically useful and syntactically invalid is money already spent that
+      cannot be reviewed.
+
+      IT IS NARROW BY CONSTRUCTION. It receives the malformed response and the format rules, and
+      NOT the filing — there is nothing to look up, because it is forbidden to change meaning. The
+      prompt enumerates what must not change: no field added, none removed, no merge, no rename, no
+      tidied title, no shortened quotation, no corrected spelling, no filled-in missing value.
+
+      AT MOST ONE ATTEMPT PER ARTIFACT, and the original malformed response, the repair request,
+      the repaired response and its validation are all preserved separately. The original is never
+      replaced. It is never used to improve semantic quality, and an architecture test fails the
+      build if a second attempt is ever configured.
