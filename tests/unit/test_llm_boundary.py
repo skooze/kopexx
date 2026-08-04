@@ -382,3 +382,83 @@ def test_a_yaml_document_carrying_filing_markup_in_a_scalar_is_still_accepted() 
     """The Phase 2 narrowing, re-asserted so the two cannot drift apart."""
     document = to_yaml({"quote": "<TYPE>EX-27</TYPE> and <ix:nonFraction> in one sentence"})
     assert validate(document, ContentFormat.YAML).ok
+
+
+# --- what a serialized document must be able to carry back out ------------------------------------
+#
+# FOUND IN A REAL FILING. A 1996 10-K405 table, quoted by a parsing model, contained U+0085 NEXT
+# LINE. Forcing a literal block scalar bypassed the emitter's own analysis, the character went out
+# raw, and the reader — which counts U+0085, U+2028 and U+2029 as line breaks — read it back as a
+# newline. Two consequences, one silent and one loud: a preserved quote no longer matched the bytes
+# it cited, and an assembly this repository had just written became one it could no longer load.
+
+
+@pytest.mark.parametrize(
+    ("name", "codepoint"),
+    [
+        ("NEXT LINE", 0x85),
+        ("LINE SEPARATOR", 0x2028),
+        ("PARAGRAPH SEPARATOR", 0x2029),
+        ("VERTICAL TAB", 0x0B),
+        ("FORM FEED", 0x0C),
+        ("ESCAPE", 0x1B),
+        ("NULL", 0x00),
+    ],
+)
+def test_a_serialized_document_reads_back_the_character_it_was_given(
+    name: str, codepoint: int
+) -> None:
+    """Both scalar paths: short enough to stay plain, and long enough to want a block scalar."""
+    for label, text in (
+        ("short", f"before{chr(codepoint)}after"),
+        ("block", f"before{chr(codepoint)}after\nsecond line{'x' * 130}"),
+    ):
+        document = to_yaml({"quote": text})
+        assert validate(document, ContentFormat.YAML).ok, f"{name} {label} left the boundary"
+        assert parse_yaml(document)["quote"] == text, (
+            f"{name} (U+{codepoint:04X}) did not survive the {label} path"
+        )
+
+
+def test_the_ordinary_characters_of_a_filing_still_get_a_readable_block_scalar() -> None:
+    """ANTI-VACUITY. Double-quoting everything would pass the test above and destroy the payload a
+    model reads. An EDGAR text table is tabs, spaces, newlines and dollar signs, and it stays a
+    block scalar.
+    """
+    table = "Service cost\t$   26\t$   28\nInterest cost\t    63\t    55\n" + "x" * 130
+    document = to_yaml({"quote": table})
+    assert "quote: |-" in document, f"an ordinary table stopped being a block scalar:\n{document}"
+    assert parse_yaml(document)["quote"] == table
+
+
+def test_every_character_a_filing_can_contain_survives_serialization() -> None:
+    """The character class, SWEPT rather than asserted, so a wrong range boundary cannot hide.
+
+    Every code point through the start of the astral planes, one at a time. Surrogates are skipped
+    because Python cannot encode a lone one. CARRIAGE RETURN is skipped because it is deliberately
+    normalized, which the test below pins separately — skipping it silently would hide exactly the
+    class of defect this sweep exists to catch.
+    """
+    points = [c for c in range(0x11000) if not (0xD800 <= c <= 0xDFFF) and c != 0x0D]
+    # One document per batch rather than per code point: each character still gets its own scalar,
+    # so nothing is masked by a neighbour, and the sweep costs a second instead of a minute.
+    broken: list[str] = []
+    for start in range(0, len(points), 512):
+        batch = points[start : start + 512]
+        wanted = {f"q{c:05x}": f"a{chr(c)}b" for c in batch}
+        try:
+            got = parse_yaml(to_yaml(dict(wanted)))
+        except Exception as exc:  # noqa: BLE001 - the failure list is the assertion message
+            broken.append(f"U+{batch[0]:04X}..U+{batch[-1]:04X} {type(exc).__name__}")
+            continue
+        broken.extend(f"U+{int(k[1:], 16):04X} corrupted" for k, v in wanted.items() if got[k] != v)
+    assert not broken, f"{len(broken)} code point(s) did not survive: {broken[:20]}"
+
+
+def test_carriage_return_is_normalized_and_that_is_the_only_exception() -> None:
+    """The one lossy conversion, stated rather than discovered. A model reads paragraphs, and a
+    payload that carried both CRLF and LF line endings would show it two kinds of line break for
+    the same thing. Everything else round-trips exactly, which the sweep above proves.
+    """
+    assert parse_yaml(to_yaml({"quote": "one\r\ntwo" + "x" * 130}))["quote"].count("\r") == 0
+    assert parse_yaml(to_yaml({"quote": "one\rtwo" + "x" * 130}))["quote"] == "one\ntwo" + "x" * 130

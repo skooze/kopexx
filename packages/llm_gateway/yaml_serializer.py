@@ -12,6 +12,7 @@ unfenced YAML 1.2 document.
 from __future__ import annotations
 
 import io
+import re
 from typing import Any, Final
 
 from ruamel.yaml import YAML
@@ -87,6 +88,31 @@ IDENTIFIER_KEYS: Final[frozenset[str]] = frozenset(
 # paragraph structure instead of a folded single line.
 LITERAL_BLOCK_THRESHOLD: Final[int] = 120
 
+# Characters that a literal block scalar CANNOT carry back out unchanged, so a string containing
+# any of them is double-quoted instead — where the emitter escapes it (\N, \L, \P, \v, \f, \x1b)
+# and the reader restores the exact character.
+#
+# FOUND IN A REAL FILING, NOT BY INSPECTION. A 1996 10-K405 table quoted by a parsing model
+# contained U+0085 NEXT LINE. Forcing style `|` bypasses the emitter's own scalar analysis, which
+# would have refused block style; the character was written raw, and the reader — which treats
+# U+0085, U+2028 and U+2029 as line breaks — turned it into a newline. In a short scalar that
+# silently corrupted a preserved quote, so it no longer matched the bytes it cited. In a block
+# scalar it broke the indentation of everything after it and the whole document became
+# unreadable: an assembly this repository had just written, that it could no longer load.
+#
+# The set is every character outside the YAML printable range, plus the two line separators that
+# ARE printable but are still read as breaks. Tab and newline are excluded deliberately: a block
+# scalar carries both correctly, and EDGAR text tables are made of them.
+_BLOCK_UNSAFE: Final[re.Pattern[str]] = re.compile(
+    "[^"
+    "\\t\\n"  # the break and the separator a block scalar carries correctly
+    "\\u0020-\\u007e"  # printable ASCII
+    "\\u00a0-\\u2027\\u202a-\\ud7ff"  # the BMP, minus U+2028 LINE and U+2029 PARAGRAPH SEPARATOR
+    "\\ue000-\\ufffd"  # the BMP above the surrogate range
+    "\\U00010000-\\U0010ffff"  # the astral planes
+    "]"
+)
+
 
 def _coerce(value: Any, key: str | None = None) -> Any:
     """Recursively prepare a value for YAML emission."""
@@ -100,7 +126,13 @@ def _coerce(value: Any, key: str | None = None) -> Any:
         if "\n" in value or len(value) > LITERAL_BLOCK_THRESHOLD:
             # Literal block scalars preserve paragraph boundaries in filing prose.
             normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+            if _BLOCK_UNSAFE.search(normalized):
+                # FIDELITY BEATS READABILITY. This gives up the paragraph layout for the rare
+                # string that carries a control or separator character, and keeps the character.
+                return DoubleQuotedScalarString(normalized)
             return LiteralScalarString(normalized)
+        if _BLOCK_UNSAFE.search(value):
+            return DoubleQuotedScalarString(value)
         return value
     return value
 
