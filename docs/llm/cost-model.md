@@ -49,6 +49,33 @@
 
 # CURRENT DIRECTION — AUTHORITATIVE
 
+> **SUPERSEDED 2026-08-04, ADDITIVELY. THE THREE CLAIMS IMMEDIATELY BELOW ARE FALSE AND ARE KEPT
+> UNEDITED**, because `rules.md` section 21 rule 16 forbids rewriting a past claim. They were true
+> when written, before Phase 1.
+>
+> **THE DEFECT THIS NOTE EXISTS TO PREVENT IS A STALE BANNER OUTRANKING A CORRECT SECTION.** The
+> sentence below sat under a heading reading AUTHORITATIVE through two phases that falsified it,
+> while the measured figures lived eighty lines further down. A reader stops at the first sentence
+> that claims authority, so a correction placed anywhere else is a correction nobody reaches.
+>
+> ```
+> "NO MODEL HAS BEEN INVOKED"        falsified by Phase 1     7 one-word calls,   USD 0.00023
+>                                    falsified by Phase 2     30 invocations,     USD 0.40711113
+>                                    falsified by Phase 2.1   7 multipart runs,   USD 2.603827
+> "NO PRICE IS KNOWN"                falsified by Phase 1, and re-verified by Phase 2.2 on
+>                                    2026-08-04: all ten committed prices match the live Price
+>                                    List API to the digit
+> "EVERY PARAMETER IS A PLACEHOLDER" half true, and the half that stands is the important one. The
+>                                    PRICE inputs are measured. The TOKEN parameters in the table
+>                                    below are still placeholders, and each row says so
+> ```
+>
+> **WHAT SURVIVES FROM IT AND IS STILL TRUE.** No corpus-scale total exists. Cost has been measured
+> on three filings, three filings is not a denominator, and no figure in this document may be
+> multiplied up to 613 filings or to 171,000.
+
+RETAINED AS WRITTEN, 2026-08-03:
+
 **NO MODEL HAS BEEN INVOKED. NO PRICE IS KNOWN. EVERY PARAMETER IN THIS DOCUMENT IS A PLACEHOLDER.**
 
 No model price, context limit, or throughput figure in this repository has been verified against a
@@ -102,6 +129,123 @@ IMPLEMENTATION STATUS: cost authorization, the pre-spend bound and the durable c
 are IMPLEMENTED. The corpus-scale extrapolation below remains PLANNED — Phase 2 measured three
 filings, and three filings is not a denominator.
 DECISION RECORD: `docs/adr/ADR-0006-model-selection-by-benchmark.md`
+
+---
+
+# WHAT PHASE 2.2 PRICED, AND THE BENCHMARK IT COULD NOT AFFORD — added 2026-08-04
+
+**NO PROVIDER REQUEST WAS ISSUED BY THIS PHASE. MEASURED BEDROCK SPEND: `USD 0.00000000`.** Every
+figure in this section is a DRY-RUN computation over verified prices and previously measured call
+counts. Nothing here is a measurement of a run, because **the benchmark did not run** — it does not
+fit the authorized ceiling, and running an arbitrary partial subset instead was not authorized. A
+subset chosen to fit a budget measures the budget.
+
+## Zero drift, which is what a cost model has to establish before it computes anything
+
+Re-verified 2026-08-04, read-only, against the live AWS Price List API and the AWS model cards:
+
+```
+all ten committed prices             match the live Price List API TO THE DIGIT, effective
+                                     2026-07-01
+all five context and output limits   match the AWS model cards read 2026-08-04
+```
+
+The prices are still not repeated here; `bedrock-capability-snapshot.yaml` remains their single
+home. What this establishes is narrow and load-bearing: the `USD 2.603827` Phase 2.1 measured was
+computed against prices that are still current, so that arithmetic did not silently rot, and the
+snapshot did not need replacing. **R-33 — the snapshot goes stale silently — was checked rather
+than assumed for the first time.**
+
+## The benchmark filing, and R-21 biting for the first time
+
+Apple Inc., `AAPL`, CIK `0000320193`, form 10-Q, accession `0000320193-25-000008`, filed
+2025-01-31, report period 2024-12-28, inline XBRL. 63 package members, of which 6 are
+human-readable and total **915,890 characters**, plus 2 filed images. Preserved bytes: 9.9 MB.
+
+Estimated intact input at **3.8 characters per token, an upper bound and not a tokenizer count**,
+measured with the repository's own compatibility guard against the committed snapshot:
+
+| model | context | estimated input | largest output that fits |
+|---|---:|---:|---:|
+| GPT OSS 120B | 128,000 | 243,507 | 0 — **INCOMPATIBLE** |
+| NVIDIA Nemotron 3 Super 120B | 256,000 | 243,507 | 12,493 |
+| Qwen3 235B A22B | 256,000 | 243,507 | 8,000 |
+| Llama 4 Maverick | 1,000,000 | 251,507 | 8,000 |
+| Qwen3 VL 235B | 256,000 | 251,507 | 4,493 |
+
+The two multimodal rows carry 2 images charged at the **UNVERIFIED 4,000-tokens-per-image upper
+bound** the pre-spend guard uses, which is why their input is 8,000 tokens higher.
+
+**GPT OSS 120B COSTS EXACTLY ZERO ON THIS FILING, AND THAT IS THE POINT.** An incompatible pairing
+is refused before invocation rather than truncated into affordability, so it never enters the
+arithmetic below. This is R-21 — "no candidate model accepts a materially sized modern filing
+intact" — producing a measured result for the first time. Phase 2 and Phase 2.1 could not touch it,
+because by construction their shared benchmark could only contain filings that fit every candidate.
+
+## The dry-run plan: per-call cost, at each candidate's OWN measured call count
+
+Per-call cost is the estimated intact input at that candidate's verified price plus that
+candidate's **own** measured Phase 2.1 mean output per call. No model's call count, output size or
+repair rate is applied to another — the 5.6x spread in plan size across candidates on one filing is
+the reason that rule exists.
+
+| model | estimated input | USD per call | Phase 2.1 calls | USD at that count |
+|---|---:|---:|---:|---:|
+| GPT OSS 120B | 243,507 | — | — | INCOMPATIBLE |
+| NVIDIA Nemotron 3 Super 120B | 243,507 | 0.03790 | 78 | 2.9564 |
+| Qwen3 235B A22B | 243,507 | 0.05556 | 58 | 3.2228 |
+| Llama 4 Maverick | 251,507 | 0.06086 | 14 | 0.8520 |
+| Qwen3 VL 235B | 251,507 | 0.13496 | 47 | 6.3433 |
+| **TOTAL, the four runnable candidates** | | | | **13.3745** |
+
+Against **`USD 5.00` authorized**.
+
+## The guardrail-bounded maximum, which is the number an authorization actually buys
+
+Phase 2.2 added a part-explosion guardrail to `packages/orchestrator/multipart_service.py`: a soft
+threshold at 64 logical parts and a hard ceiling at 100. At the hard ceiling, plus one plan, three
+reconciliation cycles and six repairs, one run is 110 calls:
+
+| model | calls | USD |
+|---|---:|---:|
+| NVIDIA Nemotron 3 Super 120B | 110 | 4.1693 |
+| Qwen3 235B A22B | 110 | 6.1121 |
+| Llama 4 Maverick | 110 | 6.6943 |
+| Qwen3 VL 235B | 110 | 14.8460 |
+| **TOTAL** | | **31.8218** |
+
+**A CEILING IS NOT A FORECAST AND A FORECAST IS NOT A CEILING**, and both belong in an
+authorization. `USD 13.3745` is what the measured behaviour of these four candidates predicts;
+`USD 31.8218` is the most the code can spend before it refuses.
+
+## What USD 5.00 buys, split equally across the four runnable candidates
+
+| model | at USD 1.2500 | calls Phase 2.1 needed |
+|---|---:|---:|
+| NVIDIA Nemotron 3 Super 120B | 32 calls | 78 |
+| Qwen3 235B A22B | 22 calls | 58 |
+| Llama 4 Maverick | 20 calls | 14 |
+| Qwen3 VL 235B | 9 calls | 47 |
+
+**ONE OF FOUR WOULD FINISH.** The other three would hit the filing-run budget and PAUSE mid-parse,
+which is the designed behaviour and which produces exactly the `INCOMPLETE_WORK` result the phase
+exists to move past. A paused branch cannot reach the mechanical completeness gate, because that
+gate requires no scheduled required job to remain nonterminal.
+
+## Every figure above is a FLOOR
+
+The Phase 2.2 prompts ask for more per part than the Phase 2.1 prompts did: a structured-table
+contract over the filing's 18 substantive table elements, and two resolvable anchors per coverage
+claim. That increases output per part AND increases the number of parts. **A hardened protocol is
+more expensive than the one whose call counts these estimates borrow**, so treating the Phase 2.1
+counts as a prediction understates rather than overstates.
+
+## The cumulative ceiling binds first in any case
+
+The durable journal stood at **`USD 3.25290926`** against `COST_CEILING_USD 5.00`, leaving roughly
+`USD 1.75` before the configured repository ceiling refuses. Releasing the twelve proven unsettled
+reservations recovers `USD 0.24197085`, bringing settled spend to `USD 3.01093841` and headroom to
+roughly `USD 1.99`. Neither number changes the conclusion, and neither is authorization to spend.
 
 ---
 
@@ -214,6 +358,53 @@ every failure. Four attempts in this phase failed at CREDENTIAL RESOLUTION, befo
 `USD 0.10396815` of ceiling for calls that never reached a provider. The MECHANISM is stated
 above and is unchanged; the justification is narrower than the mechanism, and closing that gap is
 open work rather than a claim.
+
+> **CORRECTED 2026-08-04 BY PHASE 2.2, ADDITIVELY. THE FIGURE ABOVE IS TOO SMALL BY MORE THAN
+> HALF, AND THE COUNT IS WRONG BY EIGHT.** The paragraph above is not edited — `rules.md` section
+> 21 rule 16 — and the corrected accounting, read directly out of the durable journal, is:
+>
+> ```
+> TWELVE task ids hold unsettled reservations totalling  USD 0.24197085
+>
+> ELEVEN are the SAME credential failure                 USD 0.22590990
+>     TokenRetrievalError, token expired and refresh failed, each with attempts 1,
+>     input_tokens 0, output_tokens 0, latency_ms 0, provider_request_id null, task
+>     state FAILED, all taken between 02:19:29 and 02:23:00 on 2026-08-04. The four
+>     named above are a SUBSET of these eleven.
+>
+> THE TWELFTH IS A DIFFERENT DEFECT                      USD 0.01606095
+>     tsk_icujnsgypwpkxl6xxthsahrpya SUCCEEDED, with real usage of 38,361 input and
+>     1,228 output tokens and a real provider request id. It carries TWO reservations
+>     of USD 0.01606095 and ONE settlement releasing one of them: the task was
+>     interrupted after reserving, resumed, and reserved again, and the journal settled
+>     only the later entry.
+> ```
+>
+> **THE TWO ARE DIFFERENT FAILURES AND MUST NOT BE COUNTED AS ONE.** Eleven are ceiling held for
+> calls that never reached a provider. The twelfth is ceiling held by a call that DID reach one,
+> succeeded, and was billed — a resume-after-reserve leak, and the only one of the twelve that a
+> credential fix would not have prevented.
+>
+> **A RELEASE PATH NOW EXISTS, AND IT DEMANDS PROOF RATHER THAN A JUDGEMENT.**
+> `packages/orchestrator/spend_journal.py` gains `release()` and `unsettled()`. A RELEASE entry
+> carries `amount_usd 0` and `released_usd` equal to the reservation, so it contributes exactly the
+> negative of the reservation to `sum(amount - released)` and no total needed different arithmetic.
+> The journal stays append-only: nothing is edited and nothing is deleted.
+>
+> ```
+> release() REFUSES without evidence text. A release with no recorded evidence is
+> indistinguishable from un-charging a real failure.
+>
+> The executor releases ONLY on a failure the adapter PROVES was never transported.
+> packages/llm_gateway/errors.py gains CredentialResolutionError carrying
+> transport_attempted=False; ProviderError itself gains transport_attempted defaulting
+> to TRUE. The asymmetry is deliberate: assuming a request was sent when it was not
+> merely holds ceiling, while assuming it was not sent when it WAS releases money that
+> was really spent.
+> ```
+>
+> The unconditional sentence above — "a failed attempt's reservation is not released" — is
+> therefore narrowed, not reversed. A failure that reached a provider is charged and stays charged.
 
 ---
 

@@ -90,16 +90,34 @@ The backend proves this against the preserved bytes. It doesn't take the model's
 | **Phase 0.5** — repository cleanup and corpus reverification | **COMPLETE** |
 | **Phase 1** — secure AWS access and model-capability verification | **COMPLETE** 2026-08-03 |
 | **Phase 2** — parser experiments *and* the review UI, built together | **COMPLETE** 2026-08-03 |
-| **Phase 2.1** — model-directed multipart parsing | **COMPLETE** 2026-08-03 |
+| **Phase 2.1** — model-directed multipart parsing | **COMPLETE** 2026-08-04 |
+| **Phase 2.2** — source inventory, completeness ledger, Bedrock deep dive | **COMPLETE** 2026-08-04, except the benchmark run, which is **blocked** |
 | Phases 3–8 — optional model stages, persistence, beta UI, Deep Dive | not started |
 
-**What exists today.** Seventeen small packages. The nine from before — SEC identity, the rate-limited
-SEC client, configuration, structured logging, object storage, filing discovery, byte-exact
-acquisition, the model gateway and the capability catalog — plus seven from Phase 2: durable
-evaluation storage, mechanical source-set assembly, output validation against the preserved bytes,
-hash-locked prompt versions, the orchestrator, and the review API and its pages. The model gateway
-now has a real Bedrock adapter, and the capability catalog now has the four-role router it was
-missing. Phase 2.1 added one more: the model-directed multipart protocol.
+**What exists today.** Nineteen small packages. The nine from before — SEC identity, the
+rate-limited SEC client, configuration, structured logging, object storage, filing discovery,
+byte-exact acquisition, the model gateway and the capability catalog — plus seven from Phase 2:
+durable evaluation storage, mechanical source-set assembly, output validation against the preserved
+bytes, hash-locked prompt versions, the orchestrator, and the review API and its pages. The model
+gateway now has a real Bedrock adapter, and the capability catalog now has the four-role router it
+was missing. Phase 2.1 added the model-directed multipart protocol; Phase 2.2 added two more, a
+mechanical inventory of a filing and a completeness ledger measured against it.
+
+**How much of a filing did the parse actually cover?** Until Phase 2.2 nothing could answer that. A
+citation rate counts the model's own citations — a paragraph it never mentioned never entered the
+count — so a parse that quietly skipped half a filing and cited the other half accurately looked
+exactly like one that read all of it. There is now a count of the filing itself: every visible span,
+every table, every filed image, measured from the preserved bytes before any model is asked
+anything. Each one ends up covered, unresolved, excluded by a person, or **silently omitted** — and
+that last number is the whole point. Nothing in it decides what a table or a paragraph *means*.
+
+**One of the five models cannot read a modern Apple 10-Q at all.** Not "not well" — at all. The
+filing is roughly twice what fits in GPT OSS 120B's context, so it is refused with the sizes and the
+limit, which is the promise on the tin. Two of the other four fit only by asking for a shorter
+answer than they are capable of, and the remaining two fit only at exactly their maximum. A shorter
+answer means more calls, and every call re-sends the whole filing. Running the four that can take it
+costs about `USD 13.37` against `USD 5.00` authorized, so **the benchmark has not been run** and no
+model was invoked in this phase at all.
 
 **And a UI you can actually open.** `make review` starts it on `127.0.0.1`. Pick a company, pick a
 parsing model, choose a protocol, see what it would cost, run it, and read the parse beside the
@@ -119,7 +137,9 @@ under the titles the model chose, and changes nothing.
 image or chat capability — Phase 2 and Phase 2.1 both ran the parsing stage only, and the
 orchestrator refuses to run another. You can mark a parse approved; that records a judgement and
 nothing else happens. **No parser has been picked.** All five are still on the table, and the
-single-response protocol still runs, so the two can be compared rather than assumed about.
+single-response protocol still runs, so the two can be compared rather than assumed about. **And no
+completeness figure exists for any model on any filing yet**, because the run that would produce one
+is the one waiting on a budget decision.
 
 **What was deleted on 2026-08-03.** The deterministic footnote and table parser, the 24-table
 PostgreSQL schema and its migrations, the DERA mirror and fact loader, the accession document
@@ -201,7 +221,8 @@ quietly needs a cloud credential is a test that skips everywhere it isn't there.
 packages/   SEC identity and HTTP, storage, configuration, observability, filing discovery
             and acquisition, the model gateway and its Bedrock adapter, the capability catalog
             and router, evaluation storage, source transport, coverage validation, prompt
-            versions, the orchestrator, and the review API and pages. Sixteen of them.
+            versions, the orchestrator, the review API and pages, the multipart protocol, the
+            mechanical source inventory and the completeness ledger. Nineteen of them.
 prompts/    versioned prompt files, locked by hash
 tests/      unit, integration, architecture, fixtures
 docs/       specs, ADRs, runbooks, sprint records

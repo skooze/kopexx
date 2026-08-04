@@ -255,11 +255,59 @@ Phase 2.1  Model-directed multipart parsing                 COMPLETE 2026-08-04.
                                                             candidates ran; both multimodal
                                                             ones also on an image-bearing
                                                             filing. Seven runs, USD 2.603827.
+Phase 2.2  Bedrock deep dive and the completeness harness   HARNESS COMPLETE 2026-08-04.
+                                                            THE BENCHMARK RUN IS BLOCKED on a
+                                                            cost-ceiling decision — see below.
 Phase 2.5  BREADTH across all 22 substantive form strings   BLOCKED on a user decision about
                                                             which parser and prompt version advances
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
            beta UI, Deep Dive, breadth                   NOT STARTED
 ```
+
+**PHASE 2.2 MEASURED THE THING PHASE 2.1 COULD NOT: A DENOMINATOR.** A reference rate counts a
+model's own citations, so a source region a model never mentioned never entered it — which is why
+`352/364 references resolved` was never 96.7 percent of a filing. `packages/source_inventory` now
+counts every visible text span, every `table` element and every filed image in the preserved bytes
+before any model is invoked, and `packages/completeness` gives every one of them one of four
+dispositions: COVERED, UNRESOLVED, HUMAN_EXCLUDED, or **SILENTLY_OMITTED**. The last one is the
+number the whole phase exists to produce.
+
+**R-21 HAS BITTEN, AND IT IS NOT CLOSE.** The fixed benchmark filing — Apple 10-Q accession
+`0000320193-25-000008` — needs an estimated 243,507 input tokens for its complete human-readable
+source set. `GPT OSS 120B` has a 128,000-token context and **cannot receive this filing at all**.
+Nemotron fits only with its answer cut from 32,000 output tokens to 12,493, and Qwen3 VL only at
+4,493 against its own 8,000 cap. Under `INTACT_SOURCE_ONLY` an incompatible pairing is a RESULT: it
+is recorded as an exact blocker, and nothing is truncated, sliced or swapped to another model.
+
+**THE BENCHMARK HAS NOT RUN AND NO PROVIDER REQUEST HAS BEEN ISSUED.** The four candidates that can
+receive the filing would cost `USD 13.3745` at their own measured Phase 2.1 call counts, against
+`USD 5.00` authorized; the part-explosion guardrail ceiling puts the bound at `USD 31.8218`.
+Measured Bedrock spend for this phase: **USD 0.00000000**. Running a partial arbitrary subset is
+prohibited, so nothing billable runs until the ceiling question is answered.
+
+### What Phase 2.2 added, so you do not rebuild it
+
+```
+packages/source_inventory              members, spans, table elements, images, from the bytes
+packages/completeness                  the ledger, the six-dimension status model, the truth
+                                       record, the 14-condition mechanical candidate gate
+packages/multipart/effective.py        the shared effective-artifact resolver
+packages/multipart/tables.py           the structured-table envelope a model returns
+packages/multipart/gaps.py             stable gap fingerprints
+coverage_validation/references.py      SIX resolution levels, not three, with entity decoding
+llm_gateway/errors.py                  CredentialResolutionError, transport_attempted
+orchestrator/spend_journal.py          release() and unsettled()
+prompts/parser/*-v2.txt                six superseding families plus parser-multipart-table@1
+```
+
+**LEVELS 1 TO 4 OF THE ANCHOR LADDER COUNT AS RESOLVED. LEVELS 5 AND 6 NEVER DO.** Case-insensitive
+and approximate matches are HUMAN-REVIEW CANDIDATES. Counting a near-match as proof is how a
+citation rate starts flattering the model that produced it.
+
+**ENTITY DECODING WAS NOT A DETAIL.** Apple's 10-Q carries 970 character references and not one
+literal non-ASCII character: every apostrophe, dash and non-breaking space is an escape. Without
+decoding, every model quote containing an apostrophe failed to resolve, and the failure looked
+exactly like a fabricated citation.
 
 **FILINGS HAVE NOW BEEN PARSED BY REAL MODELS.** A parser-only orchestration path, a durable
 evaluation store, a Bedrock runtime adapter, the four-role router, hash-locked prompt versions,
@@ -322,6 +370,13 @@ the truncation-and-replanning path, none of them, and the filing budget.
 **`table_count` IS ZERO IN ALL SEVEN RUNS.** Not one candidate emitted a structured table from a
 financial filing. No prompt in this phase asks for one, so it is a measured fact about unprompted
 behaviour rather than a compliance failure — and it is the largest open question the proof leaves.
+
+**A MECHANICAL_COMPLETENESS_CANDIDATE IS NOT A COMPLETE PARSE.** Phase 2.2's gate has fourteen
+conjunctive conditions and passing all of them means one thing: the result carries enough evidence
+to undergo human completeness review. It is not a score, not a ranking and not a recommendation.
+Only a person may record `HUMAN_APPROVED_COMPLETE_FOR_THIS_FILING`, and that approval is scoped to
+one filing, one source hash, one model, one model version, one region or profile, one prompt
+version, one settings set and one protocol. It does not generalize to another filing or form.
 
 **A STATUS IS NOT A SCORE.** `INCOMPLETE_WORK` means scheduled work did not finish;
 `RECONCILIATION_UNRESOLVED` means the last reconciliation returned `plan_complete: false`. Neither

@@ -38,6 +38,15 @@
 > Twelve test modules were added — ten unit, one architecture, and one in `tests/integration/`,
 > which returned with a marker that now means something — and the suite was measured on 2026-08-03
 > at **1048 tests, 0 skipped, 92.19 percent coverage** over sixteen packages.
+>
+> **UPDATED 2026-08-04 BY PHASE 2.2.** Four unit modules were added — `test_source_inventory.py`,
+> `test_completeness.py`, `test_anchor_ladder.py` and `test_multipart_tables.py` — and the suite
+> was measured at **1,564 tests, 0 skipped, 0 failed**, with `ruff format`, `ruff check` and `mypy`
+> over 118 source files all clean. **Phase 2.2 INVOKED NO MODEL AT ALL**, so the usual sentence is
+> stronger than usual this time: not only does no test reach a provider, no part of the phase did.
+> The two largest new modules are the two whose subject is a DENOMINATOR, and both are hermetic —
+> no network, no AWS, no clock, no filesystem. Detail:
+> [The Phase 2.2 suites](#the-phase-22-suites).
 
 IMPLEMENTATION STATUS: unit, integration, architecture and security layers IMPLEMENTED. Golden,
 property and performance layers PLANNED.
@@ -211,6 +220,118 @@ not. A gate wired to refuse everything passes half of these and breaks the produ
 **NO ARTIFACT CONTRACT IS ASSERTED THERE, DELIBERATELY.** The mock returns a well-formed YAML
 mapping with one node and one verbatim quote. It exercises the reader, the resolver and the audit
 path. It is not a response schema, and nothing in it claims a real model would produce that shape.
+
+## The Phase 2.2 suites
+
+Measured 2026-08-04: **1,564 collected, 1,564 passed, 0 skipped, 0 failed.** `ruff format --check`
+clean, `ruff check` clean, `mypy` clean over 118 source files. **The table under
+[The suite as it stands](#the-suite-as-it-stands) is dated 2026-08-03 and has not been
+regenerated**; it is kept as the record of that measurement, and the four modules below are the
+Phase 2.2 addition rather than a replacement for it.
+
+| Module | Tests | Subject |
+|---|---:|---|
+| `tests/unit/test_completeness.py` | 112 | interval algebra, the four dispositions, versioned human truth, the ledger, the fourteen-condition gate |
+| `tests/unit/test_source_inventory.py` | 89 | spans, offsets, hiding reasons, the rendered table grid, image headers read and never decoded |
+| `tests/unit/test_anchor_ladder.py` | 24 | six levels, the line between a PROOF and a CANDIDATE, and composed index maps |
+| `tests/unit/test_multipart_tables.py` | 22 | reading a model-returned structured table: shape carried, meaning never inferred |
+
+### What each one exists to stop
+
+```
+test_completeness.py       THAT SILENCE IS COUNTED. A source range no part of the parse ever
+                           mentioned must come out SILENTLY_OMITTED and must fail the gate. That
+                           is the omission a reference rate cannot see, because a region a model
+                           never cited never enters a reference rate's denominator — which is
+                           exactly what "352 of 364 references resolved" did NOT measure in Phase
+                           2.1. Its single most important test is
+                           `test_prose_about_a_table_does_not_discharge_the_table`: real numbers,
+                           real citations and no table is the combination this package must refuse
+                           to call coverage, and it is the combination all seven proof runs
+                           produced.
+
+test_source_inventory.py   THE DENOMINATOR ITSELF, AND NOT ONE WORD ABOUT MEANING. A span ends at
+                           a block boundary and survives an inline one; `text[start:end]` is the
+                           filed bytes INCLUDING every escape; markup that hides content marks it
+                           hidden and never deletes it; a grid position is the position a browser
+                           would render after rowspan and colspan; malformed markup is a filing
+                           rather than a failure and nothing raises over it; an image header is
+                           READ, never decoded, and an unreadable one answers None rather than a
+                           plausible default. No test claims a span is a risk factor, a table is a
+                           financial statement, or an image is a chart —
+                           `packages/filing_acquisition/inventory.py` was DELETED for judgements
+                           of exactly that kind, and a test asking for them would put the
+                           judgement back one green run at a time.
+
+test_anchor_ladder.py      WHICH NEAR-MISSES MAY BE CALLED `resolved`. Levels 1 to 4 fold away a
+                           defect of TRANSCRIPTION and still demand the same characters in the
+                           same order; levels 5 and 6 fold away a defect of JUDGEMENT and
+                           therefore produce a CANDIDATE. Counting either of the last two as proof
+                           would be a citation rate flattering the model that produced it, so it
+                           is asserted explicitly rather than implied by enum membership. Every
+                           offset assertion slices the ORIGINAL and reads it back: a ladder with
+                           wrong index maps returns the right verdict while highlighting bytes
+                           that are merely nearby, and it gets worse the more markup a filing
+                           carries — which is precisely where a reviewer most needs the highlight.
+
+test_multipart_tables.py   A CONTRACT WRITTEN AGAINST IGNORANCE. `table_count` was ZERO in all
+                           seven Phase 2.1 runs and no prompt asked for one, so what a model will
+                           emit is unmeasured. Two row shapes are accepted, a bare scalar is
+                           accepted, an unknown key survives, and a missing envelope key is a
+                           FINDING rather than a refusal — because a reader that rejected an
+                           unexpected shape would measure which shape the prompt happened to
+                           suggest. What these tests may never start asserting is named in the
+                           module docstring: that a table has a header row, that its type is one
+                           of a list, that a unit string is well formed.
+```
+
+### The mutation-proof discipline these suites follow
+
+**A REGRESSION TEST WHOSE FAILURE HAS NEVER BEEN OBSERVED IS A CLAIM, NOT A GUARD.** The rule
+already stated under [Three guards that exist because something got
+past](#three-guards-that-exist-because-something-got-past) is applied here in a stricter form,
+because every one of these modules computes a number that a person will later believe:
+
+```
+EVERY REFUSAL HAS AN ACCEPTANCE PARTNER   a cell absent from the source fails the table AND a cell
+                                          drawn from its source element passes; a table naming no
+                                          such element fails AND one naming a real element
+                                          discharges it; an incompatible pairing fails condition
+                                          eight AND a parse accounting for every item passes the
+                                          whole gate. A gate wired to refuse everything satisfies
+                                          half of these and destroys the product.
+
+ONE INPUT FLIPPED AT A TIME               `test_flipping_one_gate_input_fails_exactly_the
+                                          _conditions_it_should` and its ledger twin are
+                                          parametrized over the gate's inputs and assert EXACTLY
+                                          which conditions go red. A gate that failed everything
+                                          whenever anything was wrong would pass a coarser test
+                                          and would tell a reviewer nothing about what to look at.
+
+THE SUGGESTER ACCEPTS NONE OF ITS OWN     `test_suggest_accepts_none_of_its_own_proposals_and
+  PROPOSALS                               _derives_the_same_document_twice`. A mechanical
+                                          suggestion is evidence for a human, and a suggester that
+                                          could enact its own proposal is a backend acquiring a
+                                          semantic opinion.
+
+A COUNT NEVER GOES NEGATIVE               three separate tests assert that spans, table elements
+                                          and images silently omitted never go below zero, and one
+                                          asserts every percentage is zero when its denominator is
+                                          zero. An omission count that can go negative reports a
+                                          filing as MORE than covered.
+
+THE DOCUMENT SAYS WHAT IT IS NOT          the ledger mapping and the gate mapping each assert IN
+                                          THEIR OWN OUTPUT that passing is not completeness, and
+                                          a test reads that back. Prose in a doc file is not
+                                          carried to the person reading a result.
+```
+
+**HERMETIC, AND DELIBERATELY SMALL FIXTURES.** `test_completeness.py` measures four lines of
+synthetic prose, one table element and one image — a filing small enough to count by hand — rather
+than the 41 table elements of somebody's real 10-Q. A test whose denominator is a real filing
+proves that a number came out, not that the arithmetic is right. Inventories are built from
+`packages.source_inventory` records directly rather than by walking markup, so a ledger test cannot
+go red for a markup-walker reason; the walker has its own 89.
 
 ## The Phase 2.1 architecture guards
 

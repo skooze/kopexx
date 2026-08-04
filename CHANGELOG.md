@@ -7,6 +7,248 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 `Data migrations` and `Operational changes`.
 
 
+## Phase 2.2 — the source inventory, the completeness ledger, a blocked benchmark (2026-08-04)
+
+**A PARSE CAN NOW BE MEASURED AGAINST THE FILING INSTEAD OF AGAINST ITS OWN CITATIONS.** Phase 2.1
+reported `352/364 references resolved` and `47/47 parts terminal` and could not say what fraction of
+a filing either number described. **A reference rate counts the MODEL's own citations**: a source
+region the model never mentioned never entered the denominator, so a parse that silently ignored
+half a filing and cited the other half accurately scores the same as one that read all of it. A
+terminal part count says scheduled work finished. Both were read as completeness figures and
+neither is one.
+
+**NO MODEL WAS INVOKED. MEASURED BEDROCK SPEND FOR THIS PHASE: `USD 0.00000000`.** Every nonbillable
+task was completed; the billable one was not started.
+
+**THE BENCHMARK IS BLOCKED, AND THE BLOCKER IS ARITHMETIC.** Against Apple Inc.'s 10-Q
+`0000320193-25-000008` — CIK `0000320193`, filed 2025-01-31, 63 package members, 915,890
+human-readable characters, 9.9 MB preserved — the complete human-readable source set estimates at
+243,507 input tokens, or 251,507 for a multimodal candidate charging its 2 images at the unverified
+4,000-token upper bound.
+
+```
+model                          context    est in   largest output that fits
+GPT OSS 120B                   128,000   243,507                          0   INCOMPATIBLE
+NVIDIA Nemotron 3 Super 120B   256,000   243,507                     12,493
+Qwen3 235B A22B                256,000   243,507                      8,000
+Llama 4 Maverick             1,000,000   251,507                      8,000
+Qwen3 VL 235B                  256,000   251,507                      4,493
+```
+
+**THIS IS R-21 BITING FOR THE FIRST TIME.** `GPT OSS 120B` cannot receive this filing at all —
+roughly 1.9x its whole context window — and under `INTACT_SOURCE_ONLY` that is a RESULT recorded as
+an exact blocker rather than a failure: nothing is truncated, sliced or swapped to another model.
+Two of the remaining four fit only by shrinking the answer below their own output caps — Nemotron
+from 32,000 to 12,493, Qwen3 VL from 8,000 to 4,493, which is 493 tokens of headroom and inside the
+error bar of a character-ratio estimate — and the other two fit at exactly their own 8,000-token
+caps and no higher.
+
+Running the four that can receive it, at each candidate's own verified price and its OWN measured
+Phase 2.1 call count and mean output:
+
+```
+NVIDIA Nemotron 3 Super 120B   USD 0.03790/call x 78 =  2.9564
+Qwen3 235B A22B                USD 0.05556/call x 58 =  3.2228
+Llama 4 Maverick               USD 0.06086/call x 14 =  0.8520
+Qwen3 VL 235B                  USD 0.13496/call x 47 =  6.3433
+                                                       -------
+TOTAL for the four runnable candidates                 13.3745
+Guardrail-bounded maximum at 110 calls each            31.8218
+AUTHORIZED                                              5.0000
+```
+
+Splitting `USD 5.00` equally lets ONE of the four finish and pauses three mid-parse, which produces
+exactly the `INCOMPLETE_WORK` result this phase exists to move past. Every figure is a FLOOR: the
+hardened protocol asks for structured tables over 18 substantive table elements and two resolvable
+anchors per coverage claim, which increases both output per part and the number of parts.
+
+**WHAT IS STILL NOT TRUE.** No parser selected, ranked or promoted. No summary, image or chat model
+invoked. No breadth run across the 22 form strings. No application database, no Redis, nothing
+deployed. No completeness measurement exists for any candidate on any filing, because the run that
+would produce one has not happened.
+
+### Added
+
+- **`packages/source_inventory`** — the mechanical denominator, measured from the preserved bytes
+  with no model involved: members, visible text spans, table elements and filed images. On the
+  benchmark filing, in 0.4 seconds: 63 members, 6 human-readable carrying 915,890 characters, 2
+  images, 5 machine-only, 49 SEC renderer artifacts, 1 duplicate complete submission, **0 unknown**;
+  1,757 text spans of which 1,750 are visible and 607 mechanically duplicate; 229,410 visible
+  characters; 41 table elements, of which 18 carry 20 or more non-empty cells, 8 carry no
+  non-whitespace character at all, 7 are byte-identical to an earlier element and 0 are nested.
+  **It is a validation instrument and NOT an input filter** — the model still receives the complete
+  compatible source set intact, in filed order, hash-verified, on every invocation, and
+  visible-content projection remains unapproved. It reads byte signatures rather than extensions,
+  which is the only reason anyone noticed that `image_0.jpg` is declared `GRAPHIC`, named `.jpg` and
+  is PNG bytes, 294x368.
+- **`packages/completeness`** — the six-dimension status model, interval algebra, the versioned
+  human benchmark truth, the ledger, and the fourteen-condition mechanical candidate gate. **Four
+  dispositions per inventory item and silence is not one of them**: `COVERED`, `UNRESOLVED`,
+  `HUMAN_EXCLUDED`, `SILENTLY_OMITTED`. The last is the number this phase exists to produce and no
+  reference rate can compute it. **No enum in the package carries a value meaning semantically
+  complete.** The strongest verdict backend code can reach is
+  `MECHANICAL_COMPLETENESS_CANDIDATE`, which means a person can now review the result;
+  `HUMAN_APPROVED_COMPLETE_FOR_THIS_FILING` is set by a reviewer and is scoped to one filing, one
+  source hash, one model, one version, one region or profile, one prompt version, one settings set
+  and one protocol. The gate's fourteen conditions are conjunctive rather than weighted, because a
+  score lets a strong showing on twelve dimensions outvote a silently omitted financial statement.
+- **A SIX-LEVEL ANCHOR LADDER** in `packages/coverage_validation/references.py`, replacing three
+  levels: `EXACT`, `UNICODE_NORMALISED`, `WHITESPACE_NORMALISED`, `HYPHEN_NORMALISED`, and then
+  `CASE_INSENSITIVE` and `APPROXIMATE`, which are **HUMAN-REVIEW CANDIDATES and never count as
+  proof** — counting a case-folded near-match is how a citation rate starts flattering the model
+  that produced it. Every level is searched in two spaces: the bytes as filed, and the same bytes
+  with markup removed AND character references decoded. Every offset reported is an offset into the
+  ORIGINAL, through composed index maps. **Entity decoding is not a refinement.** The benchmark
+  filing carries 970 character references and ZERO literal non-ASCII characters — 655 `&#160;`, 116
+  `&#8217;`, 53 `&#8212;`, 51 each of `&#8220;` and `&#8221;` — and a model quoting a sentence back
+  writes the character, not the escape, so without decoding every quote containing an apostrophe
+  would have failed to resolve indistinguishably from a fabricated citation. Levels are built LAZILY
+  with identity shortcuts, because eight eager transforms over a 732 KB document is ten million
+  interpreter iterations per artifact.
+- **`packages/multipart/tables.py`** — the model-returned STRUCTURED TABLE envelope: cells with grid
+  positions, row and column spans, original cell text, an optional normalised value **that is never
+  checked**, a unit and a period label that are the model's own words, continuation links, image
+  dependency and unresolved cells. `packages/completeness/tables.py` validates one against the
+  source element it names — the element exists, the member was submitted, the grid has no collision,
+  and every cell's text occurs in that element's cells. **Nothing validates a table's meaning**; a
+  validator that checked `unit` against a list of units would be the first brick of the universal
+  filing taxonomy `rules.md` section 21 rule 2 forbids.
+- **`packages/multipart/gaps.py`** — a stable fingerprint over a gap's STRUCTURAL identity: the kind
+  of finding, and the model-created identifier or filename it names. **The free-text fields are
+  deliberately excluded.** `evidence`, `why`, `what` and `where` describe a gap rather than identify
+  it, and hashing the sentence would let a rephrasing defeat deduplication. A repeated gap is still
+  recorded, still shown to a reviewer and still carried in the evidence; it stops creating new
+  billable work.
+- **Part-explosion guardrails** in `orchestrator/multipart_service.py`: `max_new_parts_per_cycle`
+  20, `soft_part_threshold` 64, `hard_part_ceiling` 100, `no_progress_tolerance` 1. **There was no
+  limit on part count at all.** Phase 2.1 measured plans of 5, 12, 24, 27 and 28 parts for ONE
+  identical filing and nothing in the code would have stopped 280; the only economic bound was
+  `filing_budget_usd`, which stops a run by refusing to pay rather than by noticing the shape of the
+  work, and the only structural bound was a `max_steps=400` default parameter that no setting could
+  reach and no page displayed. At the soft threshold the branch PAUSES with its projected cost
+  visible and an explicit user action resumes it; at the hard ceiling automatic scheduling stops for
+  good, every artifact already bought is preserved, and the job is marked for human review. **None
+  of the four says anything about a filing** — a part count is a property of the model reading it.
+- **Seven new prompt versions, all registered and hash-locked**: `parser-multipart-plan@2`,
+  `-part@2`, `-replan@2`, `-reconcile@2`, `-gap@2`, `-format-repair@2`, and the new role
+  `parser-multipart-table@1`. **The semantic request of each v1 is carried over word for word where
+  it still applies**; what is added is a coverage-claim contract, a structured-table contract and an
+  image contract, and what is not added is any vocabulary of sections, table types, units or period
+  labels. The six v1 families are marked `SUPERSEDED` and their bytes are untouched, so every
+  Phase 2.1 result remains readable against the exact prompt that produced it.
+  `parser-multipart-table@1` is a new ROLE because it supersedes nothing: it is the targeted call
+  reconciliation makes when a data-bearing table element was not accounted for by any part, so a
+  missing table costs one call rather than a whole re-parse.
+- **`packages/review_web/benchmark_view.py`** — the completeness review surface, where a PERSON
+  turns the raw inventory into a REQUIRED SET one item at a time, on the record. The inventory can
+  say there are 41 table elements; it cannot say which carry data, which are the filing agent's
+  page-layout scaffolding, and which are the same rendering twice. **The default is
+  `REQUIRES_REVIEW` and it is not a placeholder** — an unreviewed item is neither demanded nor
+  excused, and it blocks the mechanical gate, which is the correct pressure. Two mechanical
+  suggestions are DISPLAYED AND NOT APPLIED: `MECHANICALLY_EMPTY` for a table whose cells carry no
+  non-whitespace character, `MECHANICALLY_DUPLICATE` for one whose source slice is byte-identical to
+  an earlier element. Every filing-derived value on every page goes through `html.esc` and every
+  state change is a form post with a CSRF token, because recording a judgement changes the
+  denominator of a benchmark.
+- **`docs/adr/ADR-0021-single-filing-completeness-measurement.md`** — the decision record, and
+  **`docs/sprints/PHASE-0202-bedrock-research-and-completeness-benchmark.md`** — the phase record,
+  carrying the research, the inventory, the compatibility result and the arithmetic that blocked the
+  run.
+- **202 new test functions across four new files**, collecting as 247 cases:
+  `tests/unit/test_source_inventory.py` (75), `tests/unit/test_completeness.py` (94),
+  `tests/unit/test_anchor_ladder.py` (17), `tests/unit/test_multipart_tables.py` (16). The suite
+  moves from 1,261 to **1,564 passing, 0 skipped**. No existing test was weakened, disabled, skipped
+  or deleted.
+
+### Changed
+
+- **`prompts/parser/versions.yaml`** records the six v1 multipart families as `SUPERSEDED` with a
+  forward pointer. These are VERSIONS rather than new roles, which is the opposite of the Phase 2.1
+  choice and for a stated reason: Phase 2.1 needed multipart and single-response runnable
+  simultaneously, and Phase 2.2's protocol REPLACES the Phase 2.1 multipart protocol for new runs.
+- **The reconciliation brief is now shown the CURRENT EFFECTIVE STATE.** Version 1 was re-shown a
+  superseded part's stale unresolved counts, because an earlier result is never overwritten, so the
+  model kept re-reporting items whose replacements had already run.
+- **Both new packages are wired in.** `packages/orchestrator/service.py` builds a filing's inventory
+  and memoises it per source set; `packages/review_api/handlers.py` reads the benchmark truth and
+  its mechanical suggestions; `packages/review_web/benchmark_view.py` reads both. In
+  `packages/multipart`, `tables.py` and `gaps.py` are exported and tested and the scheduler does not
+  read them yet.
+- **`Makefile`** measures coverage over `packages.source_inventory` and `packages.completeness`.
+- **No new runtime dependency.** Both new packages are standard library over the existing ones;
+  `ruamel.yaml` and `httpx` remain the whole list, and `boto3` remains an optional extra.
+
+### Fixed
+
+- **Six consumers of a multipart part read the malformed original instead of the successful
+  repair.** Commit `f70c9f3` taught the ASSEMBLY INDEX to resolve a repaired artifact and left the
+  resolver as a 44-line private static method with ONE call site — so the reconciliation brief was
+  shown `node_count 0` for a part that had two nodes, four of the five mechanical findings could not
+  fire for such a part at all, and the review UI offered no way to reach the repair from the
+  original. **A false empty is the inverse of a false complete and exactly as untrue**: this
+  repository spends considerable effort making sure uncertainty produces PARTIAL or REVIEW_REQUIRED,
+  and content that exists reported as absent had no guard. `packages/multipart/effective.py` is now
+  a named, generic, testable resolver that every consumer shares, and it keeps three facts separate
+  and never collapses them — raw parseability, repair parseability, effective usability. Nothing is
+  replaced or rewritten; the malformed original keeps its own task record and stays one click away.
+- **A reservation was held for a call that never left the machine.**
+  `packages/llm_gateway/errors.py` gained `CredentialResolutionError`, a `ProviderError` subclass
+  carrying `transport_attempted=False`, and `ProviderError` itself gained `transport_attempted`
+  defaulting to `True`. **The asymmetry is deliberate**: assuming a request was sent when it was not
+  merely holds ceiling, while assuming it was not sent when it was releases money that was really
+  spent, and a ceiling enforced against a number smaller than the bill is not a ceiling.
+  `providers/bedrock.py` raises the new type for an eleven-name frozenset covering
+  `TokenRetrievalError`, `UnauthorizedSSOTokenError`, `NoCredentialsError` and the rest.
+  `orchestrator/spend_journal.py` gained `release()` and `unsettled()`; a RELEASE entry carries
+  `amount_usd 0` and `released_usd` equal to the reservation, so it contributes exactly the negative
+  of the reservation and no total needed different arithmetic. **The journal stays append-only** —
+  nothing is edited or deleted — and a release REQUIRES evidence text and refuses without it. The
+  executor releases on a failure the adapter proves was never transported, and on nothing else.
+- **A CORRECTION TO THE PHASE 2.1 RECORD, RECORDED ADDITIVELY.** `unsettled()` was run against the
+  durable journal. Phase 2.1 section 33.14 recorded `USD 0.10396815` held for four calls that failed
+  at credential resolution before transport. **The real figure is twelve task ids holding
+  `USD 0.24197085`.** Eleven are that same credential failure — `attempts 1`, zero input and output
+  tokens, no provider request id, task `FAILED`, all taken between 02:19:29 and 02:23:00 on
+  2026-08-04 — totalling `USD 0.22590990`, and the four named earlier are a subset of them. **The
+  twelfth is a different defect**: a task that SUCCEEDED, with real usage of 38,361 input and 1,228
+  output tokens and a real provider request id, carries TWO reservations of `USD 0.01606095` and one
+  settlement. It was interrupted after reserving, resumed, and reserved again; only the later entry
+  settled, and `USD 0.01606095` leaked. The Phase 2.1 record is not rewritten —
+  `rules.md` section 21 rule 16 — and the correction is carried forward into `roadmap.md`
+  section 2.2g and the sprint record.
+
+### Operational changes
+
+- **Five members of accession `0000320193-25-000008` were acquired from SEC** — the 5,150,277-byte
+  complete submission and four XBRL linkbases — through the approved User-Agent and the project's
+  own shared rate limiter, with **zero throttle events**. 58 of the 63 were already held; a re-run
+  makes ZERO SEC requests. `source_set_sha256`
+  `ca1b1f461fb695c5e10c1ac3e16dca0ad216f08fd4e87f8f59350b38cc90e465`.
+- **The capability snapshot was re-verified and NOT replaced: zero drift.** All ten committed prices
+  match the live Price List API to the digit and all five committed context and output limits match
+  the AWS model cards read 2026-08-04. Of 119 foundation models visible in `us-east-1`, 88 emit text
+  and all 88 are AUTHORIZED.
+- **Prompt caching is published for NONE of the five approved candidates**, in any region, across
+  10,995 priced dimensions of the offer file. This corroborates
+  `docs/llm/prompt-caching-investigation.md` from the billing side: there is no rate at which a
+  cache hit could be charged. Flex is published for four of five at exactly 50 percent; Llama 4
+  Maverick publishes none, in any region, under any usagetype.
+- **A second Bedrock endpoint now exists.** `bedrock-mantle` appears on most current model cards
+  alongside `bedrock-runtime` with an AWS recommendation, and three models are mantle-only.
+  `packages/llm_gateway/providers/bedrock.py` targets `bedrock-runtime` and nothing here changes
+  that; adopting the second endpoint is a user decision with its own investigation ahead of it.
+- The durable spend journal stands at `USD 3.25290926` against `COST_CEILING_USD 5.00`. Releasing
+  the eleven reservations whose every attempt provably failed before transport returned
+  `USD 0.22590990`, bringing settled spend to `USD 3.02699936` and headroom to
+  `USD 1.97300064`. The twelfth is HELD: that task reached a provider, so whether its orphaned
+  first reservation was transported is unknown, and an uncertain reservation is never called
+  settled spend.
+
+### Data migrations
+
+None. There is still no database.
+
+
 ## Phase 2.1 — model-directed multipart filing parsing (2026-08-03)
 
 **ONE FILING PARSE MAY NOW USE MANY PROVIDER RESPONSES.** Phase 2 sent a filing intact and then

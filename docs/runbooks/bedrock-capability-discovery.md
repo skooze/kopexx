@@ -76,6 +76,106 @@ record, and every model identifier, region, limit and price belongs to
 
 ---
 
+## Forward note, added 2026-08-04 — Phase 2.2 re-ran this read-only, and found zero drift
+
+> **Nothing below this note has been edited either.** Steps 1 through 6 remain the whole procedure,
+> exactly as Phase 1 wrote them. What follows is a record of a re-run and of three method details
+> worth keeping.
+
+STATUS: IMPLEMENTED. Executed 2026-08-04, `us-east-1`, under a temporary IAM Identity Center role
+resolved by the SDK provider chain. No static credential existed, none was created, none is
+recorded.
+
+```
+RAN        Step 2, control-plane discovery
+           Step 3, limits and prices
+NOT RUN    Step 4, the functionality gates. NO model was invoked
+COST       USD 0.00000000. Nothing in Steps 2 and 3 is billable, which is why a re-verification
+           is a routine check and not a project
+RESULT     ZERO DRIFT. All ten committed prices match the live Price List API TO THE DIGIT,
+           effective 2026-07-01. All five committed context and output limits match the AWS model
+           cards read 2026-08-04. The snapshot was NOT rewritten, because nothing in it moved
+```
+
+**WHEN NOTHING MOVED, DO NOT REWRITE THE SNAPSHOT.** The standing instruction above — replace it
+wholesale, never field by field — is about a snapshot that has to change. Regenerating an unchanged
+file so it carries a newer date is the same defect approached from the other side: a date the
+evidence did not earn.
+
+### Method detail 1 — a census records ENTITLEMENT, not only presence
+
+`list-foundation-models` returning a model does not mean this account may invoke it. The 2026-08-04
+census recorded both, and the two happened to agree:
+
+```
+119   foundation models visible in us-east-1
+ 88   of them emit text
+ 88   AUTHORIZED, entitlement AVAILABLE — nothing is blocked in this account
+ 63   system-defined inference profiles, across two geographies, us. and global
+```
+
+The five approved candidates were unchanged: present, ACTIVE, same inference types, same
+modalities, same access status. `Qwen3 235B A22B` is still absent from `us-east-1` and present in
+`us-west-2` exactly as Step 2's "the live API outranks the documentation" note predicts, and
+`Llama 4 Maverick` still cannot be invoked by bare model id.
+
+### Method detail 2 — to prove a NEGATIVE about a price, enumerate the offer file
+
+This is the detail most worth keeping, because the obvious approach cannot answer the question.
+
+**Querying `get-products` per model tells you what a model IS priced for. It cannot tell you what
+no model is priced for**, and "does any of the five publish a prompt-cache rate, in any region"
+is a question of the second kind. Five negative lookups are five chances to have queried the wrong
+filter.
+
+Phase 2.2 enumerated **every priced dimension in the `AmazonBedrock` offer file — 10,995 of them —
+and scanned the whole set**. That turns five absences into one exhaustive statement, and it also
+produces the control the scan needs to be believable:
+
+```
+ZERO      cache price rows for any of the five approved candidates, in any region
+SIX       models DO publish cache rates under AmazonBedrock: Nova Micro, Nova Lite, Nova Pro,
+          Nova Premier, Nova 2.0 Lite, Grok 4.3
+NOTE      the Claude family publishes cache rates under a DIFFERENT service code, so its absence
+          from an AmazonBedrock scan means nothing at all
+```
+
+A scan that found nothing anywhere would be evidence about the scan. Full record:
+[the prompt-caching investigation](../llm/prompt-caching-investigation.md), section 6.
+
+The same enumeration re-confirms why **Step 3 records the STANDARD tier only**, with a measurement
+rather than a caution: `flex` is published for four of the five at exactly 50 percent of standard
+and `batch` for all five, while **`Llama 4 Maverick` publishes no flex and no priority price in any
+region under any usagetype** — a property of the whole Llama family. `priority` is 1.75x standard,
+so **standard is the MIDDLE of three synchronous prices, not the floor**. Recording a cheaper tier
+the code does not request would understate cost, which is the one direction a cost estimate must
+never be wrong in.
+
+One asymmetry to know before enabling a tier: the resolved tier IS reported back in the Converse
+response as `serviceTier.type`, and a distinct `ResolvedServiceTier` CloudWatch dimension exists.
+That is the strongest available evidence that a REQUESTED tier and a SERVED tier can differ. **AWS
+never states the conditions under which they do**, so a measurement taken across mixed tiers cannot
+be attributed.
+
+### Method detail 3 — a second runtime endpoint now exists, and this project does not use it
+
+`bedrock-mantle` appears on most current model cards alongside `bedrock-runtime`, with AWS
+recommending it, and **three models are mantle-only** (`Grok 4.3`, `GPT-5.5`, `GPT-5.4`).
+
+```
+IMPLEMENTED           packages/llm_gateway/providers/bedrock.py targets bedrock-runtime, and
+                      every measurement this repository holds was taken through it
+REQUIRES USER         any use of bedrock-mantle. It is a second transport surface with its own
+DECISION              request shape, its own model set and its own caching story, and adopting
+                      it would change what a preserved request means
+```
+
+This is an architectural fact Phase 1, Phase 2 and Phase 2.1 did not encounter. It is recorded so
+that the next person reading a model card and seeing two endpoints knows which one produced the
+snapshot.
+
+---
+
 ## Preconditions
 
 ```

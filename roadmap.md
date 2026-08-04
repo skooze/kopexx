@@ -1,12 +1,14 @@
 # roadmap.md — Kopexx Delivery Roadmap
 
-STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2.1, 2026-08-04)
-LAST UPDATED: 2026-08-04, after the Phase 2.1 five-model proof completed.
+STATUS OF THIS DOCUMENT: IMPLEMENTED (accurate as of Phase 2.2, 2026-08-04)
+LAST UPDATED: 2026-08-04, after Phase 2.2 measured a modern filing against all five candidates and
+found that the benchmark it exists to run does not fit the authorized cost ceiling.
 ARCHITECTURE DECISIONS: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
 `docs/adr/ADR-0018-verified-capability-snapshot-over-a-provider-adapter.md` and
 `docs/adr/ADR-0019-parser-review-application-over-a-framework.md` and
-`docs/adr/ADR-0020-model-directed-multipart-parsing.md`
+`docs/adr/ADR-0020-model-directed-multipart-parsing.md` and
+`docs/adr/ADR-0021-single-filing-completeness-measurement.md`
 SEQUENCING PRINCIPLE: evidence before architecture; architecture before schema; a working parser
 review loop before anything that depends on parsed data.
 
@@ -48,6 +50,11 @@ PHASE 2.1  Model-directed multipart parsing           COMPLETE  2026-08-04. All 
                                                       candidates ran, both multimodal ones
                                                       also on an image-bearing filing.
                                                       Seven runs, USD 2.603827 measured.
+PHASE 2.2  Bedrock deep dive, the mechanical source   COMPLETE 2026-08-04, EXCEPT THE BENCHMARK
+           inventory, the completeness ledger         RUN ITSELF, which is BLOCKED on a
+                                                      cost-ceiling decision. Every nonbillable
+                                                      task finished. NO MODEL WAS INVOKED:
+                                                      measured Bedrock spend USD 0.00000000.
 PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
                                                       BLOCKED on a user parser-selection decision
 PHASE 3    Optional model stages: image, summary, chat
@@ -72,6 +79,15 @@ the PARSING stage only, and the orchestrator raises rather than running another.
 artifact records a judgement and activates no reuse: no search consults the evaluation store and no
 cache is populated. Breadth across the 22 substantive form strings has NOT been attempted and is
 blocked on a user decision about which parser and prompt version should advance.
+
+**A MODERN FILING DOES NOT FIT EVERY CANDIDATE, AND THE PROOF THAT WOULD SHOW IT DOES NOT FIT THE
+BUDGET.** Phase 2.2 measured Apple's 10-Q `0000320193-25-000008` — 63 members, 915,890
+human-readable characters, an estimated 243,507 input tokens — against all five candidates through
+the repository's own compatibility guard. `GPT OSS 120B` is INCOMPATIBLE: the source set is roughly
+1.9x its entire 128,000-token context and no output request makes that fit. Running the four that
+can receive it, at each one's OWN measured Phase 2.1 call count, costs `USD 13.3745` against a
+`USD 5.00` authorized ceiling. Nothing billable ran: measured Bedrock spend for the phase is
+`USD 0.00000000`. Section PHASE 2.2 below carries the arithmetic.
 
 | Area | Status |
 |---|---|
@@ -103,7 +119,12 @@ blocked on a user decision about which parser and prompt version should advance.
 | Model-directed multipart protocol: plan, parts, subparts, replanning, reconciliation | IMPLEMENTED — Phase 2.1, `packages/multipart` |
 | Durable hierarchical task queue, per-attempt reservation, restart and resume | IMPLEMENTED — Phase 2.1, `evaluation_store` + `orchestrator` |
 | Multipart review surface: call hierarchy, per-call review, assembled index | IMPLEMENTED — Phase 2.1, `review_web/multipart_view.py` |
-| Prompt caching | INVESTIGATED and NOT AVAILABLE — Phase 2.1, `docs/llm/prompt-caching-investigation.md` |
+| Prompt caching | INVESTIGATED and NOT AVAILABLE — Phase 2.1, reconfirmed from the billing side in Phase 2.2: no cache rate is published for any of the five in any of 10,995 priced dimensions |
+| Mechanical source inventory: members, visible spans, table elements, filed images | IMPLEMENTED — Phase 2.2, `packages/source_inventory` |
+| Completeness ledger: six-dimension status, interval algebra, versioned human benchmark truth, the 14-condition mechanical gate | IMPLEMENTED — Phase 2.2, `packages/completeness` |
+| Six-level source-anchor ladder against the preserved bytes | IMPLEMENTED — Phase 2.2, `coverage_validation/references.py`, replacing three levels |
+| Completeness review surface: a person classifies one filing's inventory | IMPLEMENTED — Phase 2.2, `review_web/benchmark_view.py` |
+| Single-filing completeness benchmark across the five candidates | BLOCKED — Phase 2.2, on a cost-ceiling decision. Nothing has been run |
 | Image / summary / chat artifacts | NOT STARTED — Phase 3 |
 | Persistence, approval gate, Redis cache | NOT STARTED — Phase 4 |
 | Background population | NOT STARTED — Phase 5, needs separate authorization |
@@ -423,6 +444,13 @@ protocol remains runnable so the two can be compared. Measured results are in
 
 ## 2.1f — The proof that has NOT finished, and why
 
+> **FORWARD NOTE, 2026-08-04.** This subsection was written while the proof was blocked and it is
+> left standing rather than rewritten. The blocker was cleared by `aws sso login` on the host and
+> **all five candidates then ran** — seven runs, `USD 2.603827` measured, recorded in the block at
+> the top of this file and in `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md`
+> section 3. What follows describes the interruption, which is still worth reading because it is
+> R-35.
+
 **ONE CANDIDATE OF FIVE RAN.** `GPT OSS 120B` produced a valid, schedulable 24-part plan on the
 preserved 3M 10-K405 of 1996 and four completed parts resolving 65 of 66 source references
 against the preserved bytes. The AWS IAM Identity Center session then expired mid-run at
@@ -437,6 +465,228 @@ that had succeeded. `aws sso login` on the host unblocks it; the runbook is
 **WHAT THAT LEAVES UNMEASURED**: four candidates under this protocol, the multimodal filing
 entirely, truncation and replanning against a real model, reconciliation cycles against a real
 model, and a completed mechanical assembly.
+
+---
+
+# PHASE 2.2 — THE MECHANICAL SOURCE INVENTORY, THE COMPLETENESS LEDGER,
+# AND A BENCHMARK THAT DOES NOT FIT THE AUTHORIZED CEILING
+# COMPLETE 2026-08-04 EXCEPT THE BENCHMARK RUN, WHICH IS BLOCKED ON A USER COST DECISION.
+#
+# NO PROVIDER REQUEST WAS ISSUED BY THIS PHASE. Measured Bedrock spend: USD 0.00000000.
+#
+# Decision: docs/adr/ADR-0021-single-filing-completeness-measurement.md
+# Record:   docs/sprints/PHASE-0202-bedrock-research-and-completeness-benchmark.md
+
+## 2.2a — The defect this phase exists to close
+
+Phase 2.1 could report `352/364 references resolved` and `47/47 parts terminal` and could not say
+what fraction of a filing either number described.
+
+**A REFERENCE RATE COUNTS THE MODEL'S OWN CITATIONS.** A source region the model never mentioned
+never entered the denominator at all, so a parse that silently ignored half a filing and cited the
+other half accurately scores the same as one that read all of it. A terminal part count says
+scheduled work finished. Both were read as completeness figures and neither is one.
+
+The fix is a denominator measured from the FILING rather than from the parse, and a disposition per
+inventory item in which silence is not one of the options.
+
+## 2.2b — The benchmark filing, and what a mechanical inventory found in it
+
+Apple Inc., `AAPL`, CIK `0000320193`, form `10-Q`, accession `0000320193-25-000008`, filed
+2025-01-31, report period 2024-12-28, inline-XBRL era. 63 package members, 9.9 MB preserved. Five
+members were acquired from SEC in this phase — the 5,150,277-byte complete submission and four XBRL
+linkbases — and 58 were already held. Zero throttle events.
+
+Measured by `packages/source_inventory` over the preserved bytes in 0.4 seconds, with no model
+involved:
+
+```
+63 members    6 human-readable, 915,890 characters    2 images    5 machine-only
+49 SEC renderer artifacts    1 duplicate complete submission    0 unknown
+1,757 text spans, 1,750 visible, 607 mechanically duplicate, 229,410 visible characters
+41 table elements: 18 with 20+ non-empty cells, 8 empty of text, 7 byte-duplicates, 0 nested
+source_set_sha256  ca1b1f461fb695c5e10c1ac3e16dca0ad216f08fd4e87f8f59350b38cc90e465
+```
+
+**970 CHARACTER REFERENCES AND ZERO LITERAL NON-ASCII CHARACTERS.** Every non-breaking space,
+apostrophe, em dash and quotation mark in this filing is an escape: 655 `&#160;`, 116 `&#8217;`,
+53 `&#8212;`, and 51 each of `&#8220;` and `&#8221;`. A model quoting a sentence back writes the
+CHARACTER, not the escape. Without entity decoding in the resolution ladder, every quote containing
+an apostrophe would have failed to resolve — and a failed resolution is indistinguishable from a
+fabricated citation. That is the same class of defect Phase 2.1 saw as "a non-breaking hyphen"
+among the twelve unresolved GPT OSS references.
+
+**A FILED IMAGE IS NOT ALWAYS WHAT ITS NAME SAYS.** `image_0.jpg` is declared `GRAPHIC`, named
+`.jpg`, and is PNG bytes, 294x368. `aapl-20241228_g1.jpg` really is jpeg, 46x56. The disposition
+reads the byte signature rather than the extension, which is the only reason this was seen at all.
+Recorded as an observation about this filing, not generalised.
+
+## 2.2c — R-21 bites, and the answer is a refusal rather than a workaround
+
+Measured with the repository's own compatibility guard, the committed capability snapshot and the
+multipart PART prompt. Token figures are CHARACTER-RATIO ESTIMATES at 3.8 characters per token — an
+upper bound, never a tokenizer count. The two multimodal rows charge 2 images at the UNVERIFIED
+4,000-tokens-per-image upper bound the pre-spend guard uses.
+
+| model | context | est. input | largest output that fits |
+|---|---:|---:|---|
+| GPT OSS 120B | 128,000 | 243,507 | 0 — **INCOMPATIBLE** |
+| NVIDIA Nemotron 3 Super 120B | 256,000 | 243,507 | 12,493 |
+| Qwen3 235B A22B | 256,000 | 243,507 | 8,000 |
+| Llama 4 Maverick | 1,000,000 | 251,507 | 8,000 |
+| Qwen3 VL 235B | 256,000 | 251,507 | 4,493 |
+
+**GPT OSS 120B CANNOT RECEIVE THIS FILING, AND NOT MARGINALLY.** The complete human-readable source
+set is roughly 1.9x its entire context window; no output request makes it fit. Under
+`INTACT_SOURCE_ONLY` that is a RESULT recorded as an exact blocker — nothing is truncated, sliced,
+or swapped to another model.
+
+**TWO OF THE OTHER FOUR FIT ONLY BY SHRINKING THE ANSWER, AND TWO FIT WITH NOTHING TO SPARE.**
+Nemotron's own output cap is 32,000 and it fits at 12,493. Qwen3 VL's is 8,000 and it fits at 4,493,
+which leaves 493 tokens of headroom — inside the error bar of a character-ratio estimate. Qwen3 235B
+A22B and Llama 4 Maverick each fit at exactly their own 8,000-token caps and no higher. **Only
+Llama 4 Maverick's 1M context has room on the INPUT side.** A smaller answer per call means more
+parts, and every part re-sends 243,507 input tokens.
+
+This is R-21, whose status was OPEN since it was written. Phase 2 and Phase 2.1 could not touch it
+because a shared benchmark can only contain filings that fit every candidate. This one does not.
+
+## 2.2d — The benchmark is BLOCKED, and the arithmetic is the reason
+
+Per-call cost is the estimated intact input at each candidate's own verified price, plus that
+candidate's OWN measured Phase 2.1 mean output per call. No model's call count or repair rate is
+applied to another.
+
+```
+model                          est in  USD/call  P2.1 calls   USD at that count
+GPT OSS 120B                  243,507         -           -   INCOMPATIBLE
+NVIDIA Nemotron 3 Super 120B  243,507   0.03790          78          2.9564
+Qwen3 235B A22B               243,507   0.05556          58          3.2228
+Llama 4 Maverick              251,507   0.06086          14          0.8520
+Qwen3 VL 235B                 251,507   0.13496          47          6.3433
+                                                                   --------
+TOTAL, the four runnable candidates                                 13.3745
+GUARDRAIL-BOUNDED MAXIMUM at 110 calls each                         31.8218
+AUTHORIZED                                                           5.0000
+```
+
+**SPLITTING USD 5.00 EQUALLY LETS ONE OF FOUR FINISH.** `USD 1.2500` buys 32 Nemotron calls against
+78 needed, 22 Qwen3 235B calls against 58, 20 Maverick calls against 14, and 9 Qwen3 VL calls
+against 47. The other three would hit the filing-run budget and PAUSE mid-parse — the designed
+behaviour, and exactly the `INCOMPLETE_WORK` result this phase exists to move past. A paused branch
+cannot reach `MECHANICAL_COMPLETENESS_CANDIDATE`, because condition 8 of the gate requires that no
+scheduled required job remain nonterminal.
+
+**EVERY FIGURE ABOVE IS A FLOOR.** The hardened protocol asks for a structured table over 18
+substantive table elements and two resolvable anchors per coverage claim, which increases output per
+part and increases the number of parts.
+
+**THE CUMULATIVE CEILING BINDS FIRST IN ANY CASE.** The durable journal stands at `USD 3.25290926`
+against `COST_CEILING_USD 5.00`, so `USD 1.75` is available before the configured repository ceiling
+refuses. Releasing the eleven reservations whose attempt provably failed before transport returns
+`USD 0.22590990`, bringing settled spend to `USD 3.02699936` and headroom to `USD 1.97300064`. The
+twelfth is HELD — see 2.2g.
+
+Nothing billable runs until the ceiling question is answered. A partial arbitrary subset is not run
+in the meantime, because a comparison drawn from whichever candidates happened to be affordable is
+not a comparison.
+
+## 2.2e — What was built
+
+```
+packages/source_inventory              members, visible text spans, table elements, filed images,
+                                       measured from the preserved bytes. Standard library only
+packages/completeness                  the six-dimension status model, interval algebra, the
+                                       versioned human benchmark truth, the ledger, and the
+                                       fourteen-condition mechanical candidate gate
+multipart/effective.py                 the shared effective-artifact resolver
+multipart/tables.py                    the structured-table envelope reader
+multipart/gaps.py                      stable gap fingerprints
+coverage_validation/references.py      the SIX-LEVEL anchor ladder replacing three levels
+llm_gateway/errors.py                  CredentialResolutionError, ProviderError.transport_attempted
+orchestrator/spend_journal.py          release() and unsettled()
+orchestrator/multipart_service.py      part-explosion guardrails
+prompts/parser/                        six v2 families plus parser-multipart-table-v1
+```
+
+**THE INVENTORY IS A VALIDATION INSTRUMENT AND NOT AN INPUT FILTER.** The selected parsing model
+still receives the complete compatible source set intact, in filed order, hash-verified, on every
+invocation. Nothing here narrows, projects, slices or reorders what is sent; `rules.md` section 21
+rules 6 and 7 are untouched and visible-content projection remains unapproved.
+
+**AND IT ADJUDICATES NOTHING.** An offset, a length, a hash, an element name, a grid position and
+an image header field are transport facts. Whether a span is a risk factor, whether a table is a
+financial statement or a layout device, whether an image is a chart or a logo — none of that is
+decided in backend code, here or anywhere.
+
+## 2.2f — The Bedrock research, entirely read-only
+
+No `bedrock-runtime` call, no resource created, no tracked file modified.
+
+```
+119 foundation models visible in us-east-1; 88 emit text; all 88 AUTHORIZED
+ZERO DRIFT   all ten committed prices match the live Price List API to the digit, and all five
+             committed context and output limits match the AWS model cards read 2026-08-04
+FLEX         published for four of five at exactly 50 percent. Llama 4 Maverick publishes none
+CACHE        published for NONE of the five, in any region, across 10,995 priced dimensions
+```
+
+The prompt-caching finding independently corroborates
+`docs/llm/prompt-caching-investigation.md` from the billing side: there is no rate at which a cache
+hit on any of these five could be charged.
+
+**IDENTIFIED AND NOT RUN**, because completing the current five outranks adding a sixth and the
+current five do not fit: Amazon Nova 2 Lite (1M context, 64K output, the only relevant model
+publishing a cache rate), Llama 4 Scout (10M context, 8K output), Mistral Large 3 (256K/32K). GLM 5
+is REJECTED on measured ground rather than preference — 200K context against 243,507 estimated input
+tokens. The 1M-context / 128K-output combination exists only in the Claude family, which is priced
+under a different service code.
+
+**A SECOND BEDROCK ENDPOINT NOW EXISTS.** `bedrock-mantle` appears on most current model cards
+alongside `bedrock-runtime`, AWS recommends it, and three models are mantle-only.
+`packages/llm_gateway/providers/bedrock.py` targets `bedrock-runtime`. Adopting the second endpoint
+is a user decision and needs its own investigation; nothing here uses it.
+
+## 2.2g — A correction to the Phase 2.1 record, made ADDITIVELY
+
+Phase 2.1 section 33.14 recorded `USD 0.10396815` held for four calls that failed at credential
+resolution before transport. The durable journal says the real figure is larger.
+
+**TWELVE task ids hold unsettled reservations totalling `USD 0.24197085`.**
+
+Eleven are the same credential failure — token expired, refresh failed, `attempts 1`, zero input and
+output tokens, no provider request id, task `FAILED` — taken between 02:19:29 and 02:23:00 on
+2026-08-04, totalling `USD 0.22590990`. The four named in Phase 2.1 are a subset of these eleven.
+
+**THE TWELFTH IS A DIFFERENT DEFECT.** That task SUCCEEDED, with real usage of 38,361 input and
+1,228 output tokens and a real provider request id, and carries TWO reservations of `USD 0.01606095`
+with only the later one settled. It was interrupted after reserving, resumed, and reserved again.
+`USD 0.01606095` leaked.
+
+**AND IT IS HELD RATHER THAN RELEASED, WHICH IS THE SAME ASYMMETRY THE RELEASE PATH IS BUILT ON.**
+The eleven are provable: zero tokens, no provider request id, an adapter error raised before
+transport. The twelfth reached a provider, so whether its orphaned FIRST reservation was transported
+is unknown. Holding an uncertain reservation costs headroom that could have been used; releasing it
+would call money that may really have been spent settled, and a ceiling enforced against a number
+smaller than the bill is not a ceiling.
+
+The Phase 2.1 record is not rewritten. `rules.md` section 21 rule 16 forbids it, and this correction
+is carried forward here and into the sprint record instead.
+
+## 2.2h — What this phase did NOT do
+
+```
+no model invoked                             no parser selected, ranked or promoted
+no summary, image or chat model invoked      no Phase 2.5 breadth work
+no Phase 3 work                              no application database, no Redis
+nothing deployed                             no benchmark run
+```
+
+**THE BENCHMARK ITSELF HAS NOT RUN.** Four candidates can receive the filing intact and running
+those four costs `USD 13.3745` against `USD 5.00` authorized. Until that is resolved there is no
+completeness measurement for any candidate on any filing, and the ledger, the gate and the six-level
+ladder have been exercised only against tests and against the mechanical inventory — never against a
+real parse of this filing.
 
 ---
 
@@ -771,11 +1021,11 @@ breadth.
 | ID | Risk | Severity | Status |
 |---|---|---|---|
 | R-20 | Intact submission is unaffordable or impossible for a large fraction of filings. Dated Phase 0 evidence: 44% of primary documents exceed ~200k estimated tokens, 12% exceed ~1M | HIGH | OPEN. Phase 1 measures real limits; Phase 2 measures cost. The no-slicing policy makes it a visible failure, not a silent truncation |
-| R-21 | No candidate model accepts a materially sized modern filing intact | HIGH | OPEN. Phase 2 |
+| R-21 | No candidate model accepts a materially sized modern filing intact | HIGH | **MEASURED 2026-08-04, Phase 2.2. No longer hypothetical.** Against Apple's 10-Q `0000320193-25-000008` — 915,890 human-readable characters, 243,507 estimated input tokens — GPT OSS 120B is INCOMPATIBLE at 128,000 context, roughly 1.9x over. Two of the remaining four fit ONLY by shrinking the answer — Nemotron to 12,493 output tokens against its own 32,000 cap and Qwen3 VL to 4,493 against 8,000, which is 493 tokens of headroom — and the other two, Qwen3 235B A22B and Llama 4 Maverick, fit at exactly their own 8,000-token caps and no higher. Only Llama 4 Maverick's 1M context has room on the input side. The refusal is the designed behaviour: nothing was truncated, sliced or substituted |
 | R-22 | The five candidate LABELS have not been mapped to verified model IDs, versions, regions, modalities, limits or prices | HIGH | CLOSED 2026-08-03. All five mapped uniquely, reached, and recorded in `docs/llm/bedrock-capability-snapshot.yaml`. The snapshot goes stale silently, which is R-33 |
 | R-23 | Model parse output varies between reruns, weakening the completeness guarantee | HIGH | OPEN. Repeat-run variability is a measured Phase 2 output; artifacts are versioned and superseded, never overwritten |
-| R-24 | Token estimates are a character ratio, unfit for a compatibility gate | MEDIUM | OPEN. Bedrock returns exact usage per invocation, so Phase 2 measures rather than estimates; the pre-spend guard is still a character ratio and remains an upper bound, not a count |
-| R-33 | The capability snapshot goes stale silently. Nothing in the repository can detect that a provider changed a price, moved a model between regions or retired a version | MEDIUM | OPEN. Mitigated by the date carried onto every record, the runbook that regenerates it, and the rule that it is replaced wholesale. Re-run before any Phase 2 cost commitment |
+| R-24 | Token estimates are a character ratio, unfit for a compatibility gate | MEDIUM | OPEN. Bedrock returns exact usage per invocation, so Phase 2 measures rather than estimates; the pre-spend guard is still a character ratio and remains an upper bound, not a count. **Phase 2.2 made the limit concrete**: the 3.8-characters-per-token estimate is what declared GPT OSS 120B INCOMPATIBLE at 243,507 tokens and what left Qwen3 VL 235B with 493 tokens of headroom, a margin inside the estimate's own error bar. An upper bound is adequate to REFUSE and is not adequate to PROMISE, and the two multimodal figures additionally charge each image at an UNVERIFIED 4,000-token upper bound |
+| R-33 | The capability snapshot goes stale silently. Nothing in the repository can detect that a provider changed a price, moved a model between regions or retired a version | MEDIUM | OPEN. Mitigated by the date carried onto every record, the runbook that regenerates it, and the rule that it is replaced wholesale. **Re-verified 2026-08-04, Phase 2.2: ZERO DRIFT.** All ten committed prices match the live Price List API to the digit, effective 2026-07-01, and all five committed context and output limits match the AWS model cards read that day. The five candidates are present, ACTIVE, with the same inference types, modalities and access status. That is one dated check by a person, not a detector — the risk is that the repository cannot NOTICE a change, and it still cannot |
 | R-34 | Phase 1 discovery ran under a broad administrator role, which the security policy permits for one-time manual discovery but not for a durable path | MEDIUM | OPEN. A least-privilege Bedrock policy is required before any repeatable or automated invocation. No CI job holds an AWS role. ADR-0018 section 7 |
 | R-25 | Pre-2001 filing components are not individually addressable through EDGAR; the complete-submission text may be the only retrievable artifact, so the input contract must not assume a per-document URL | MEDIUM | Measured. Design constraint, not a defect |
 | R-26 | Malformed markup is normal before 2005 | MEDIUM | Measured. Transport tolerance required |
@@ -784,7 +1034,7 @@ breadth.
 | R-30 | Uniqueness rules keyed on accession alone reject valid EDGAR co-registrations | MEDIUM | CLOSED. Key is `(cik, accession)`; ownership verified from the archive path |
 | R-31 | A guessed form allowlist in runtime code contradicts the reviewed contract, and a reconciliation sharing the same filter cannot see it | HIGH | CLOSED 2026-08-03. The qualifying set is a required argument with no default; an architecture test fails on a form literal in runtime source. ADR-0017 section 8 |
 | R-32 | Capability lost to the cleanup — no local numeric evidence, no filed-document lister — is not rebuilt because nothing tracks it | MEDIUM | OPEN. The lister is Phase 2a; numeric cross-checking is reconsidered on measured need |
-| R-09 | Unit economics unknown | HIGH | OPEN. Phase 2 produces the first measured figure |
+| R-09 | Unit economics unknown | HIGH | OPEN. Phase 2 produced the first measured figures and Phase 2.1 the first multipart ones — seven runs, `USD 2.603827`, on two filings. **Phase 2.2 computed the first figure for a MODERN filing and it is the reason the benchmark is blocked**: `USD 13.3745` for the four candidates that can receive Apple's 10-Q intact, at each one's own measured call count, and `USD 31.8218` at the 110-call guardrail ceiling — against `USD 5.00` authorized. Three filings and one dry run are not a denominator, and nothing extrapolates to 613 filings |
 
 ---
 
@@ -806,7 +1056,20 @@ breadth.
 
 ## Known Limitations
 
+> **THREE OF THESE ITEMS WERE CORRECTED ADDITIVELY ON 2026-08-04, IN PHASE 2.2.** Items 1, 6 and 8
+> were true when they were written and stopped being true in Phase 1 or Phase 2. Each keeps its
+> original sentence and carries a dated correction underneath it, because `rules.md` section 21
+> rule 16 forbids rewriting a past claim — and because a limitation that quietly disappears teaches
+> nobody why it was there.
+
 1. No model has ever been invoked by this project. Every cost figure is a placeholder.
+   **CORRECTED 2026-08-04, ADDITIVELY. False since Phase 1, 2026-08-03.** Seven Phase 1 gate
+   invocations cost `USD 0.00023`; the durable spend journal now stands at `USD 3.25290926`
+   cumulative, of which the seven Phase 2.1 multipart proof runs measured `USD 2.603827` on real
+   preserved filings. Prices are official inputs verified against the live Price List API with zero
+   drift on 2026-08-04, and token counts come from the provider per invocation. What is still true
+   is narrower and is item 11: three filings is not a corpus denominator, and a PRE-SPEND estimate
+   remains a character ratio.
 2. The corpus is 613 filings out of millions. It is representative by construction, not complete.
 3. Token counts throughout are character-ratio estimates, explicitly labelled as such.
 4. Structured numeric history remains XBRL-bound and effectively complete only from 2011 — and
@@ -816,14 +1079,38 @@ breadth.
    `fintek_integration_test`. Nothing in this repository can reach them.
 6. `packages/configuration` and `packages/observability` have no non-test caller. They are the
    designated homes for startup validation and structured logging and are wired in Phase 2.
+   **CORRECTED 2026-08-04, ADDITIVELY. Half false since Phase 2, 2026-08-03.**
+   `packages/configuration` gained a non-test caller: `packages/review_api/app.py` builds every
+   instance from validated settings. `packages/observability` still has none, and the reason is
+   recorded rather than hidden — the review server silences the standard library's access log
+   precisely because that log would carry query strings which `observability` exists to redact.
+   `packages/multipart/tables.py` and `packages/multipart/gaps.py` join the list: exported, tested,
+   and not yet read by the scheduler.
 7. Filing acquisition is implemented for the inline-XBRL era only. The other five transport eras
    have no acquisition path.
 8. `packages/model_catalog` is half of its eventual self. The capability record, label mapping,
    price inputs and cost ceiling exist; the four-role router is Phase 2.
+   **CORRECTED 2026-08-04, ADDITIVELY. False since Phase 2, 2026-08-03.** The four-role router
+   arrived in `packages/model_catalog/routing.py` and the package is whole: `route` resolves one
+   label and discloses a cross-region route, `route_selection` returns one entry per SELECTED role
+   so a blank selector produces no stage, and `selector_entries` returns unavailable candidates
+   with a concrete reason instead of hiding them.
 9. The capability snapshot is dated evidence and goes stale silently. Nothing in the repository can
    detect that a provider changed a price or moved a model. R-33.
 10. Only the standard on-demand price tier is recorded. Flex, priority and batch tiers exist and are
-    not authorized; recording an unauthorized cheaper tier would understate cost.
+    not authorized; recording an unauthorized cheaper tier would understate cost. Phase 2.2 read
+    all three from the offer file and left them unauthorized: flex is published for four of the
+    five at exactly 50 percent, Llama 4 Maverick publishes none, and standard is the MIDDLE of
+    three synchronous prices rather than the floor.
+11. **Cost is measured for three filings and only three.** Nothing in `docs/llm/cost-model.md`
+    extrapolates to a corpus. The Phase 2.2 figures for a fourth filing are a DRY RUN computed from
+    each candidate's own Phase 2.1 call count; no call was made and the real count is unknown.
+12. **The single-filing completeness benchmark has not run.** The inventory, the ledger and the
+    fourteen-condition gate have never been exercised against a real parse of the benchmark filing,
+    and the benchmark truth carries no recorded human classification. Four candidates can receive
+    the filing intact and running those four costs `USD 13.3745` against `USD 5.00` authorized.
+13. **`table_count` is zero in all seven Phase 2.1 runs**, and whether these models can emit a
+    structured table when asked is still untested. The v2 prompt families ask; nothing has run them.
 
 ---
 

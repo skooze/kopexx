@@ -3,6 +3,7 @@
 STATUS: INVESTIGATED, NOT ENABLED
 DATE: 2026-08-03
 PHASE: 2.1
+RE-VERIFIED: 2026-08-04 (Phase 2.2), from the billing side, independently — section 6
 DECISION RECORD: [ADR-0020](../adr/ADR-0020-model-directed-multipart-parsing.md), decision 3
 
 ---
@@ -155,3 +156,70 @@ When any of those holds, the finding is re-verified and recorded here with its d
 capability snapshot gains the fields the brief requires (supported, applicable invocation API,
 minimum cacheable prefix, cache lifetime, pricing, region limitations, image cacheability); and
 enabling it remains a separate decision requiring the five preconditions above.
+
+---
+
+## 6. Independent corroboration from the billing side — added 2026-08-04, Phase 2.2
+
+Sections 1 and 2 rested on a control plane that describes caching for nothing and on a
+documentation page that could be out of date. **Phase 2.2 asked a third source that has no reason
+to agree with either: the AWS Price List offer file, which is what a cache hit would actually be
+BILLED against.** A capability with no published rate cannot be charged, so a missing price row is
+stronger evidence than a missing documentation row.
+
+Read 2026-08-04, read-only, no invocation:
+
+```
+10,995   priced dimensions in the AmazonBedrock offer file
+     0   cache price rows for GPT OSS 120B, in any region
+     0   cache price rows for NVIDIA Nemotron 3 Super 120B, in any region
+     0   cache price rows for Qwen3 235B A22B, in any region
+     0   cache price rows for Llama 4 Maverick, in any region
+     0   cache price rows for Qwen3 VL 235B, in any region
+```
+
+**ZERO FOR ALL FIVE, ACROSS EVERY REGION THE OFFER FILE PRICES.** This does not merely fail to
+confirm caching; it removes the mechanism by which a cache hit could be charged differently from an
+ordinary input token.
+
+### The six that DO publish a cache rate, which is what makes the zero above meaningful
+
+A scan that found nothing anywhere would be evidence about the scan. This one found rates:
+
+```
+Amazon Nova Micro     Amazon Nova Lite      Amazon Nova Pro
+Amazon Nova Premier   Amazon Nova 2.0 Lite  Grok 4.3
+```
+
+The Claude family publishes cache rates too, under a **different service code**, which is why it
+does not appear in an `AmazonBedrock` scan and why its absence there means nothing.
+
+Two of those six are worth naming precisely, because a reader will otherwise re-derive them:
+**`Amazon Nova 2 Lite` is the only model relevant to this project's filing sizes that publishes a
+cache rate** — `0.000144375` per 1k cache read, alongside 1,000,000 context and 64,000 max output —
+and **`Amazon Nova Premier` is LEGACY with an announced end of life of 2026-09-14**, so its rate is
+not a route to anything. Neither is an approved candidate; see `model-benchmark.md`, Phase 2.2.
+
+### The request-ordering reasoning is CONFIRMED, and it is the part that would still bite
+
+`cost-model.md` and ADR-0020 both record that FinTek would get no relief from caching even on a
+caching-capable model, because of the order in which it builds a request. That reasoning was
+re-checked against `packages/llm_gateway/providers/bedrock.py` in this phase and is correct:
+
+```
+what the adapter sends    the per-call BRIEF first, then the intact filing after it
+why                       the instruction must be readable before the filing it concerns
+what caching matches      a strict token PREFIX
+the consequence           the brief VARIES per call, so the invariant filing is not a shared
+                          prefix at all, and a caching-capable model would recompute the whole
+                          filing on every call anyway
+```
+
+**THAT MAKES THE ORDERING A SEMANTIC DECISION WITH A PRICE ATTACHED, NOT A BUG.** Reordering the
+payload so the invariant filing becomes the cacheable prefix would change what every model sees on
+every call, which requires re-benchmarking and, under `rules.md` section 21, explicit approval —
+and it buys exactly nothing until a caching-capable model is an approved candidate. It is recorded
+as an EXPERIMENT LATER, and nothing in the code was changed.
+
+**NOTHING WAS ENABLED, NOTHING WAS PROBED, AND NO `cachePoint` BLOCK EXISTS ANYWHERE IN THIS
+REPOSITORY.** Section 3 still holds in full.

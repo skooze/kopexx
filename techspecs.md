@@ -38,6 +38,23 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 > preserved bytes; the AWS IAM Identity Center session then expired mid-run and the remaining
 > runs stopped. `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 7.
 >
+> **CORRECTED 2026-08-04, ADDITIVELY: THE PROOF FINISHED.** The paragraph above was true when
+> written and the blocker was cleared by `aws sso login` on the host. All five candidates then ran
+> the multipart protocol against the preserved 3M 10-K405 of 1996, and both multimodal candidates
+> also ran an image-bearing Macy's 10-Q/A — seven runs, `USD 2.603827` measured. Plan sizes for one
+> identical filing ranged from 5 parts to 28. `table_count` is ZERO in all seven.
+>
+> **PHASE 2.2 COMPLETED 2026-08-04, EXCEPT THE BENCHMARK RUN IT EXISTS TO ENABLE.** A mechanical
+> source inventory and a completeness ledger now exist, so a parse can be measured against the
+> FILING rather than against its own citations. The six-level anchor ladder replaced a three-level
+> search. Two packages were added; the runtime dependency list did not grow. **NO MODEL WAS
+> INVOKED** — measured Bedrock spend for the phase is `USD 0.00000000` — and the single-filing
+> benchmark is BLOCKED: four of the five candidates can receive Apple's 10-Q
+> `0000320193-25-000008` intact and running those four costs `USD 13.3745` against `USD 5.00`
+> authorized. The fifth, GPT OSS 120B, cannot receive it at all. Decision:
+> `docs/adr/ADR-0021-single-filing-completeness-measurement.md`. Record:
+> `docs/sprints/PHASE-0202-bedrock-research-and-completeness-benchmark.md`.
+>
 > **STILL TRUE, AND THEY ARE NOT SMALL.** No application database exists. No Redis exists. No
 > summary artifact, no image artifact and no chat session exists — Phase 2 and Phase 2.1 both ran
 > the PARSING stage only, and invoking another raises. Multipart multiplies the number of PARSER
@@ -48,29 +65,44 @@ THIS DOCUMENT DESCRIBES WHAT THE CODE CURRENTLY DOES.
 Sections marked `PLANNED` describe work that does not exist. `roadmap.md` is authoritative for
 sequencing.
 
-LAST SYNCHRONIZED WITH CODE: 2026-08-03, Phase 2.1.
+LAST SYNCHRONIZED WITH CODE: 2026-08-04, Phase 2.2.
 
 VERIFICATION, measured locally on that date:
 
 ```
-1,253 tests passing, 0 skipped        coverage 91.64 percent against an 85 percent gate
+1,564 tests passing, 0 skipped        coverage 92.72 percent against an 85 percent gate
 ruff format and lint clean            across `packages tests`
-mypy clean                            `packages`
-wheel and sdist built and inspected   packages/ and dist-info only
-external import check                 9 runtime packages import; 5 deleted packages do not
-gitleaks clean over history and tree  pip-audit clean
+mypy clean                            119 source files under `packages`
 ```
+
+`pip-audit`, `gitleaks` and the wheel, sdist and external-import checks are commit-time obligations
+listed under the validation suite below. They are not restated as results here, because a result is
+only true on the day it was measured.
+
+**THE COUNT IN THIS BLOCK WAS STALE AND THE CORRECTION IS RECORDED RATHER THAN QUIETLY APPLIED.**
+It read `1,253` while Phase 2.1 in fact finished at `1,261` — eight tests written and never counted
+here, which is `rules.md` section 18 not being applied at the end of a phase rather than a defect in
+anything the code does. Phase 2.2 added 202 new test functions across four new files, collecting as
+247 cases, and `tests/unit/test_benchmark_review.py` adds 56 more, which is the whole of the
+move from 1,261 to 1,564. No existing test was weakened,
+disabled, skipped or deleted.
 
 ---
 
 # 1. CURRENT STATE
 
-## 1.1 Runtime packages — seventeen
+## 1.1 Runtime packages — nineteen
 
 None of them interprets meaning. That is the whole architecture, and it did not change when the
 first filing was parsed, or when one parse became a dozen calls: the seven packages Phase 2 added
 transport, orchestrate, preserve, prove and display, and the one Phase 2.1 added carries a plan
 the MODEL wrote. Not one of them decides what a filing says.
+
+**THE TWO PHASE 2.2 PACKAGES COUNT AND MEASURE, WHICH IS THE HARDEST PLACE TO KEEP THAT LINE.**
+`source_inventory` says where a `table` tag sits and how many non-empty cells it holds; it does not
+say the table is a balance sheet. `completeness` says a claimed interval resolves in the preserved
+bytes and an inventory item is COVERED, UNRESOLVED, HUMAN_EXCLUDED or SILENTLY_OMITTED; it does not
+say the parse is complete, and no enum in it carries a value that means semantically complete.
 
 ```
 packages/sec_identity        CIK, accession and URL normalization — the single home       5 modules
@@ -85,12 +117,13 @@ packages/llm_gateway         the model chokepoint, boundary validator, YAML 1.2 
                              and the Bedrock Converse adapter — the ONLY AWS SDK import
 packages/model_catalog       verified capabilities, label mapping, cost ceiling, and the   6
                              FOUR-ROLE ROUTER. No AWS import, no ARN, no region literal.
-packages/evaluation_store    parent runs, child jobs, exact evidence, events, comments,    7
-                             THREE independent state machines, and the durable hierarchical
-                             multipart task queue. NOT the product database.
-packages/source_transport    mechanical source-set assembly, local-first reuse, transport  7
+packages/evaluation_store    parent runs, child jobs, exact evidence, events, comments,    8
+                             THREE independent state machines, the durable hierarchical
+                             multipart task queue, and the versioned benchmark truth.
+                             NOT the product database.
+packages/source_transport    mechanical source-set assembly, local-first reuse, transport  8
                              disposition, lossless decoding, intact-source compatibility
-packages/coverage_validation elastic reader, source-reference resolution against the       5
+packages/coverage_validation elastic reader, the SIX-LEVEL anchor ladder against the       6
                              preserved bytes, generic numeric signals. No COMPLETE verdict.
 packages/prompt_registry     versioned, SHA-256 hash-locked prompts. A used version is     3
                              never edited; the hash is what makes that impossible.
@@ -100,12 +133,24 @@ packages/orchestrator        preflight, the THREE-CEILING durable spend journal,
                              bounded in-process worker
 packages/review_api          the review HTTP application on the standard library: router,  6
                              security policy, handlers, threaded server, assembly
-packages/review_web          server-rendered pages, escaping, the two assets, and the      6
-                             multipart hierarchy, per-call and assembled views. No
-                             framework, no bundler, no npm, no build step.
-packages/multipart           the MODEL-DIRECTED multipart envelopes, their generic         6
+packages/review_web          server-rendered pages, escaping, the two assets, the          7
+                             multipart hierarchy, per-call and assembled views, and the
+                             completeness review surface where a person classifies one
+                             filing's inventory. No framework, no bundler, no npm, no
+                             build step.
+packages/multipart           the MODEL-DIRECTED multipart envelopes, their generic         9
                              structural validation, safe carriage of a model-created
-                             identifier, and mechanical assembly. No filing taxonomy.
+                             identifier, mechanical assembly, the effective-artifact
+                             resolver, the structured-table reader, gap fingerprints
+packages/source_inventory    the MECHANICAL denominator: members, visible text spans,       6
+                             table elements and filed images, measured from the
+                             preserved bytes. A validation instrument, never an input
+                             filter — nothing here changes what a model receives
+packages/completeness        the six-dimension status model, interval algebra, the         8
+                             versioned human benchmark truth, the ledger and the
+                             fourteen-condition mechanical gate. Its strongest verdict
+                             is MECHANICAL_COMPLETENESS_CANDIDATE, which means a person
+                             can now review it
 ```
 
 ## 1.2 Dependency graph — measured, not asserted
@@ -123,6 +168,8 @@ model_catalog        -> llm_gateway    (the hardened YAML 1.2 parser, not reimpl
 evaluation_store     -> llm_gateway, storage
 source_transport     -> filing_acquisition, sec_identity, storage, llm_gateway
 coverage_validation  -> llm_gateway
+source_inventory     -> source_transport, storage
+completeness         -> source_inventory, coverage_validation
 prompt_registry      -> llm_gateway, storage
 orchestrator         -> evaluation_store, source_transport, coverage_validation,
                         prompt_registry, model_catalog, llm_gateway
@@ -142,6 +189,17 @@ every instance from validated settings. `packages/observability` still has none,
 recorded rather than hidden — the review server silences the standard library's access log
 precisely because that log would carry query strings which `observability` exists to redact, and
 wiring it is the change that closes this gap.
+
+Both Phase 2.2 packages are wired in. `packages/orchestrator/service.py` calls
+`source_inventory.build_inventory` and memoises the result per source set;
+`packages/review_api/handlers.py` reads `packages/completeness` for the benchmark truth and its
+mechanical suggestions; `packages/review_web/benchmark_view.py` reads both, and is the surface on
+which a person turns a raw inventory into a REQUIRED SET one item at a time.
+
+**`packages/multipart/gaps.py` AND `packages/multipart/tables.py` STILL HAVE NO NON-TEST CALLER.**
+They are exported and tested and the scheduler does not read them yet. Stated rather than implied,
+because a module with no caller is indistinguishable from a module that is wired in if nobody
+writes it down.
 
 ## 1.3 Committed test infrastructure
 
@@ -233,6 +291,16 @@ Why each, once, in `docs/adr/ADR-0017`.
 | Preflight, spend journal, parser-only execution | `orchestrator` | IMPLEMENTED — Phase 2 |
 | Parser-review API and pages | `review_api`, `review_web` | IMPLEMENTED — Phase 2 |
 | Parsed evaluation artifacts | `coverage_validation`, `evaluation_store` | IMPLEMENTED — Phase 2, provisional |
+| Model-directed multipart protocol and mechanical assembly | `multipart` | IMPLEMENTED — Phase 2.1 |
+| Durable hierarchical task queue and the multipart scheduler | `evaluation_store`, `orchestrator` | IMPLEMENTED — Phase 2.1 |
+| Mechanical source inventory: members, spans, table elements, images | `source_inventory` | IMPLEMENTED — Phase 2.2 |
+| Completeness status model, ledger, interval algebra, mechanical gate | `completeness` | IMPLEMENTED — Phase 2.2 |
+| Six-level source-anchor ladder against the preserved bytes | `coverage_validation/references.py` | IMPLEMENTED — Phase 2.2 |
+| Completeness review surface: classify one filing's inventory | `review_web/benchmark_view.py` | IMPLEMENTED — Phase 2.2 |
+| Versioned human benchmark truth, stored per accession and source hash | `completeness/truth.py`, `evaluation_store` | IMPLEMENTED — Phase 2.2 |
+| Effective-artifact resolution, structured tables, gap fingerprints | `multipart` | IMPLEMENTED — Phase 2.2; `tables.py` and `gaps.py` have no caller yet |
+| Pre-transport reservation release | `llm_gateway`, `orchestrator/spend_journal.py` | IMPLEMENTED — Phase 2.2 |
+| Single-filing completeness benchmark run | — | BLOCKED — Phase 2.2, on a cost-ceiling decision |
 | Image / summary / chat artifacts | — | PLANNED, Phase 3 |
 | Persistence, approval gate, Redis cache | — | PLANNED, Phase 4 |
 
@@ -287,7 +355,7 @@ identifier SEC assigned.
 TESTS. 15 in `tests/unit/test_sec_identity.py`, including the filing-agent prefix trap and the
 empty pre-2001 primary document.
 
-### 3.2 `packages/configuration` — IMPLEMENTED, no non-test caller
+### 3.2 `packages/configuration` — IMPLEMENTED; its caller arrived in Phase 2
 
 RESPONSIBILITY. Load and eagerly validate settings so a misconfiguration fails at startup rather
 than after generating traffic that will be blocked.
@@ -558,7 +626,7 @@ TESTS. 50 in `tests/unit/test_model_catalog.py`, all hermetic, plus 12 repositor
 # 4. Repository structure
 
 ```
-packages/        9 runtime libraries
+packages/        19 runtime libraries, enumerated in section 1.1
 prompts/         versioned .txt and .yaml, never .md — deep-analysis only
 tests/           unit, architecture, fixtures
 docs/            architecture, sec, llm, deep-analysis, api, data-dictionary, testing,
@@ -624,8 +692,219 @@ orchestrator/sizing.py             the cap handed to the provider, the target th
 **Operational limits, never statements about filings**: recursion depth 4, reconciliation cycles 3,
 format repairs per artifact 1, automatic retries per attempt 1.
 
+**FOUR MORE ARRIVED IN PHASE 2.2, AND THEY CLOSE A HOLE THAT HAD NO BOTTOM.** There was no limit on
+part count at all. Phase 2.1 measured plans of 5, 12, 24, 27 and 28 parts for ONE identical filing —
+a 5.6x spread from the same bytes on the same day — and nothing in the code would have stopped 280.
+The only economic bound was `filing_budget_usd`, which stops a run by refusing to pay rather than by
+noticing the shape of the work, and the only structural bound was a `max_steps=400` DEFAULT
+PARAMETER on `drive` that no setting could reach and no page displayed.
+
+```
+max_new_parts_per_cycle   20   the remainder of a larger proposal is left unqueued with the
+                               reason recorded. It is not renamed, dropped or silently deferred
+soft_part_threshold       64   the branch PAUSES with its projected cost and its new-versus-
+                               repeated gap split visible. An explicit user action resumes it
+hard_part_ceiling        100   automatic scheduling stops for good. Every artifact already
+                               bought is preserved and the job is marked for human review
+no_progress_tolerance      1   how many consecutive reconciliation cycles may create no new
+                               unique work before the loop stops. DECLARED AND VALIDATED; the
+                               scheduler does not consult it yet, and the gap fingerprints in
+                               `packages/multipart/gaps.py` that would feed it have no caller
+```
+
+**A LOGICAL PART IS A PART TASK OR A SUBPART TASK, counted once.** A format repair is not one — it
+produces no new coverage, it replaces an artifact — and neither is a reconciliation call. Counting
+either would fire the ceiling on work that is not part explosion.
+
+**NONE OF THE FOUR IS A STATEMENT ABOUT A FILING.** A part count is a property of the model reading
+it, which is what a 5.6x spread on identical bytes means. These bounds say what this system will pay
+for without being asked again; `rules.md` section 21 rule 19 keeps the question of how many parts a
+10-Q has with the model.
+
 **Three cost ceilings, tightest wins**: cumulative, phase, and one filing's own parse. A refusal
 PAUSES the branch with the reason visible; nothing is shrunk, dropped or downgraded to fit.
+
+**A RESERVATION IS NOW RELEASED WHEN, AND ONLY WHEN, TRANSPORT IS PROVEN NOT TO HAVE HAPPENED.**
+`packages/llm_gateway/errors.py` gained `CredentialResolutionError`, a `ProviderError` subclass
+carrying `transport_attempted=False`; `ProviderError` itself gained `transport_attempted`,
+defaulting to `True`. **The asymmetry is deliberate.** Assuming a request was sent when it was not
+merely holds ceiling that could have been used. Assuming it was not sent when it was releases money
+that was really spent, and a ceiling enforced against a number smaller than the bill is not a
+ceiling. `providers/bedrock.py` raises the new type for an eleven-name frozenset of credential
+exceptions — `TokenRetrievalError`, `UnauthorizedSSOTokenError`, `NoCredentialsError` and the rest.
+
+`orchestrator/spend_journal.py` gained `release()` and `unsettled()`. **The journal stays
+append-only**: a RELEASE entry carries `amount_usd 0` and `released_usd` equal to the reservation,
+so it contributes exactly the negative of the reservation to `sum(amount - released)` and no total
+needed different arithmetic. Nothing is edited and nothing is deleted. A release REQUIRES evidence
+text and refuses without it.
+
+`unsettled()` is what found the Phase 2.1 accounting error. **Twelve task ids hold unsettled
+reservations totalling `USD 0.24197085`**, not the four totalling `USD 0.10396815` that the
+Phase 2.1 record states. Eleven are the same credential failure, `USD 0.22590990`, and the four
+named earlier are a subset of them. The twelfth is a different defect: a task that SUCCEEDED, with
+real usage and a real provider request id, holds TWO reservations of `USD 0.01606095` and one
+settlement — it was interrupted after reserving, resumed, and reserved again, and only the later
+entry settled. Recorded additively here and in `roadmap.md` section 2.2g; the Phase 2.1 record is
+not rewritten.
+
+### 3.12 `packages/source_inventory` — IMPLEMENTED in Phase 2.2
+
+RESPONSIBILITY. Measure the FILING, before any model is invoked, so that what a parse omitted in
+silence can be seen at all.
+
+THE DEFECT IT EXISTS TO CLOSE. Phase 2.1 could report that 352 of 364 model-emitted source
+references resolved against the preserved bytes. **It could not report what fraction of the filing
+that represented**, because a source region a model never cited never entered the count. A reference
+rate measures a model's own citations and says nothing about what it left out.
+
+```
+records.py    MemberRecord, TextSpan, TableElement, TableCell, ImageRecord, HiddenReason,
+              FilingInventory. Every span carries its member, its offsets into the original
+              bytes, whether it is visible, and — when it is not — WHY
+markup.py     walk_markup, plain_text_spans, normalize_text. A tolerant reader for SGML, HTML
+              and XHTML alike, because malformed markup is normal before 2005
+images.py     media_type and dimensions read from the BYTE SIGNATURE, never the extension
+inventory.py  build_inventory over a SourceSet: 63 members in 0.4 seconds on the benchmark filing
+errors.py     MarkupUnreadableError, ImageUnreadableError, SourceInventoryError
+```
+
+INVARIANTS.
+- **It is a validation instrument and NOT an input filter.** The selected parsing model still
+  receives the complete compatible source set intact, in filed order, hash-verified, on every
+  invocation. Nothing here narrows, projects, slices or reorders what is sent, and visible-content
+  projection remains an unapproved research option under `rules.md` section 21 rule 7.
+- **It measures and does not adjudicate.** An offset, a length, a hash, an element name, a grid
+  position and an image header field are transport facts, which `rules.md` invariant 14 permits.
+  Whether a span is a risk factor, whether a table is a financial statement or a layout device, and
+  whether an image is a chart or a logo are decided by the model with source evidence and overruled
+  by a human reviewer — never here.
+- **A hidden span is recorded with its reason, never dropped.** The benchmark filing's inline-XBRL
+  hidden-fact block is one 56,644-character span carrying `display:none`; it is excluded from the
+  visible denominator WITH that reason attached, which is a transport observation rather than a
+  judgement about content.
+- **Table elements are classified by BYTES ONLY.** On the benchmark filing: 18 carry 20 or more
+  non-empty cells, 8 carry no non-whitespace character at all, 7 are byte-identical to an earlier
+  element, 0 are nested. None of those four counts is a claim about what any table holds.
+
+DEPENDENCIES. `packages/source_transport` for the member set and its dispositions, and
+`packages/storage` for hashing. Standard library otherwise; no dependency was added.
+
+TESTS. 75 test functions in `tests/unit/test_source_inventory.py`.
+
+### 3.13 `packages/completeness` — IMPLEMENTED in Phase 2.2
+
+RESPONSIBILITY. Say what a parse accounted for, measured against the mechanical inventory, in a
+shape that cannot be misread as a score.
+
+```
+status.py     SIX INDEPENDENT DIMENSIONS, never one boolean: TransportState, SerializationState,
+              ConvergenceState, SourceCoverageState, TableState, ImageState, plus HumanReadiness
+intervals.py  Interval, merge, overlaps, gaps, covered_length. Two resolved quotes bound an
+              interval in the preserved bytes; the union of every part's intervals against the
+              span inventory is a coverage figure with a real denominator underneath it
+truth.py      the VERSIONED human benchmark truth for ONE filing — REQUIRED_SPAN, EXCLUDED_SPAN,
+              REQUIRED_TABLE, EXCLUDED_TABLE, REQUIRED_IMAGE, EXCLUDED_IMAGE — plus `suggest`,
+              which proposes and never decides
+ledger.py     build_ledger and resolve_claims. FOUR DISPOSITIONS PER ITEM: COVERED, UNRESOLVED,
+              HUMAN_EXCLUDED, SILENTLY_OMITTED
+tables.py     validate one structured table against the source element it names
+gate.py       the FOURTEEN-condition mechanical candidate gate, conjunctive
+```
+
+INVARIANTS.
+- **No enum here has a value meaning SEMANTICALLY COMPLETE**, and none ever will. The strongest
+  value backend code may set in `HumanReadiness` is `READY_FOR_REVIEW`. The gate's strongest verdict
+  is `MECHANICAL_COMPLETENESS_CANDIDATE`, which means the result carries enough evidence to undergo
+  human completeness review. `HUMAN_APPROVED_COMPLETE_FOR_THIS_FILING` is set by a reviewer and by
+  nothing else, and is scoped to one filing, one source hash, one model, one model version, one
+  region or profile, one prompt version, one settings set and one protocol.
+- **SILENTLY_OMITTED is the number this package exists to produce**, and silence is not a
+  disposition. An inventory item that no coverage claim, no structured table and no resolved
+  reference reaches, and that no human excluded, is reported as omitted rather than left uncounted.
+- **Fourteen conditions, all necessary, and no threshold.** A weighted score would let a strong
+  showing on twelve dimensions outvote a silently omitted financial statement. Each condition is a
+  distinct way a parse can be UNREVIEWABLE, and none substitutes for another. Condition 8 is why a
+  budget-paused branch cannot be a candidate: no scheduled required job may remain nonterminal.
+- **Nothing validates a table's MEANING.** Not the title, not the type, not the unit, not the period
+  label, not whether the header row is really a header. `validate_table` checks that the element
+  exists, the member was submitted, the grid has no collision, and every cell's text occurs in that
+  element's cells. A cell that is neither in the source nor declared unresolved is a cell supplied
+  from somewhere other than this filing, and that is the one thing it refuses. A validator that
+  checked `unit` against a list of units would be the first brick of the universal filing taxonomy
+  `rules.md` section 21 rule 2 forbids.
+
+DEPENDENCIES. `packages/source_inventory` for the denominator and `packages/coverage_validation` for
+resolved references. It reads a structured table by attribute rather than by importing
+`packages/multipart`, so the ledger does not depend on one protocol's envelope shape.
+
+TESTS. 94 test functions in `tests/unit/test_completeness.py`.
+
+### 3.14 The six-level anchor ladder — IMPLEMENTED in Phase 2.2
+
+`packages/coverage_validation/references.py` replaced a three-level search. The four extra levels
+exist because Phase 2.1's twelve unresolved GPT OSS references were all, on inspection, small
+transcription defects over content demonstrably present in the parse: a capitalised first letter, a
+non-breaking hyphen, a dropped space, an inserted word.
+
+```
+1  EXACT                  character for character
+2  UNICODE_NORMALISED     NFKC PER CHARACTER, so every output character maps back to exactly one
+                          input position. Whole-string NFKC would compose a base letter and a
+                          combining accent into one character and lose that correspondence
+3  WHITESPACE_NORMALISED  runs of whitespace collapsed to one space
+4  HYPHEN_NORMALISED      Unicode dashes and minus signs to ASCII, soft hyphens removed, curly
+                          quotes folded to straight ones in the same pass
+5  CASE_INSENSITIVE       a HUMAN-REVIEW CANDIDATE, never a resolution
+6  APPROXIMATE            a HUMAN-REVIEW CANDIDATE: head and tail both occur, in order, close
+                          enough together to be the same passage
+```
+
+**LEVELS 1 THROUGH 4 COUNT AS MECHANICALLY RESOLVED. LEVELS 5 AND 6 DO NOT, EVER, BY DEFAULT.**
+Counting a case-folded near-match as proof is how a citation rate starts flattering the model that
+produced it.
+
+TWO SEARCH SPACES, ONE COORDINATE SYSTEM. Every level is tried over the preserved text as sent and
+over the same bytes with markup removed **and character references decoded**. Every offset reported
+is an offset into the ORIGINAL, through composed index maps. A hit found only in the second space is
+reported as `TEXT_ONLY`. The second space is not a projection of the INPUT: nothing here changes
+what a model receives.
+
+**ENTITY DECODING IS NOT A REFINEMENT.** The benchmark filing carries 970 character references and
+ZERO literal non-ASCII characters — 655 `&#160;`, 116 `&#8217;`, 53 `&#8212;`, 51 each of `&#8220;`
+and `&#8221;`. A model quoting a sentence back writes the character, not the escape. Without
+decoding, every quote containing an apostrophe would have failed to resolve, and a failed resolution
+is indistinguishable from a fabricated citation.
+
+**THE LEVELS ARE BUILT LAZILY, WITH IDENTITY SHORTCUTS.** Eight eager transforms over a 732 KB
+document is ten million interpreter iterations per artifact, and SEC markup is overwhelmingly ASCII,
+so the Unicode and typographic folds usually change not one character.
+
+### 3.15 `packages/multipart` additions — IMPLEMENTED in Phase 2.2
+
+```
+effective.py  resolve_effective: WHICH artifact currently holds a part's content when more than
+              one exists for it. It was a 44-line private method with ONE call site while six
+              other consumers read the malformed original — so the reconciliation brief was shown
+              node_count 0 for a part that had two nodes, and four of the five mechanical findings
+              could not fire for such a part at all. THREE FACTS STAY SEPARATE: raw parseability,
+              repair parseability, effective usability. Nothing is ever replaced or rewritten
+tables.py     read_table and read_tables: the model-returned STRUCTURED TABLE envelope — cells
+              with grid positions, row and column spans, original cell text, an optional
+              normalised value THAT IS NEVER CHECKED, a unit and a period label that are the
+              model's own words, continuation links, image dependency, unresolved cells
+gaps.py       fingerprint and fold: a digest over a gap's STRUCTURAL identity — the kind of
+              finding and the identifier or filename it names — and deliberately NOT over the
+              prose, because two cycles describing the same missing material in different words
+              are the same gap and a hash of the sentence would say otherwise
+```
+
+**A FALSE EMPTY IS THE INVERSE OF A FALSE COMPLETE AND EXACTLY AS UNTRUE.** This repository spends
+considerable effort making sure uncertainty produces PARTIAL or REVIEW_REQUIRED rather than a false
+complete; content that exists and is reported as absent had no guard at all until `effective.py`.
+
+`resolve_effective` has callers in `orchestrator/multipart_service.py`. `tables.py` and `gaps.py` do
+not yet, and section 1.2 says so.
 
 ## Build and packaging
 
@@ -698,17 +977,48 @@ Not implemented: authentication of any kind, and there is nothing to authenticat
    detect that a provider changed a price, moved a model or retired a version. Official price
    INPUTS are now verified; the token counts they multiply are not, so every cost figure in
    `docs/llm/cost-model.md` remains a placeholder. Still BLOCKING for any cost commitment.
+   **CORRECTED 2026-08-04, ADDITIVELY. The second half stopped being true in Phase 2.** Token
+   counts are measured — Bedrock returns exact usage per invocation — and `docs/llm/cost-model.md`
+   now carries measured per-filing figures rather than placeholders. Phase 2.1 measured
+   `USD 2.603827` across seven runs at prices re-verified with ZERO DRIFT against the live Price
+   List API on 2026-08-04. **The FIRST half is unchanged and is still true**: nothing in the
+   repository detects drift, the check was a person re-running a runbook, and what is measured
+   covers three filings, which is not a corpus. A PRE-SPEND estimate is still a character ratio at
+   3.8 characters per token, an upper bound and not a count.
 4. Filing acquisition covers the inline-XBRL era only. The other five transport eras have no
    acquisition path.
 5. The complete filed-document set of an accession cannot currently be listed. The module that did
    it was deleted for classifying documents into a Regulation S-K role taxonomy; the replacement is
    Phase 2a.
+   **CORRECTED 2026-08-04, ADDITIVELY. False since Phase 2, 2026-08-03.**
+   `packages/filing_acquisition/documents.py` is the non-classifying replacement: it reports
+   sequence, filer-declared type, filename, description and byte range from EDGAR's SGML envelope,
+   and assigns no role, class, importance or meaning to any of it. Phase 2.2 listed all 63 members
+   of accession `0000320193-25-000008` through it. One thing it does not do is reconcile: that
+   envelope's `PUBLIC DOCUMENT COUNT` declares 63 while the envelope contains 62 `DOCUMENT` blocks,
+   and the discrepancy is recorded rather than resolved.
 6. There is no local numeric evidence. DERA was deleted; cross-checking model-returned numbers
    against an independent source is reconsidered on measured need.
 7. `packages/configuration` and `packages/observability` have no non-test caller.
+   **CORRECTED 2026-08-04, ADDITIVELY. Half false since Phase 2, 2026-08-03.**
+   `packages/configuration` gained one: `packages/review_api/app.py`. `packages/observability` has
+   none. `packages/multipart/tables.py` and `packages/multipart/gaps.py` have none either — the
+   scheduler does not read them yet. Section 1.2 carries the detail.
 8. `packages/sec_identity` exports several URL builders with no current caller —
    `cik_submissions_stem`, `is_valid_accession`, `filing_index_json_url`,
    `company_tickers_exchange_url`. They are retained, unlike the dead code removed from
    `llm_gateway`, because each is a verified SEC endpoint format rather than a speculative
    contract, and this package is the designated single home for exactly that.
 9. No authentication exists. BLOCKING for any exposure beyond loopback.
+10. **The single-filing completeness benchmark has not run.** The inventory, the ledger and the gate
+    have never been exercised against a real parse of the benchmark filing, and the benchmark truth
+    has no recorded human classification. `GPT OSS 120B` cannot receive that filing intact at all,
+    and running the four that can costs `USD 13.3745` against `USD 5.00` authorized. BLOCKING for
+    any completeness measurement.
+11. **`no_progress_tolerance` is declared, validated and not enforced.** The scheduler does not
+    consult it and the gap fingerprints that would feed it have no caller, so a reconciliation loop
+    is still bounded only by `max_reconciliation_cycles`.
+12. **`packages/llm_gateway/providers/bedrock.py` targets `bedrock-runtime`.** A second endpoint,
+    `bedrock-mantle`, now appears on most current model cards with an AWS recommendation, and three
+    models are mantle-only. Adopting it is a user decision and has its own investigation ahead of
+    it; nothing in this repository uses it.

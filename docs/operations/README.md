@@ -161,6 +161,39 @@ REFUSAL          an invocation whose bound would exceed the CUMULATIVE ceiling i
 No cost per filing is known. The price INPUTS in the capability snapshot are verified; the token
 counts they multiply are not, and the first measurement is pending.
 
+> **CORRECTED 2026-08-04, ADDITIVELY.** The paragraph above is kept unedited (`rules.md` section 21
+> rule 16) and is no longer true. Cost per filing HAS been measured — 30 single-response
+> invocations in Phase 2 at `USD 0.40711113`, and seven multipart runs in Phase 2.1 at
+> `USD 2.603827`, on three filings. **Three filings is not a denominator**, nothing extrapolates to
+> a corpus, and `docs/llm/cost-model.md` is authoritative. Phase 2.2 re-verified on 2026-08-04 that
+> the price inputs those figures were computed against are still current, to the digit.
+
+### An unsettled reservation, and the only condition under which it may be released
+
+IMPLEMENTED (Phase 2.2). An operator will otherwise find the ceiling higher than the spending they
+can account for, and guess.
+
+**A RESERVATION IS RELEASED ONLY WHEN THE ADAPTER PROVES THE REQUEST NEVER REACHED A PROVIDER.**
+`packages/llm_gateway/errors.py` carries `CredentialResolutionError` with
+`transport_attempted=False`; `ProviderError` itself defaults `transport_attempted` to **True**. The
+asymmetry is deliberate — assuming a request was sent when it was not merely holds ceiling, while
+assuming it was not sent when it WAS releases money that was really spent.
+
+```
+release()    REFUSES without evidence text. A release with no recorded evidence is
+             indistinguishable from un-charging a real failure.
+             It APPENDS: amount_usd 0 and released_usd equal to the reservation. Nothing in the
+             journal is ever edited or deleted.
+unsettled()  lists every task id holding a reservation with no settlement, so the gap between
+             the journal's running total and real spend is readable rather than inferred.
+```
+
+Reading the journal with `unsettled()` on 2026-08-04 found **twelve task ids holding
+`USD 0.24197085`**, of which eleven were one expired-SSO credential failure and the twelfth was a
+task interrupted after reserving, resumed, and reserved again with only the later entry settled.
+The full accounting is in `docs/llm/cost-model.md`; the operational lesson is that a long parse
+interrupted mid-flight can leave a reservation behind, and `unsettled()` is how it is found.
+
 ### What a restart does, and what it deliberately does not
 
 `EvaluationStore.mark_interrupted_jobs()` runs once at start-up. Every child job still in a
@@ -252,6 +285,57 @@ provider time. If the session expires mid-run, every subsequent call fails with 
 provider error, the task records the reason, and the run stops with everything already produced
 preserved. `aws sso login` and then **Resume interrupted work** continues it. This is not
 hypothetical: it happened during the Phase 2.1 proof runs.
+
+**A PART COUNT NOW HAS A SOFT THRESHOLD AND A HARD CEILING.** Added in Phase 2.2 to
+`packages/orchestrator/multipart_service.py`, as code defaults rather than environment variables:
+
+```
+soft_part_threshold   64    crossing it emits a parts.soft_threshold event. Nothing is stopped;
+                            an operator is told, because a plan growing past 64 logical parts is
+                            the shape a runaway looks like before it is one
+hard_part_ceiling    100    emits a parts.hard_ceiling event and stops AUTOMATIC scheduling
+                            there. Every artifact already produced is preserved and the result
+                            requires human review. A part left unqueued is left unqueued WITH THE
+                            REASON RECORDED — never renamed, dropped or silently deferred
+```
+
+The defect this prevents is arithmetic rather than semantic: **every part re-sends the intact
+filing and pays the full uncached input rate for it**, so an unbounded part count is an unbounded
+bill against a bounded authorization. The ceiling is an OPERATIONAL bound and says nothing about
+how many parts a filing has — the model still decides that, and a bounded run is paused with its
+reason recorded, never divided by the backend to fit.
+
+### Re-verifying the capability snapshot, read-only, for zero dollars
+
+IMPLEMENTED. Executed 2026-08-04 by Phase 2.2. **The authoritative procedure is
+[the discovery runbook](../runbooks/bedrock-capability-discovery.md)**; this section records only
+that it was run, what it cost, and what it found, so the next operator reproduces the method rather
+than reinventing it.
+
+```
+WHAT WAS RUN     the runbook's Step 2 control-plane discovery and Step 3 price and limit
+                 verification, read-only, in us-east-1, under a temporary federated identity
+WHAT WAS NOT     Step 4, the functionality gates. NO model was invoked, no resource was created,
+                 no tracked file was rewritten
+WHAT IT COST     USD 0.00000000. Control-plane calls, the Price List API and public model cards
+                 are not billable; that is why this is a routine check rather than a project
+WHAT IT FOUND    ZERO DRIFT. All ten committed prices match the live Price List API to the digit,
+                 effective 2026-07-01, and all five committed context and output limits match the
+                 model cards read 2026-08-04
+CENSUS TOTALS    119 foundation models visible in us-east-1, 88 of which emit text, and all 88
+                 AUTHORIZED with entitlement AVAILABLE; 63 system-defined inference profiles
+                 across two geographies, us. and global
+```
+
+**ZERO DRIFT IS A RESULT, AND IT MEANS THE SNAPSHOT IS NOT REWRITTEN.** The runbook's standing
+instruction is to replace the snapshot WHOLESALE rather than edit one field. That applies when
+something moved. When nothing moved, the correct action is to record the date the check was made
+and change no value — rewriting a file to carry a newer date it did not earn is the same defect
+from the other direction.
+
+Raw census output and the digests behind it are host state under the gitignored
+`var/phase2.2-research/`, for the same reason every other piece of evidence that can name an
+account is: `tests/architecture/test_phase1_aws_boundary.py` fails the build if it becomes tracked.
 
 ## Observability
 

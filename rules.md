@@ -24,6 +24,17 @@ is untouched and every semantic invocation still receives the complete source se
 approval covers OUTPUT only, and mechanical multipart INPUT and visible-content projection remain
 unapproved. The three new rules are prohibitions.
 
+AMENDED 2026-08-04 by Phase 2.2 (ADR-0021), which added seven single-home rows in section 5 for
+mechanical source inventory, the completeness ledger, the human benchmark truth, structured-table
+validation, effective-artifact resolution, the structured-table envelope and gap identity. Nothing
+was relaxed: every added row names a package or module that exists and carries code, and every one
+of them is on the PROOF side of `rules.md` invariant 13 — they measure the preserved bytes and they
+decide nothing about what a filing means. Section 3's COMPLETE-CONTENT-INVARIANT gains a mechanism
+rather than an exception: "coverage is reconciled against discovered source material, never against
+section counts" now has an implementation that can produce the denominator, and the four
+dispositions it recognises — assigned, repeated, decorative, machine-only or `UNRESOLVED` — are the
+same four the ledger records.
+
 AMENDED 2026-08-03 by the cleanup commit (ADR-0017), which DELETED the deterministic semantic
 parser, the application persistence layer, its migrations, and the DERA mirror and fact loader.
 Every amendment made that day is a STRENGTHENING or a correction of a statement that had become
@@ -512,6 +523,13 @@ Before writing a new function:
 | The durable hierarchical task queue and its state machine | `packages/evaluation_store/tasks.py` and `queue_states.py` |
 | Multipart output sizing: the cap, the target and the headroom between them | `packages/orchestrator/sizing.py` |
 | The synthetic brief compiled for one multipart invocation | `packages/orchestrator/briefs.py` |
+| Mechanical inventory of preserved bytes: members, visible-text spans, table elements, images | `packages/source_inventory/` |
+| The completeness ledger, its six-dimension status model and the mechanical candidate gate | `packages/completeness/` |
+| The versioned HUMAN benchmark truth for one filing | `packages/completeness/truth.py` |
+| Validating a structured table against the source element it names | `packages/completeness/tables.py` |
+| Which artifact currently holds a part's content | `packages/multipart/effective.py` |
+| The structured-table envelope a model returns | `packages/multipart/tables.py` |
+| A gap's stable identity, so a repeat can be recognised as one | `packages/multipart/gaps.py` |
 | Artifact approval and reuse | `packages/artifact_store/` — RESERVED, Phase 4 |
 | Scope validation | `packages/deep_analysis/scope.py` — RESERVED, Phase 7 |
 

@@ -39,6 +39,19 @@
 > Four candidates and the multimodal filing have not run. The partial evidence is in
 > `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 3.
 >
+> **SUPERSEDED 2026-08-04, ADDITIVELY. THE RE-RUN FINISHED.** The note above is kept unedited
+> (`rules.md` section 21 rule 16) and is no longer true: the credential event cleared, and all five
+> candidates ran the multipart protocol on the 3M 10-K405 while both multimodal candidates also ran
+> the image-bearing Macy's 10-Q/A — **seven runs, `USD 2.603827` measured**. Results are in
+> `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 3. **Nothing in them ranks,
+> scores, promotes or eliminates a candidate, and `table_count` is ZERO in all seven.**
+>
+> **UPDATED 2026-08-04 BY PHASE 2.2. NO MODEL WAS INVOKED IN THAT PHASE AT ALL.** It re-verified
+> the committed capability evidence read-only, censused what else the account offers, and measured
+> intact-source compatibility for a materially sized modern filing — which is the first result this
+> document carries that a candidate **cannot** produce. See
+> [PHASE 2.2](#phase-22--compatibility-a-census-and-still-no-benchmark-2026-08-04).
+>
 > **NOTHING HERE RANKS, SCORES, PROMOTES OR ELIMINATES A CANDIDATE, UNDER EITHER PROTOCOL.** All
 > five remain equally available for user-directed testing, and a comparison drawn from one candidate
 > is exactly the reasoning `rules.md` section 21 rule 14 forbids.
@@ -46,6 +59,161 @@
 > Authoritative: `docs/adr/ADR-0016-corpus-first-model-first-architecture.md`,
 > `docs/adr/ADR-0017-delete-the-rejected-parser-and-application-persistence.md`,
 > `docs/adr/ADR-0019-parser-review-application-over-a-framework.md` and `roadmap.md`.
+
+---
+
+# PHASE 2.2 — Compatibility, a census, and still no benchmark (2026-08-04)
+
+**NO MODEL WAS INVOKED. NO PROVIDER REQUEST WAS ISSUED. MEASURED SPEND: `USD 0.00000000`.** No
+candidate was added to the approved set, none was removed, **and no parser was selected, ranked,
+promoted or eliminated.** Everything below is either a read-only observation of the account and the
+public price and documentation surfaces, or a compatibility computation the repository's own
+pre-spend guard performs before any call.
+
+## The first candidate this document records as INCOMPATIBLE
+
+Measured against Apple Inc., CIK `0000320193`, form 10-Q, accession `0000320193-25-000008`, filed
+2025-01-31, inline XBRL. Its 6 human-readable members total **915,890 characters** and it carries
+2 filed images. Input is a **character-ratio estimate at 3.8 characters per token, an upper bound
+and not a tokenizer count**; the two multimodal rows include 2 images at the **UNVERIFIED**
+4,000-tokens-per-image bound the guard uses.
+
+| model | context | estimated input | largest output that fits | result |
+|---|---:|---:|---:|---|
+| GPT OSS 120B | 128,000 | 243,507 | 0 | **INCOMPATIBLE** |
+| NVIDIA Nemotron 3 Super 120B | 256,000 | 243,507 | 12,493 | fits |
+| Qwen3 235B A22B | 256,000 | 243,507 | 8,000 | fits |
+| Llama 4 Maverick | 1,000,000 | 251,507 | 8,000 | fits |
+| Qwen3 VL 235B | 256,000 | 251,507 | 4,493 | fits |
+
+**`GPT OSS 120B` CANNOT RECEIVE THIS FILING AT ALL, AND NOT MARGINALLY** — the source set is
+roughly 1.9x its entire context window, and no output request makes that fit. Under
+`INTACT_SOURCE_ONLY` that is a RESULT and is recorded as an exact blocker: nothing is truncated,
+sliced, or swapped to another model.
+
+**TWO CANDIDATES FIT ONLY BY SHRINKING THE ANSWER.** Nemotron's own output cap is 32,000 and it
+fits at 12,493; Qwen3 VL's is 8,000 and it fits at 4,493, leaving 493 tokens of headroom — inside
+the error bar of a character-ratio estimate.
+
+This is **R-21** — "no candidate model accepts a materially sized modern filing intact" — producing
+evidence for the first time. Phase 2 and Phase 2.1 could not touch it: by construction their shared
+benchmark could only contain filings that fit every candidate.
+
+## What the read-only census found
+
+Run 2026-08-04 in `us-east-1` under a temporary federated role, control plane and public price and
+documentation surfaces only. No `bedrock-runtime` call, no resource created.
+
+```
+119   foundation models visible to this account in us-east-1
+ 88   of them emit text
+ 88   AUTHORIZED, entitlement AVAILABLE — nothing is blocked in this account
+ 63   system-defined inference profiles, across two geographies, us. and global.
+```
+
+**THE FIVE APPROVED CANDIDATES ARE UNCHANGED.** Present, ACTIVE, same inference types, same
+modalities, same access status. `Qwen3 235B A22B` is still absent from `us-east-1` and still
+present in `us-west-2`, exactly as the snapshot records, and `Llama 4 Maverick` still cannot be
+invoked by bare model id.
+
+## Zero drift on every committed value
+
+```
+all ten committed prices              match the live Price List API TO THE DIGIT, effective
+                                      2026-07-01
+all five context and output limits    match the AWS model cards read 2026-08-04
+```
+
+**The capability snapshot did not need replacing**, and no value in it was edited. This is the
+first time R-33 — the snapshot goes stale silently — has been checked rather than assumed. The
+prices themselves are not repeated here; `bedrock-capability-snapshot.yaml` is their single home.
+
+## Three candidates the census identified, and did NOT run
+
+**IDENTIFIED, DOCUMENTED, NOT ADDED, NOT INVOKED, NOT COMPARED.** They are recorded here so that
+the decision is ready if it is ever taken; they are not approved candidates and no result of any
+kind exists for them. If one is ever adopted, its identifiers, limits and prices move into
+`bedrock-capability-snapshot.yaml` and are deleted from here, because a capability recorded twice
+drifts.
+
+```
+1  Amazon Nova 2 Lite
+   model id       amazon.nova-2-lite-v1:0
+   invoked via    us.amazon.nova-2-lite-v1:0 — an inference PROFILE is REQUIRED
+   region         seen in the us-east-1 census; the profile is a us. geography route
+   price          0.00033 in / 0.00275 out per 1k standard
+                  0.000165 in / 0.001375 out per 1k flex; cache read 0.000144375
+   limits         1,000,000 context, 64,000 max output, text + image + video
+   why noted      the only model in the account combining a context that holds this filing with
+                  room to spare AND an output limit 8x three of the five candidates. It is also
+                  the only relevant model that publishes a prompt cache rate at all.
+   risk           output is priced at 8.3x its input, so a 64K response costs USD 0.176. An
+                  inference profile is a data-residency decision, not only a throughput one.
+   dry-run cost   one Apple run at 12 calls: USD 1.15
+
+2  Llama 4 Scout
+   model id       meta.llama4-scout-17b-instruct-v1:0
+   invoked via    us.meta.llama4-scout-17b-instruct-v1:0
+   region         seen in the us-east-1 census
+   price          0.00017 in / 0.00066 out per 1k; no flex published, batch at 50 percent
+   limits         10,000,000 context, 8,000 max output, text + image
+   why noted      removes the INPUT problem for every filing in the 613-filing corpus, including
+                  the 12.9 MB JPMorgan 10-K that fits nothing else. Cheaper than Maverick in both
+                  directions, and a known transport path — it is Maverick's sibling.
+   risk           8,000 output, so the part count stays high; against THIS filing it adds little
+                  that Maverick's 1M context does not already give
+   dry-run cost   one Apple run at 14 calls: USD 0.58
+
+3  Mistral Large 3
+   model id       mistral.mistral-large-3-675b-instruct
+   invoked via    ON_DEMAND, no profile
+   region         seen in the us-east-1 census
+   price          0.0005 in / 0.0015 out per 1k; flex at 50 percent
+   limits         256,000 context, 32,000 max output, text + image
+   why noted      largest parameter count in the account, multimodal, no profile and therefore no
+                  data-residency decision, and a 32K output limit matching the best of the five
+   risk           256K context means it fits only by shrinking the answer, the same trade as
+                  Nemotron; 3.3x Nemotron's input price
+   dry-run cost   one Apple run at 20 calls: USD 2.50
+```
+
+Also observed and recorded because a later reader will otherwise look for them: the
+**1M-context / 128K-output combination exists only in the Claude family**, which is priced under a
+different service code; `Llama 4 Scout` at 10M is the only model documented above 1M anywhere on
+Bedrock; and `GLM 5` at 200K context / 128K output is the largest output limit outside Claude on an
+ordinary on-demand path and is **INCOMPATIBLE** with this filing on the same arithmetic that
+excludes `GPT OSS 120B`.
+
+## A LARGER OUTPUT LIMIT IS A COST FACT, NOT A QUALITY FACT
+
+This is the sentence that has to be read before any of the three entries above is acted on.
+
+```
+A larger output limit lets the model return more per call, which lets a plan use fewer parts,
+which lowers the number of times the intact filing is re-sent, which lowers cost.
+
+It says NOTHING about whether the parse is correct. Not whether a node's title, type, boundary
+or period is right. Not whether a table was read. Not whether a region of the filing was
+represented at all.
+```
+
+Correctness is a human judgement made in the review UI, and `review_history` is empty on all seven
+Phase 2.1 runs. Choosing a model because its output limit is bigger would be selecting a parser on
+a transport property — the shape of reasoning `rules.md` section 21 rule 14 exists to stop.
+
+## What Phase 2.2 did not measure
+
+```
+NOTHING ABOUT ANY MODEL'S BEHAVIOUR. No request was issued, so no parse, no table, no citation
+and no cost of any run was observed in this phase.
+
+REPEAT-RUN VARIABILITY. R-23, still untouched. No filing has been parsed twice by the same model
+under either protocol.
+
+WHETHER THE FOUR COMPATIBLE CANDIDATES CAN ACTUALLY PARSE THIS FILING. The benchmark did not
+run: at their own measured Phase 2.1 call counts it costs USD 13.3745 against USD 5.00
+authorized. The arithmetic is in `cost-model.md`.
+```
 
 ---
 

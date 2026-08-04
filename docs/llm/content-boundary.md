@@ -118,6 +118,118 @@ never be copied into model-visible content.
 
 ---
 
+## The structured-table contract — added 2026-08-04, Phase 2.2
+
+IMPLEMENTATION STATUS: IMPLEMENTED. Reader: `packages/multipart/tables.py`. Validator:
+`packages/completeness/tables.py`. Prompt: `prompts/parser/parser-multipart-table-v1.txt`, plus the
+table contract carried into the six v2 multipart families. All registered and hash-locked in
+`prompts/parser/versions.yaml`.
+
+**IT INTRODUCES NO NEW FORMAT.** A structured table comes back inside the same **one unfenced
+YAML 1.2 document** every other response is, and every prohibition in this document applies to it
+unchanged. There is no JSON in it, no JSON Schema behind it, no native tool call producing it, and
+no second document. A grid of cells is a YAML sequence of YAML mappings, and that is the whole
+transport story.
+
+The provisional minimum envelope is three keys — `table_id`, `source_member`, `rows` — and **their
+absence is a FINDING, never a refusal.** `table_count` was ZERO in all seven Phase 2.1 runs, so
+what a model will actually emit is unmeasured, and a reader that rejected an unexpected shape would
+measure only which shape the prompt happened to suggest.
+
+### The defect the serialization rules exist to prevent
+
+**ALMOST EVERY VALUE IN A TABLE RESPONSE IS A CHARACTER-FOR-CHARACTER COPY OUT OF A FINANCIAL
+FILING, AND FILING TEXT IS MADE OF EXACTLY THE CHARACTERS THAT END A YAML DOCUMENT EARLY.** This is
+not hypothetical: under prompt version 2 in Phase 2, five of fifteen responses were UNPARSEABLE on
+serialisation grounds alone, and Phase 2.1 measured 20 unreadable responses out of 67 part calls
+from one candidate, most of them caused by a colon followed by a space inside an unquoted plain
+scalar — `State of Incorporation: Delaware`.
+
+A table makes that far more likely, because a cell is where the colons, the leading hyphens, the
+currency marks and the footnote markers live. The prompts therefore state each case with the form
+that parses, rather than asking for "valid YAML":
+
+```
+a colon followed by a space          quote the value — otherwise it becomes a mapping
+a leading hyphen followed by a space quote the value — otherwise it becomes a list item
+a hash character                     quote it. An element id such as aapl-20241228.htm#t13 is a
+                                     comment the moment it is unquoted
+an angle bracket, leading or         quote it
+  trailing spaces, a bracket
+a double quote inside a value        escape as backslash-quote. An apostrophe needs no escaping,
+                                     and the value is NOT switched to single quotes to avoid one
+a line break inside a value          a block scalar, never a quoted scalar
+a tab inside a value                 written as backslash-t inside double quotes; and NO line of
+                                     the response may be INDENTED with a tab, which YAML forbids
+                                     and which stops the parse at that line
+an identifier, a date, or anything   quoted. YAML 1.2 parses an unquoted 0000320193 as the
+  that looks like a number           integer 320193
+```
+
+### Non-ASCII characters are copied through, and tidying one is a data defect
+
+**AN EN DASH IS NOT A HYPHEN, A CURLY QUOTE IS NOT AN APOSTROPHE, AND A NON-BREAKING SPACE IS NOT A
+SPACE.** The prompts require every non-ASCII character to be copied through unchanged inside double
+quotes, and forbid straightening, folding or substituting any of them.
+
+The reason is mechanical rather than aesthetic: every cell text and every anchor is searched for in
+the **preserved bytes** of the element it names, so a tidied character is a character that is not
+there, and the resulting failure is indistinguishable from a fabricated citation. Phase 2.2
+measured the Apple 10-Q primary document carrying **970 character references and zero literal
+non-ASCII characters** — 655 `&#160;`, 116 `&#8217;`, 53 `&#8212;`, 51 each `&#8220;` and `&#8221;`
+— which is the same defect approaching from the other side, and is why the anchor ladder in
+`packages/coverage_validation` decodes entities before it searches.
+
+**THE REPOSITORY HOLDS THE RECIPROCAL OBLIGATION**, and it is already documented below under
+[Three verified YAML facts](#three-verified-yaml-facts-that-drive-the-design): `to_yaml`
+double-quotes any string carrying a character a block scalar cannot return unchanged. A boundary
+that demanded exact characters inbound and mangled them outbound would prove nothing.
+
+### What the table validator may never check
+
+`packages/completeness/tables.py` checks that the named element exists, that the member was
+submitted, that the grid has no position collision, and that every cell's text occurs inside that
+element. **Nothing validates a table's meaning** — not the title, not the type, not the unit, not
+the period label, not whether a header row is really a header. A validator that checked `unit`
+against a list of units would be the first brick of the universal filing taxonomy `rules.md`
+section 21 rule 2 forbids.
+
+---
+
+## Strict JSON-Schema structured output — REQUIRES USER DECISION
+
+IMPLEMENTATION STATUS: NOT IMPLEMENTED, and not partially implemented. No code path in this
+repository constructs a JSON Schema, requests a structured-output mode, or accepts a JSON response;
+`reject_native_tools` still refuses native tool definitions outright.
+
+**IT IS AVAILABLE ON BEDROCK, AND THAT IS PRECISELY WHY IT NEEDS A DECISION RATHER THAN A PATCH.**
+Recorded here on 2026-08-04 by the Phase 2.2 read-only research so that it is not rediscovered as a
+free win by a later reader.
+
+```
+WHAT IT WOULD PLAUSIBLY FIX   the serialization failures. Five of fifteen Phase 2 responses were
+                              UNPARSEABLE on format grounds alone, and one candidate produced zero
+                              readable documents in six attempts while returning structures a
+                              reader could see were well formed. Money already spent that cannot be
+                              reviewed is the failure this would address.
+
+WHY IT IS NOT A FREE WIN      the schema is JSON Schema and the response is JSON. Both are on the
+                              prohibited list at the top of this document, in BOTH directions.
+                              Adopting it is a change to a product rule, not an implementation
+                              detail, and ADR-0013 is the record that would have to be revisited.
+
+WHAT WOULD HAVE TO BE TRUE    a user decision, on the record. Nothing else — no measurement, no
+                              cost argument and no failure rate — authorizes it. A lower
+                              unparseable rate is not authorization to change the boundary.
+```
+
+The alternative already taken, and the one that requires no decision, is the narrowly scoped
+FORMAT REPAIR of ADR-0020 decision 7 plus the per-case serialization rules above: the malformed
+response is preserved, repaired by one call that receives the format rules and **not** the filing,
+and the original is never replaced.
+
+---
+
 ## Responsibility
 
 Produce, validate, and audit every piece of content that a language model can see, and parse
