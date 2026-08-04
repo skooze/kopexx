@@ -899,7 +899,23 @@ def test_the_filing_budget_pauses_the_queue_before_it_overspends(tmp_path: Path)
     tasks = harness.store.load_tasks(run_id, job_id)
     blocked = [t for t in tasks if t.state is TaskState.BLOCKED]
     assert blocked, "a budget of three worst-case reservations did not pause anything"
-    assert all(t.blocked_reason for t in blocked), "a task was blocked with no reason recorded"
+
+    # TWO KINDS OF BLOCKED, AND ONLY ONE OF THEM OWES AN EXPLANATION.
+    #
+    # A task paused by the BUDGET must say so: that is money refusing work, and a refusal a person
+    # cannot see the reason for is the thing this test exists to prevent. A task blocked on a
+    # declared DEPENDENCY owes nothing — it is waiting for the parts it named, which is already on
+    # its record, and inventing a sentence for it would make the two indistinguishable.
+    #
+    # CORRECTED 2026-08-04. This read `all(t.blocked_reason for t in blocked)`, which was true only
+    # because a serial run hit the budget before reconciliation ever created a dependency-blocked
+    # task. Running a parse eight-wide creates them, and the assertion started failing for the one
+    # reason that is not a defect.
+    budget_blocked = [t for t in blocked if t.blocked_reason]
+    assert budget_blocked, "the budget paused nothing, so this test proves nothing"
+    assert all(t.depends_on for t in blocked if not t.blocked_reason), (
+        "a task was blocked with neither a reason nor a dependency to be waiting on"
+    )
     assert "budget.paused" in [e.kind for e in harness.store.read_events(run_id)]
     assert [t for t in tasks if t.state is TaskState.SUCCEEDED], (
         "the pause discarded work that had already been paid for"
@@ -931,9 +947,20 @@ def test_the_phase_ceiling_is_tracked_separately_from_the_cumulative_one(
 # --- restart and partial retry -------------------------------------------------------------------------
 
 
-def restarted_targets(tasks: list[Any]) -> list[Any]:
-    """The tasks a crashed process would have left mid-flight."""
-    return [t for t in tasks if t.state in RESUMABLE_TASK_STATES]
+def strand_leases(harness: Any, run_id: str, job_id: str) -> None:
+    """Make every mid-flight task look like it belongs to a process that died.
+
+    A CRASH MEANS THE PROCESS IS GONE AND THE TEST HAS TO SAY SO, because the test process is
+    still very much alive. `mark_interrupted_tasks` and `mark_interrupted_jobs` now park only work
+    whose owner is provably dead — that is what lets several parses share one store — so a restart
+    test that leaves a LIVE lease on its tasks is simulating a restart nobody had.
+    """
+    for task in harness.store.load_tasks(run_id, job_id):
+        if task.state not in RESUMABLE_TASK_STATES:
+            continue
+        task.owner = "crashed-host:999999999"
+        task.heartbeat = "2000-01-01T00:00:00+00:00"
+        harness.store.save_task(task)
 
 
 def test_a_restart_marks_in_flight_tasks_interrupted_and_reruns_nothing(tmp_path: Path) -> None:
@@ -958,10 +985,7 @@ def test_a_restart_marks_in_flight_tasks_interrupted_and_reruns_nothing(tmp_path
     # `mark_interrupted_tasks` now parks only work whose owning process is dead — that is what lets
     # several parses share one store — so a restart test that leaves a LIVE lease on its tasks is
     # simulating a restart nobody had. The dead pid stands in for the process that crashed.
-    for stranded in restarted_targets(before):
-        stranded.owner = "crashed-host:999999999"
-        stranded.heartbeat = "2000-01-01T00:00:00+00:00"
-        harness.store.save_task(stranded)
+    strand_leases(harness, run_id, job_id)
 
     restarted = _harness(tmp_path, provider=ScriptedProvider())
     restarted.store.mark_interrupted_tasks()
@@ -1014,6 +1038,7 @@ def test_a_resumed_parse_finishes_and_actually_reaches_review(tmp_path: Path) ->
     with pytest.raises(RuntimeError):
         harness.service.multipart.drive(run_id, job_id)
 
+    strand_leases(harness, run_id, job_id)
     restarted = _harness(tmp_path, provider=ScriptedProvider())
     restarted.store.mark_interrupted_tasks()
     restarted.store.mark_interrupted_jobs()

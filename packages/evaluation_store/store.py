@@ -583,14 +583,31 @@ class EvaluationStore:
     def mark_interrupted_jobs(self) -> list[tuple[str, str]]:
         """Move every mid-flight job to INTERRUPTED. Returns the (run_id, job_id) pairs touched.
 
-        Called once at server start. NOTHING IS RE-INVOKED. A job that was RUNNING when the
+        Called once at application start. NOTHING IS RE-INVOKED. A job that was RUNNING when the
         process died may or may not have been billed; the only honest thing to do is say so and
         wait for a person to decide whether to spend again.
+
+        ABANDONED IS A TEST, NOT AN ASSUMPTION, and a job inherits it from its tasks. A job carries
+        no lease of its own because it does no work; what it owns is a set of tasks that do, so it
+        is abandoned exactly when none of them is still held by a living process.
         """
         touched: list[tuple[str, str]] = []
+        now = utc_now()
         for run_id in self.list_run_ids():
             for job in self.load_jobs(run_id):
                 if job.execution_state in RESUMABLE_EXECUTION_STATES:
+                    # A JOB IS ABANDONED ONLY WHEN NOTHING IS STILL WORKING ITS TASKS. A job holds
+                    # no lease of its own — it is a container — so its liveness is the liveness of
+                    # its work. Parking it while a live process drives its tasks was the other half
+                    # of the defect that ate a GPT OSS parse: the tasks were correctly left alone
+                    # and the job around them was marked INTERRUPTED anyway, so the run reported
+                    # itself dead while it was demonstrably still running.
+                    if any(
+                        owner_is_alive(task.owner, task.heartbeat, now=now)
+                        for task in self.load_tasks(run_id, job.job_id)
+                        if task.state in RESUMABLE_TASK_STATES
+                    ):
+                        continue
                     job.execution_state = ExecutionState.INTERRUPTED
                     job.failure = (
                         "the server restarted while this job was in flight. It was NOT rerun: a "
