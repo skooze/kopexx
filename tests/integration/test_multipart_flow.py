@@ -976,6 +976,90 @@ def test_resume_reopens_only_the_interrupted_branch(tmp_path: Path) -> None:
     assert all(t.state is TaskState.SUCCEEDED for t in others), "resume disturbed a completed part"
 
 
+def test_a_resumed_parse_finishes_and_actually_reaches_review(tmp_path: Path) -> None:
+    """FOUND ON A REAL RUN, NOT IN THIS FILE. A restart marks BOTH the tasks and the child job
+    INTERRUPTED. Reopening only the tasks left the job in a terminal state, so a parse that then
+    ran to completion had nowhere to go: 47 of 47 parts terminal, 214 nodes produced, and a job
+    still reporting INTERRUPTED with no way for a reviewer to see any of it.
+
+    The whole point of paying for half a parse and resuming it is that the finished parse becomes
+    reviewable. A resume that cannot end in READY_FOR_REVIEW has bought nothing.
+    """
+
+    class StopsAfterPlan(ScriptedProvider):
+        def invoke(self, request: ModelRequest) -> ModelResponse:
+            if parse_yaml(request.user_content).get("brief") == "part":
+                raise RuntimeError("scripted crash mid-parse")
+            return super().invoke(request)
+
+    harness = _harness(tmp_path, provider=StopsAfterPlan())
+    run = harness.service.create_run(_request())
+    run_id, job_id = run.run_id, run.job_ids[0]
+    harness.service.multipart.start(run_id, job_id)
+    with pytest.raises(RuntimeError):
+        harness.service.multipart.drive(run_id, job_id)
+
+    restarted = _harness(tmp_path, provider=ScriptedProvider())
+    restarted.store.mark_interrupted_tasks()
+    restarted.store.mark_interrupted_jobs()
+    assert restarted.store.load_job(run_id, job_id).execution_state is ExecutionState.INTERRUPTED, (
+        "the restart did not park the job, so this test would pass for the wrong reason"
+    )
+
+    restarted.service.multipart.resume(run_id, job_id)
+    job = restarted.service.multipart.drive(run_id, job_id)
+    assert job.execution_state is ExecutionState.READY_FOR_REVIEW, (
+        f"a resumed parse finished in {job.execution_state.value} and no reviewer can reach it"
+    )
+    assembly = restarted.store.load_assembly(run_id, job_id)
+    assert assembly is not None and assembly["part_count"] > 0
+
+
+def test_resuming_a_job_whose_tasks_all_finished_still_reopens_it(tmp_path: Path) -> None:
+    """THE SHAPE THE GUARD USED TO MISS. A process can die between the last task and assembly.
+    There is then nothing to re-arm, and a resume conditioned on having re-armed something would
+    be a no-op on exactly the case that most needs fixing.
+    """
+    harness = _harness(tmp_path)
+    run = harness.service.create_run(_request())
+    run_id, job_id = run.run_id, run.job_ids[0]
+    harness.service.multipart.start(run_id, job_id)
+    # Every task, and then a death before assembly: `run_next` is driven directly so `_finish` is
+    # never reached, which is the state a process that died at that moment would leave behind.
+    while harness.service.multipart.run_next(run_id, job_id):
+        pass
+    harness.store.mark_interrupted_jobs()
+    assert not harness.store.runnable_tasks(run_id, job_id)
+
+    assert harness.service.multipart.resume(run_id, job_id) == [], (
+        "a task was re-armed; this test no longer covers the empty case"
+    )
+    assert harness.store.load_job(run_id, job_id).execution_state is ExecutionState.RUNNING, (
+        "resume left a finished parse parked in INTERRUPTED"
+    )
+    assert (
+        harness.service.multipart.drive(run_id, job_id).execution_state
+        is ExecutionState.READY_FOR_REVIEW
+    )
+
+
+def test_resuming_reopens_nothing_else_and_invokes_nothing(tmp_path: Path) -> None:
+    """ANTI-VACUITY. Reopening the job must not be a licence to reopen a job that ended properly,
+    and resume itself still spends nothing — driving the queue is a separate, explicit act.
+    """
+    harness = _harness(tmp_path)
+    run_id, job_id = _run(harness)
+    before = harness.store.load_job(run_id, job_id).execution_state
+    assert before is ExecutionState.READY_FOR_REVIEW
+
+    calls = len(harness.provider.requests)
+    assert harness.service.multipart.resume(run_id, job_id) == []
+    assert harness.store.load_job(run_id, job_id).execution_state is before, (
+        "resume dragged a reviewable parse back out of its terminal state"
+    )
+    assert len(harness.provider.requests) == calls, "resume invoked a model"
+
+
 def test_one_failed_part_does_not_erase_the_parts_that_succeeded(tmp_path: Path) -> None:
     provider = ScriptedProvider()
     provider.fail_once = {"back"}

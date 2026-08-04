@@ -295,6 +295,24 @@ class MultipartParseService:
             if task.state is TaskState.INTERRUPTED:
                 self._store.resume_task(task, author=self._author)
                 reopened.append(task.task_id)
+        # THE CHILD JOB REOPENS TOO, OR A FINISHED PARSE COULD NEVER REACH REVIEW. A restart marks
+        # BOTH levels INTERRUPTED; reopening only the tasks left the job terminal while every task
+        # beneath it succeeded, and `_finish` then had nowhere to move it. Measured on a real run:
+        # 47 of 47 parts terminal, 214 nodes produced, and a job still reporting INTERRUPTED.
+        #
+        # UNCONDITIONALLY, NOT ONLY WHEN A TASK WAS RE-ARMED. A process can die between the last
+        # task and assembly, and that is precisely the case where `reopened` is empty and the parse
+        # needs nothing except to be assembled. Guarding on `reopened` would make resume a no-op on
+        # the one shape it most needs to fix. Reopening spends nothing by itself: the caller still
+        # has to drive the queue, and an empty queue costs an assembly pass.
+        job = self._store.load_job(run_id, job_id)
+        if job.execution_state is ExecutionState.INTERRUPTED:
+            job.failure = None
+            self._store.set_execution_state(
+                job,
+                ExecutionState.RUNNING,
+                message=f"reopened by {self._author}; {len(reopened)} task(s) re-armed",
+            )
         return reopened
 
     def retry(self, run_id: str, job_id: str, task_id: str) -> MultipartTask:

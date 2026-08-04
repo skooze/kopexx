@@ -144,7 +144,14 @@ _EXECUTION_TRANSITIONS: Final[dict[ExecutionState, frozenset[ExecutionState]]] =
     ExecutionState.READY_FOR_REVIEW: frozenset(),
     ExecutionState.FAILED: frozenset(),
     ExecutionState.INCOMPATIBLE: frozenset(),
-    ExecutionState.INTERRUPTED: frozenset(),
+    # INTERRUPTED REOPENS, AND ONLY THROUGH AN EXPLICIT USER ACTION. Added in Phase 2.1, because a
+    # multipart parse can be interrupted with half its parts already bought and then legitimately
+    # resumed — and under the old table the child job stayed INTERRUPTED for ever while every task
+    # beneath it succeeded, so a finished parse could never reach review. That is the same shape as
+    # `TaskState.INTERRUPTED -> READY` one level down, and it is reached the same way: a person
+    # asks. Nothing automatic uses this edge; `mark_interrupted_jobs` still only ever moves work
+    # INTO this state, and a restart still re-invokes nothing.
+    ExecutionState.INTERRUPTED: frozenset({ExecutionState.RUNNING}),
     ExecutionState.CANCELLED: frozenset(),
 }
 

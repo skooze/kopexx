@@ -562,3 +562,48 @@ def test_a_task_summary_counts_and_never_judges() -> None:
     assert summary["by_type"]["RECONCILE_PARSE"] == 1
     assert summary["actual_cost_usd"] == "0"
     assert "verdict" not in summary and "quality" not in summary
+
+
+# --- a resumed child job must be able to reach review ---------------------------------------------
+#
+# FOUND ON A REAL RUN. A restart marks BOTH levels INTERRUPTED. Resuming only the tasks left the
+# child job terminal while every task beneath it succeeded, so `_finish` had nowhere to move it:
+# 47 of 47 parts terminal, 214 nodes produced, and a job still reporting INTERRUPTED.
+
+
+def test_an_interrupted_child_job_reopens_only_to_running() -> None:
+    """The same shape as TaskState.INTERRUPTED -> READY, reached the same way: a person asks."""
+    from packages.evaluation_store import ExecutionState, permitted_execution_transitions
+
+    assert permitted_execution_transitions(ExecutionState.INTERRUPTED) == frozenset(
+        {ExecutionState.RUNNING}
+    )
+
+
+def test_no_other_terminal_execution_state_reopens() -> None:
+    """MUTATION PROOF. Only INTERRUPTED gained an edge; CANCELLED and FAILED are still ends."""
+    from packages.evaluation_store import ExecutionState, permitted_execution_transitions
+
+    for state in (
+        ExecutionState.READY_FOR_REVIEW,
+        ExecutionState.FAILED,
+        ExecutionState.INCOMPATIBLE,
+        ExecutionState.CANCELLED,
+    ):
+        assert permitted_execution_transitions(state) == frozenset(), (
+            f"{state.value} acquired an outgoing transition"
+        )
+
+
+def test_marking_interrupted_still_only_moves_work_into_that_state(
+    store: EvaluationStore,
+) -> None:
+    """A restart must still re-invoke nothing. The new edge is for an explicit resume only."""
+    import inspect
+
+    source = inspect.getsource(EvaluationStore.mark_interrupted_jobs)
+    assert "ExecutionState.INTERRUPTED" in source
+    assert "ExecutionState.RUNNING" not in source, (
+        "the restart path can now move a job OUT of INTERRUPTED, which would resume billable work"
+    )
+    assert store is not None

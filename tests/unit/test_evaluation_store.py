@@ -358,9 +358,24 @@ def test_a_validation_verdict_reaches_review_rather_than_failing_the_job() -> No
     assert ExecutionState.READY_FOR_REVIEW in TERMINAL_EXECUTION_STATES
 
 
-def test_terminal_execution_states_have_no_successor() -> None:
-    for state in TERMINAL_EXECUTION_STATES:
+def test_terminal_execution_states_have_no_successor_except_a_resumed_interruption() -> None:
+    """INTERRUPTED IS A PAUSE, NOT AN ENDING, AND PHASE 2.1 IS WHERE THAT DISTINCTION EARNED ITS
+    KEEP.
+
+    Every other terminal state is a genuine end. INTERRUPTED is where a restart parks work that was
+    in flight, and a multipart parse can be interrupted with half its parts already bought. Under
+    the old table the child job stayed INTERRUPTED for ever while every task beneath it succeeded —
+    measured on a real run: 47 of 47 parts terminal, 214 nodes produced, and a job that could never
+    reach review.
+
+    The edge is reached ONLY by an explicit user action. `mark_interrupted_jobs` still only moves
+    work INTO this state, which the test below asserts, so a restart still re-invokes nothing.
+    """
+    for state in TERMINAL_EXECUTION_STATES - {ExecutionState.INTERRUPTED}:
         assert permitted_execution_transitions(state) == frozenset()
+    assert permitted_execution_transitions(ExecutionState.INTERRUPTED) == frozenset(
+        {ExecutionState.RUNNING}
+    )
 
 
 def test_resumable_and_terminal_states_partition_the_execution_machine() -> None:
