@@ -128,6 +128,10 @@ RESPONSE_TRANSPORT_EVIDENCE: Final[str] = "response-transport.json"
 VALIDATION_EVIDENCE: Final[str] = "validation.yaml"
 ENVELOPE_EVIDENCE: Final[str] = "envelope.yaml"
 
+#: The source-set manifest, written ONCE at the CHILD JOB level. Deliberately the same name the
+#: single-response path uses, so both protocols' review pages resolve a filename the same way.
+SOURCE_SET_EVIDENCE: Final[str] = "source-set.yaml"
+
 #: The provider stop reason that means the output budget ran out. A response carrying it is
 #: TRUNCATED whatever its visible text looks like.
 OUTPUT_LIMIT_STOP_REASON: Final[str] = "max_tokens"
@@ -238,7 +242,40 @@ class MultipartParseService:
         job.budget_ceiling_usd = job.budget_ceiling_usd or self._settings.filing_budget_usd
         job.multipart = self._session_summary(job, plan=None, tasks=[task])
         self._store.save_job(job)
+        self._preserve_source_set(context)
         return task
+
+    def _preserve_source_set(self, context: _Context) -> None:
+        """Store the exact submitted bytes ONCE, at the child-job level, before any call.
+
+        WITHOUT THIS THERE IS NO RAW VIEW AND NO SIDE-BY-SIDE VIEW. A reviewer opening one part
+        needs the preserved filing beside it, and resolving that from a corpus path months later
+        depends on a file nobody promised not to move. It is written once rather than per task
+        because every semantic call of one filing receives the SAME set — a ten-task parse of a
+        146 KB filing would otherwise store the filing ten times.
+
+        The manifest gains an `evidence_name` per member, which is what the review surface
+        resolves a filename through. That is the same mapping the single-response path writes, so
+        both protocols' review pages read the source the same way.
+        """
+        job = context.job
+        run_id, job_id = job.parent_run_id, job.job_id
+        manifest = context.source_set.to_mapping()
+        names: dict[str, str] = {}
+        for index, block in enumerate(context.blocks, start=1):
+            suffix = "bin" if block.is_image else "txt"
+            name = f"source-{index:02d}.{suffix}"
+            self._store.put_evidence(run_id, job_id, name, block.raw_bytes)
+            names[block.label] = name
+        for member in manifest["members"]:
+            member["evidence_name"] = names.get(
+                member["filename"] or f"{context.source_set.accession}.txt"
+            )
+        self._store.put_evidence_text(
+            run_id, job_id, SOURCE_SET_EVIDENCE, _yaml(manifest), content_type="application/yaml"
+        )
+        job.source_set = manifest
+        self._store.save_job(job)
 
     # --- explicit user actions --------------------------------------------------------------------
     #
@@ -1025,6 +1062,14 @@ class MultipartParseService:
             return
 
         context.plan = plan
+        # THE SESSION SUMMARY IS REFRESHED HERE, NOT ONLY WHEN THE PARSE FINISHES. It is what the
+        # hierarchy header reads, and a run that is interrupted or paused after planning would
+        # otherwise show "plan not yet produced" beside twenty-four parts the plan created. A
+        # header that contradicts the table under it is worse than one that says less.
+        context.job.multipart = self._session_summary(
+            context.job, plan=plan, tasks=self._store.load_tasks(run_id, job_id)
+        )
+        self._store.save_job(context.job)
         by_part: dict[str, str] = {}
         for index, part in enumerate(plan.ordered()):
             created = self._create_task(

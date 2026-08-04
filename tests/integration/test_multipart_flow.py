@@ -1137,3 +1137,53 @@ def test_a_part_is_not_penalised_for_citing_only_its_own_material(completed: Com
     )
     findings = " ".join((back.validation or {})["coverage"]["findings"])
     assert "carry no resolved reference" not in findings
+
+
+# --- the source set a reviewer actually sees ------------------------------------------------------
+#
+# BOTH OF THESE WERE FOUND BY OPENING THE UI AGAINST A REAL RUN, not by an assertion. The multipart
+# path preserved every request and every response and did NOT preserve the source set, so a part's
+# review page had no filing to show beside it — no raw view, no side-by-side. And the session
+# summary was written once at start and once at finish, so an interrupted run showed "plan not yet
+# produced" in its header beside twenty-four parts the plan had created.
+
+
+def test_the_source_set_is_preserved_once_at_the_child_job_level(completed: Completed) -> None:
+    """A part cannot be reviewed beside a filing the store does not hold."""
+    harness, run_id, job_id = completed
+    job = harness.store.load_job(run_id, job_id)
+    assert job.source_set is not None
+    submitted = [m for m in job.source_set["members"] if m["submitted"]]
+    assert submitted, "the job recorded no submitted member"
+    for member in submitted:
+        name = member["evidence_name"]
+        assert name, f"{member['filename']} carries no evidence name, so no page can resolve it"
+        assert harness.store.has_evidence(run_id, job_id, name)
+        stored = harness.store.get_evidence(run_id, job_id, name)
+        assert sha256_bytes(stored) == member["sha256"], (
+            "the preserved bytes are not the sent bytes"
+        )
+
+
+def test_the_source_set_is_stored_once_and_not_once_per_task(completed: Completed) -> None:
+    """A ten-task parse of a 146 KB filing would otherwise store the filing ten times."""
+    harness, run_id, job_id = completed
+    job_level = [n for n in harness.store.list_evidence(run_id, job_id) if n.startswith("source-")]
+    assert job_level, "no source evidence at the child-job level"
+    for task in harness.store.load_tasks(run_id, job_id):
+        per_task = [
+            n
+            for n in harness.store.list_task_evidence(run_id, job_id, task.task_id)
+            if n.startswith("source-")
+        ]
+        assert not per_task, f"task {task.task_id} duplicated the source set: {per_task}"
+
+
+def test_the_session_summary_carries_the_plan_as_soon_as_the_plan_exists(
+    completed: Completed,
+) -> None:
+    harness, run_id, job_id = completed
+    session = harness.store.load_job(run_id, job_id).multipart
+    assert session is not None
+    assert session["parse_plan_id"] == "plan-alpha"
+    assert session["planned_part_count"] == 3
