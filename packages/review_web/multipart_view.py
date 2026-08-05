@@ -759,3 +759,181 @@ def _coverage_card(coverage: dict[str, Any]) -> str:
         ),
         class_="card",
     )
+
+
+# --- the assembled parse, beside the filing it came from -----------------------------------------
+
+
+def _part_absence(entry: dict[str, Any]) -> str:
+    """Why a part contributed no node. NEVER silence, and never an empty part quietly skipped.
+
+    35 of the 81 parts of the benchmark parse produced no node, 16 of them because the attempt hit
+    the output cap. A pane that rendered only the parts with content would show a clean parse of 46
+    parts and hide every truncation in it — which is the false complete `rules.md` section 21 rule 5
+    exists to prevent, arrived at through a rendering choice rather than through a status.
+    """
+    state = str(entry.get("task_state") or "")
+    stop = str(entry.get("stop_reason") or "")
+    if entry.get("truncated") or state == "TRUNCATED":
+        return warning(
+            "This part produced no node in the assembled parse: its attempt reached the output "
+            f"limit (stop reason {stop or 'unreported'}). The partial output is preserved as "
+            "evidence and is deliberately NOT merged in - blind continuation is prohibited."
+        )
+    return warning(
+        f"This part produced no node in the assembled parse. Its call is in state "
+        f"{state or 'unrecorded'} and its stop reason was {stop or 'unreported'}."
+    )
+
+
+def _assembled_node(entry: dict[str, Any], node: dict[str, Any]) -> str:
+    """One node as the model wrote it, with the quotes it cited and no claim that they resolve.
+
+    THE QUOTES ARE THE MODEL'S CLAIM AND ARE LABELLED AS SUCH. A job's `validation` for a multipart
+    parse carries the assembly summary and no per-node resolution outcome, so this pane has nothing
+    that would justify an EXACT or UNRESOLVED badge. The per-part figure it DOES have is measured
+    and is printed beside the part; the badge belongs on the task page, which resolves each quote
+    against the preserved bytes and links it to its offset.
+
+    Rendering an unchecked quote with a resolution badge is precisely how a citation rate starts
+    flattering the model that produced it.
+    """
+    quotes = [q for q in (node.get("source") or []) if isinstance(q, dict)]
+    return tag(
+        "div",
+        join(
+            tag("div", esc(node.get("type") or "(no type)"), class_="kind"),
+            tag("div", esc(node.get("title") or "(no title)"), class_="title"),
+            tag("div", esc(node.get("content") or ""), class_="body"),
+            (
+                tag("p", esc("Ambiguity: " + str(node["ambiguity"])), class_="hint")
+                if node.get("ambiguity")
+                else ""
+            ),
+            (
+                tag(
+                    "ul",
+                    each(
+                        quotes,
+                        lambda q: tag(
+                            "li",
+                            join(
+                                badge("quoted by the model", "neutral"),
+                                tag("span", esc(f" “{str(q.get('quote') or '')[:110]}”")),
+                                tag("span", esc(f" - {q.get('filename') or ''}"), class_="hint"),
+                            ),
+                        ),
+                    ),
+                    class_="refs",
+                )
+                if quotes
+                else tag("p", "No source reference was supplied for this node.", class_="refs")
+            ),
+        ),
+        class_="node",
+    )
+
+
+def assembled_pane(*, base: tuple[str, ...], assembly: dict[str, Any]) -> str:
+    """Every part of a multipart parse with the content it produced, for the side-by-side view.
+
+    WHY THIS EXISTS AT ALL. `job_view.parsed_pane` was written for the single-response protocol and
+    reads the job's own `response-visible.txt`. A multipart parse has none - every response belongs
+    to a call - so the parsed half of the side-by-side rendered nothing for the entire Phase 2.1
+    protocol. On the benchmark parse that is 81 parts and 229 nodes of real content sitting behind
+    an empty pane, on the one screen `job_view`'s own docstring calls the point of Phase 2: a parsed
+    artifact cannot be evaluated without the filing it came from beside it.
+
+    IT IS AN INDEX WITH CONTENT, NOT A REWRITTEN PARSE. Part order, part identifiers, part titles,
+    node types and node titles are the model's and are carried verbatim - `rules.md` section 21
+    rule 19. Nothing is renamed, nothing is merged, nothing is sorted and no part is dropped,
+    including the ones that produced nothing.
+
+    IT STATES ITS STATUS AND NEVER IMPLIES COMPLETENESS. `INCOMPLETE_WORK` and
+    `RECONCILIATION_UNRESOLVED` are printed as they are stored, and the assembly's own status note
+    - which says in terms that these signals are not a completeness verdict - is printed with them.
+    """
+    parts = assembly.get("parts") or []
+    resolved = sum(int(p.get("references_resolved") or 0) for p in parts)
+    cited = sum(int(p.get("reference_count") or 0) for p in parts)
+    empty = sum(1 for p in parts if not (p.get("nodes") or []))
+
+    def part(entry: dict[str, Any]) -> str:
+        nodes = entry.get("nodes") or []
+        return tag(
+            "div",
+            join(
+                tag(
+                    "div",
+                    esc(f"{entry.get('type') or '(no type)'} — part {entry.get('part_id') or ''}"),
+                    class_="kind",
+                ),
+                tag("div", esc(entry.get("title") or "(no title)"), class_="title"),
+                tag(
+                    "p",
+                    esc(
+                        f"{entry.get('node_count', 0)} node(s); "
+                        f"{entry.get('references_resolved', 0)} of "
+                        f"{entry.get('reference_count', 0)} quotes located in the preserved bytes; "
+                        f"{entry.get('output_tokens', 0):,} output tokens"
+                    ),
+                    class_="hint",
+                ),
+                # STATED PER PART RATHER THAN PER NODE, and that is not a workaround. The assembly
+                # already counts image references per part, which is the figure a reviewer needs
+                # here, and `tests/architecture/test_phase21_boundaries.py` forbids a multipart
+                # module naming a non-parsing model ROLE by name. The guard is blunt on purpose and
+                # is not worth weakening for a rendering convenience.
+                (
+                    warning(
+                        f"{entry['image_reference_count']} node(s) in this part depend on image "
+                        "content. Whether those images were analysed is recorded in this job's "
+                        "coverage report, and a text-only parser never claims image coverage."
+                    )
+                    if entry.get("image_reference_count")
+                    else ""
+                ),
+                _part_absence(entry) if not nodes else "",
+                each(nodes, lambda n: _assembled_node(entry, n)),
+                tag(
+                    "p",
+                    tag(
+                        "a",
+                        "the exact response for this part, with every quote checked",
+                        href=url(*base, "tasks", entry.get("task_id") or ""),
+                    ),
+                    class_="hint",
+                ),
+            ),
+            class_="node",
+        )
+
+    return tag(
+        "section",
+        join(
+            tag("h2", "Parsed"),
+            tag(
+                "p",
+                esc(
+                    f"{assembly.get('part_count', 0)} part(s) and "
+                    f"{assembly.get('node_count', 0)} node(s), in the model's order and its own "
+                    f"vocabulary. {resolved} of {cited} quotes across the parse were located in "
+                    f"the preserved bytes; {empty} part(s) produced no node."
+                ),
+            ),
+            warning(
+                f"Assembled status {assembly.get('status') or 'unrecorded'}. "
+                + str(assembly.get("status_note") or "")
+            ),
+            tag(
+                "p",
+                esc(
+                    "A quote below is what the model cited, not a located citation. Each part "
+                    "links to its own page, which resolves every quote against the preserved "
+                    "bytes and links it to the offset where it was found."
+                ),
+                class_="hint",
+            ),
+            each(parts, part),
+        ),
+    )

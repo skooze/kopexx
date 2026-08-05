@@ -112,6 +112,29 @@ class ReviewSettings:
     bind_host: str = "127.0.0.1"
     bind_port: int = 8765
     dev_auth_secret: str | None = None
+    #: The host names this instance answers to, comma-separated in `REVIEW_ALLOWED_HOSTS`. Empty
+    #: disables the check, which is correct for a loopback instance that has no published name.
+    allowed_hosts: tuple[str, ...] = ()
+    #: Whether a BROWSER reaches this instance over TLS. It is not whether this process terminates
+    #: TLS: behind a reverse proxy the process speaks plain HTTP on the loopback while the browser
+    #: speaks HTTPS, and it is the browser's view that decides whether a `Secure` cookie can come
+    #: back. Setting it wrong in either direction breaks the session — a `Secure` cookie over plain
+    #: HTTP is discarded, and a non-`Secure` cookie over TLS is one downgrade away from the wire.
+    served_over_https: bool = False
+    #: Serve with NO AUTHENTICATION AT ALL beyond the loopback interface.
+    #:
+    #: THIS IS AN OWNER'S DECISION AND IT IS DELIBERATELY NOT THE DEFAULT. Set on 2026-08-04 for
+    #: kopexx.com, with the exposure stated and accepted: the review UI publishes preserved
+    #: filings, every run's evidence, and controls that issue BILLABLE provider calls, to anyone
+    #: who can reach the name. What bounds the damage is the durable spend journal, not this
+    #: setting.
+    #:
+    #: WHY A FLAG RATHER THAN DELETING THE GUARD. The guard's value was never that authentication
+    #: is mandatory — it is that an unauthenticated public instance cannot happen by FORGETTING
+    #: something. Removing the check outright would make a mistyped `REVIEW_BIND_HOST` silently
+    #: publish this application. Requiring a second, explicitly-named setting keeps the accident
+    #: impossible while letting the decision be made.
+    public_unauthenticated: bool = False
     evaluation_root: str = "./var/evaluation-runs"
     prompt_directory: str = "./prompts/parser"
     capability_snapshot: str = "./docs/llm/bedrock-capability-snapshot.yaml"
@@ -146,12 +169,14 @@ class ReviewSettings:
         return self.bind_host in {"127.0.0.1", "::1", "localhost"}
 
     def __post_init__(self) -> None:
-        if not self.loopback_only and not self.dev_auth_secret:
+        if not self.loopback_only and not self.dev_auth_secret and not self.public_unauthenticated:
             raise ValueError(
                 f"bind_host {self.bind_host!r} leaves the loopback interface and no development "
                 "authentication secret is configured. An unauthenticated review UI on a LAN "
                 "exposes preserved filings, run evidence and a control that spends money. Set "
-                "REVIEW_DEV_SECRET in ignored environment state, or bind to 127.0.0.1."
+                "REVIEW_DEV_SECRET in ignored environment state, bind to 127.0.0.1, or — if "
+                "publishing it without any authentication is the intention — say so explicitly "
+                "with REVIEW_PUBLIC_UNAUTHENTICATED=true."
             )
         if self.dev_auth_secret is not None and len(self.dev_auth_secret) < 16:
             raise ValueError(
@@ -200,6 +225,15 @@ class Settings:
             review=ReviewSettings(
                 bind_host=source.get("REVIEW_BIND_HOST", "127.0.0.1"),
                 bind_port=int(source.get("REVIEW_BIND_PORT", "8765")),
+                allowed_hosts=tuple(
+                    h.strip()
+                    for h in source.get("REVIEW_ALLOWED_HOSTS", "").split(",")
+                    if h.strip()
+                ),
+                served_over_https=source.get("REVIEW_SERVED_OVER_HTTPS", "").lower()
+                in {"1", "true", "yes"},
+                public_unauthenticated=source.get("REVIEW_PUBLIC_UNAUTHENTICATED", "").lower()
+                in {"1", "true", "yes"},
                 # No default and no placeholder. An empty placeholder documents an unsafe design
                 # as the expected one; absent means loopback-only, which is the safe state.
                 dev_auth_secret=source.get("REVIEW_DEV_SECRET") or None,

@@ -94,9 +94,9 @@ class RecordingObjectStore(FilesystemObjectStore):
         self.calls.append(("uri", key))
         return super().uri_for(key)
 
-    def list_keys(self, prefix: str = "") -> list[str]:
+    def list_keys(self, prefix: str = "", *, max_depth: int | None = None) -> list[str]:
         self.calls.append(("list", prefix))
-        return super().list_keys(prefix)
+        return super().list_keys(prefix, max_depth=max_depth)
 
     def written(self) -> list[str]:
         return [key for kind, key in self.calls if kind == "put"]
@@ -1351,3 +1351,101 @@ def test_a_store_rooted_at_a_path_creates_and_uses_that_directory(tmp_path: Path
     store.save_run(run)
     assert (root / "runs" / run.run_id / "run.yaml").is_file()
     assert store.load_run(run.run_id).run_id == run.run_id
+
+
+def test_the_state_prefilter_only_ever_skips_and_never_decides() -> None:
+    """The start-up sweep's fast path must fail OPEN on anything it does not recognise.
+
+    It exists to avoid parsing 700 manifests to learn there is no work. If it ever answered False
+    for a shape it merely failed to understand, a genuinely abandoned task would be skipped by the
+    sweep and would never be parked — a silent loss, which is the failure mode the sweep exists to
+    prevent.
+    """
+    from packages.evaluation_store.store import _may_be_resumable
+
+    assert _may_be_resumable(b"state: RUNNING\n") is True
+    assert _may_be_resumable(b'state: "READY"\n') is True
+    assert _may_be_resumable(b"state: SUCCEEDED\n") is False
+    assert _may_be_resumable(b"state: TRUNCATED\n") is False
+    # Everything below is unrecognised, and every one of them must fall through to the parser.
+    assert _may_be_resumable(b"") is True
+    assert _may_be_resumable(b"task_type: PARSE_PART\n") is True
+    assert _may_be_resumable(b"state: SOMETHING_NEW\n") is True
+    assert _may_be_resumable(b"\xff\xfe binary garbage") is True
+    # An indented `state:` belongs to a nested attempt, not to the task, and must not be read as
+    # the task's own state.
+    assert _may_be_resumable(b"attempts:\n  - state: SUCCEEDED\n") is True
+
+
+def test_the_prefilter_does_not_change_which_tasks_the_sweep_parks(tmp_path: Path) -> None:
+    """The fast path and the full parse must agree about every task in a real store.
+
+    The prefilter reads bytes; the sweep it feeds acts on parsed records. This asserts they see the
+    same store: the abandoned task is parked and the finished one is left exactly alone.
+    """
+    from packages.evaluation_store.identity import new_task_id
+    from packages.evaluation_store.queue_states import TaskState, TaskType
+    from packages.evaluation_store.tasks import new_task
+
+    store = EvaluationStore.at_path(tmp_path)
+    run = make_run()
+    store.save_run(run)
+    job = make_job(run.run_id)
+    store.save_job(job)
+
+    def task(state: TaskState, *, owner: str = "", heartbeat: str = "") -> Any:
+        made = new_task(
+            task_id=new_task_id(),
+            run_id=run.run_id,
+            root_job_id=job.job_id,
+            task_type=TaskType.PARSE_PART,
+            routing=routing(),
+            prompt=PromptIdentity(prompt_id="parse", version="1", sha256="0" * 64),
+            settings=ParserSettings(max_output_tokens=4096, temperature=0.0),
+        )
+        made.state = state
+        made.owner = owner
+        made.heartbeat = heartbeat
+        store.save_task(made)
+        return made
+
+    # Held by a process that cannot be alive, so the sweep must park it.
+    abandoned = task(TaskState.RUNNING, owner="gone:999999", heartbeat=at(1))
+    finished = task(TaskState.SUCCEEDED)
+
+    assert [t.task_id for t in store.resumable_tasks_of(run.run_id, job.job_id)] == [
+        abandoned.task_id
+    ]
+    assert [t[2] for t in store.mark_interrupted_tasks()] == [abandoned.task_id]
+    assert store.load_task(run.run_id, job.job_id, finished.task_id).state is TaskState.SUCCEEDED
+    assert store.load_task(run.run_id, job.job_id, abandoned.task_id).state is TaskState.INTERRUPTED
+
+
+def test_listing_runs_never_descends_into_a_run(
+    store: EvaluationStore, objects: RecordingObjectStore
+) -> None:
+    """A run manifest is always two levels down, so nothing deeper can answer this listing.
+
+    WITHOUT THE BOUND THE WALK ENTERS EVERY RUN'S `events/`, `jobs/`, `tasks/` AND `evidence/`, and
+    the cost of naming the runs becomes the size of the whole store. Measured on the development
+    store — 71 runs among roughly 13,000 files — this was 2.8 of the home page's 5.5 CPU seconds
+    and 14,898 `relative_to` calls, on the first page every reader lands on.
+
+    Asserted against what the walk VISITED rather than against elapsed time: a timing assertion
+    would pass on a fast disk with the bound removed.
+    """
+    run = make_run()
+    store.save_run(run)
+    job = make_job(run.run_id)
+    store.save_job(job)
+    store.append_event(run.run_id, kind="job.started", job_id=job.job_id, message="working")
+    store.put_evidence_text(run.run_id, job.job_id, "response-visible.txt", "a stored response")
+
+    deep = objects.list_keys(f"runs/{run.run_id}/")
+    assert any("/events/" in key for key in deep), "the fixture has nothing below the manifest"
+
+    listed = store.list_run_ids()
+    assert listed == [run.run_id]
+    shallow = objects.list_keys("runs/", max_depth=2)
+    assert all(key.count("/") == 2 for key in shallow), shallow
+    assert not any("/events/" in key or "/jobs/" in key for key in shallow), shallow

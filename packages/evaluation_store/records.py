@@ -196,6 +196,18 @@ class InvocationAttempt:
     output_tokens: int
     visible_characters: int
     reasoning_characters: int
+    #: WHICH ADAPTER ACTUALLY ANSWERED, as `ModelProvider.name` spells it — `bedrock`, `mock`.
+    #:
+    #: RECORDED BECAUSE THE PAGE WAS CLAIMING OTHERWISE. `model_routing` carries the label, the
+    #: invocation id and the region a run was CONFIGURED with, and the review page printed all
+    #: three beside a dollar cost for a run the mock provider answered offline: `Claude Haiku 4.5 —
+    #: us.anthropic.claude-haiku-4-5-20251001-v1:0 — region us-east-1 — USD 0.0905289`, for a call
+    #: that never left the machine. `InvocationRecord.provider` had the truth the whole time and
+    #: stopped here. rules.md section 10 requires an invocation to record what it invoked.
+    #:
+    #: EMPTY MEANS NO RESPONSE CAME BACK, which is the honest value on the ProviderError path: the
+    #: attempt has no record, so no adapter answered it. It is never defaulted to a real provider.
+    provider: str = ""
     provider_request_id: str | None = None
     error: str | None = None
     retryable: bool | None = None
@@ -211,6 +223,7 @@ class InvocationAttempt:
             "output_tokens": self.output_tokens,
             "visible_characters": self.visible_characters,
             "reasoning_characters": self.reasoning_characters,
+            "provider": self.provider,
             "provider_request_id": self.provider_request_id,
             "error": self.error,
             "retryable": self.retryable,
@@ -229,6 +242,10 @@ class InvocationAttempt:
             output_tokens=_integer(raw, "output_tokens", where),
             visible_characters=_integer(raw, "visible_characters", where),
             reasoning_characters=_integer(raw, "reasoning_characters", where),
+            # ABSENT IN EVERY ATTEMPT RECORDED BEFORE THIS FIELD EXISTED, and it reads back as the
+            # empty string rather than as a guess. A stored run whose provider was never written
+            # down does not become a Bedrock run because Bedrock is the likely answer.
+            provider=raw.get("provider") or "",
             provider_request_id=_optional_text(raw, "provider_request_id"),
             error=_optional_text(raw, "error"),
             retryable=raw.get("retryable"),

@@ -444,3 +444,71 @@ candidates:
       TEXT ONLY. A filing's images are reported unanalysed and this candidate's parse may not claim
       image coverage.
 
+  # --- ADDED 2026-08-04, THE SECOND TIME, FOR A SCALE QUESTION THE FIRST SEVEN COULD NOT ANSWER ---
+  #
+  # MEASURED ACROSS SEVEN CANDIDATES ON ONE FILING: the number of provider CALLS a parse takes spans
+  # 14 to 123, and because every call re-sends the whole filing, that is also the spread in cost —
+  # USD 0.337 to USD 3.238 — and in wall clock. Call count is a property of how coarsely a MODEL
+  # plans, not of the filing.
+  #
+  # WHY THIS ONE. Claude Haiku 4.5 is the only reachable model in this account that publishes a
+  # PROMPT-CACHE READ RATE at a tenth of its input rate. On a protocol whose dominant cost is the
+  # same filing sent tens of times, that is the only lever measured so far that attacks the dominant
+  # term rather than trimming around it.
+  #
+  # THE NEWEST CLAUDE TIER IS NOT REACHABLE. Opus 5, Sonnet 5 and Fable 5 all answer
+  # AccessDeniedException on both the us. and global. profiles, pointing at AWS sales support. Five
+  # older Claude models DO answer: Haiku 4.5, Sonnet 4.5, Opus 4.5, Sonnet 4.6 and Opus 4.6.
+
+  - label: Claude Haiku 4.5
+    provider: Anthropic
+    model_id: "anthropic.claude-haiku-4-5-20251001-v1:0"
+    model_name: Claude Haiku 4.5
+    version_qualifier: "20251001-v1:0"
+    mapping: UNIQUE
+    mapping_evidence: >-
+      One Claude Haiku 4.5 in the account. Claude 3 Haiku and Claude 3.5 Haiku are separately named,
+      separately priced and separately dated models and are NOT this label.
+    availability: AVAILABLE
+    access_status: agreement NOT_AVAILABLE (no marketplace flow applies), authorization AUTHORIZED, entitlement AVAILABLE
+    first_use_enablement_required: false
+    marketplace_subscription_required: false
+    verified_regions: ["us-east-1"]
+    inference_profile_required: true
+    inference_profile_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    text_input: true
+    image_input: true
+    multimodal: false
+    image_verified: false
+    context_tokens: 200000
+    max_output_tokens: 64000
+    invocation_apis: [Converse, InvokeModel]
+    streaming_supported: true
+    emits_reasoning_before_answer: true
+    reasoning_evidence: >-
+      NOT MEASURED. The conservative default: assuming a model reasons when it does not costs a
+      smaller output target, and assuming it does not when it does costs a truncated part.
+    price_input_per_1k: 0.0011
+    price_output_per_1k: 0.0055
+    price_image: none published; image input billed as input tokens
+    smoke_transport: ACCEPTED
+    smoke_instruction: EXACT
+    smoke_note: >-
+      Returned hello, stopReason end_turn, 10 input and 4 output tokens, through the us. inference
+      profile in us-east-1.
+    blocker: null
+    disabled_reason: null
+    compatibility_note: >-
+      MARKED TEXT-ONLY BECAUSE THE IMAGE PATH IS UNVERIFIED, not because the model lacks one. The
+      model card lists image input; this project labels a candidate multimodal only after a real
+      image invocation succeeds, and that gate has not been run for it. A parse by this candidate
+      reports its images unanalysed and does not claim image coverage.
+
+      IT IS THE ONLY REACHABLE CANDIDATE PUBLISHING A PROMPT-CACHE READ RATE — 0.00011 per 1K
+      against an input rate of 0.0011, a tenth. Caching is NOT enabled and enabling it is a separate
+      decision: the request currently places the varying brief before the invariant filing, so a
+      strict prefix match would find nothing to reuse.
+
+      Priced under the AmazonBedrockService code rather than AmazonBedrock, which is where every
+      Claude rate lives and is why the five original candidates' price sweep did not see it.
+

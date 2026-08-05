@@ -101,7 +101,9 @@ h3 { font-size: .9rem; }
   position: relative;
   overflow-y: auto;
 }
-.panel.collapsed { display: none; }
+/* THE PANEL IS HIDDEN BY A CLASS ON `body`, NOT ON ITSELF. That is what lets one class change
+   swap both controls at once without the server re-rendering either of them. */
+body.panel-collapsed .panel { display: none; }
 .panel h1 { color: #fff; font-size: 1rem; }
 .panel label { display: block; margin: .85rem 0 .2rem; font-size: .74rem;
                text-transform: uppercase; letter-spacing: .07em; color: var(--panel-muted); }
@@ -143,9 +145,12 @@ h3 { font-size: .9rem; }
 /* --- main workspace --------------------------------------------------------------------- */
 
 main { flex: 1; padding: 1.1rem 1.4rem 3.5rem; overflow-x: auto; }
-.reopen { display: inline-block; margin-bottom: .8rem; padding: .2rem .55rem;
+/* Always rendered, shown only when the panel is away. Hiding it in CSS rather than omitting it
+   from the markup is what makes reopening free. */
+.reopen { display: none; margin-bottom: .8rem; padding: .2rem .55rem;
           border: 1px solid var(--rule); border-radius: 5px; background: var(--surface-raised);
           text-decoration: none; color: var(--ink); }
+body.panel-collapsed .reopen { display: inline-block; }
 
 .card { background: var(--surface-raised); border: 1px solid var(--rule);
         border-radius: 8px; padding: .85rem 1rem; margin-bottom: .9rem; }
@@ -210,19 +215,108 @@ form.inline button { background: var(--accent-blue); cursor: pointer; font-weigh
 
 .mode-note { font-size: .76rem; color: var(--ink-muted); margin-top: 1.4rem; }
 .mono { font-family: ui-monospace, monospace; font-size: .78rem; }
+
+/* --- global nav, panel modes, and the contextual review menu -------------------------------
+   THREE SIGNALS FOR ACTIVE, NEVER COLOUR ALONE: aria-current, a filled surface, and a leading
+   glyph rendered in the markup. The same rule the tab strip above already follows, and the reason
+   every status marker in this stylesheet has a text equivalent. */
+.panel-nav ul { list-style: none; margin: 0 0 .5rem; padding: 0; }
+.panel-nav a.nav-item { display: block; padding: .3rem .45rem; border-radius: 5px;
+                        border: 1px solid transparent; color: var(--panel-text);
+                        text-decoration: none; }
+.panel-nav a.nav-item:hover { background: #33383e; }
+.panel-nav a.nav-active { background: #2f343a; border-color: #5a616a; font-weight: 600; }
+.panel-nav .hint { display: block; margin: 0 0 .35rem .95rem; }
+
+.panel-mode { display: flex; flex-wrap: wrap; gap: .3rem; align-items: baseline;
+              border-top: 1px solid #4e545b; border-bottom: 1px solid #4e545b;
+              padding: .45rem 0; margin: .45rem 0 .6rem; }
+.panel-mode .mode { padding: .18rem .5rem; border-radius: 5px; border: 1px solid #4e545b;
+                    color: var(--panel-text); text-decoration: none; font-size: .78rem; }
+.panel-mode .mode-active { background: #2f343a; border-color: #5a616a; font-weight: 600; }
+.panel-mode .mode-disabled { opacity: .55; cursor: default; }
+
+.panel-section { border-top: 1px solid #4e545b; margin-top: .7rem; padding-top: .5rem; }
+.panel-section h2 { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+                    color: var(--panel-muted); margin: 0 0 .35rem; }
+.panel-section a { color: #cfe0f7; text-decoration: none; display: inline-block; }
+.panel-section .step-disabled { color: var(--panel-muted); cursor: default; }
+.panel ol.steps, .panel ul.menu { list-style: none; margin: 0; padding: 0; }
+.panel ol.steps > li { margin: .32rem 0; font-size: .8rem; }
+.panel ol.steps > li[aria-current="step"] { background: #2f343a; border-radius: 5px;
+                                            padding: .2rem .35rem; font-weight: 600; }
+.panel ul.menu > li { margin: .28rem 0; font-size: .8rem; }
+
+/* --- breadcrumbs -------------------------------------------------------------------------- */
+.crumbs { display: flex; flex-wrap: wrap; gap: .3rem; align-items: baseline;
+          font-size: .78rem; color: var(--ink-muted); margin: 0 0 .55rem; }
+.crumbs a { text-decoration: none; }
+.crumbs .sep { color: var(--rule); }
+.crumbs [aria-current="page"] { color: var(--ink); font-weight: 600; }
+
+/* --- what a link will do, before it is clicked ---------------------------------------------
+   A tooltip is not one of these. `title` does not exist on touch and is invisible to a keyboard,
+   so every one of these markers is text that is always on the page. */
+.scope, .kind-word { display: inline-block; border: 1px solid var(--rule); border-radius: 4px;
+                     padding: 0 .3rem; font-size: .7rem; text-transform: uppercase;
+                     letter-spacing: .05em; color: var(--ink-muted); }
+.panel .scope, .panel .kind-word { border-color: #5a616a; color: var(--panel-muted); }
+
+/* --- opened markers. Three words, never two, and never a bare glyph. -----------------------
+   `opened` means this server rendered that page at the version stated. It is not a review and
+   not a judgement, which is why none of these classes may ever carry a tick on its own. */
+.opened, .opened-earlier, .opened-never { font-size: .72rem; white-space: nowrap; }
+.opened          { color: var(--ink-muted); }
+.opened-earlier  { color: var(--ink); background: var(--accent-amber);
+                   border-radius: 4px; padding: 0 .3rem; }
+.opened-never    { color: var(--ink-muted); }
+.panel .opened, .panel .opened-never { color: var(--panel-muted); }
+
+/* --- the hub ------------------------------------------------------------------------------ */
+.steps-table td { vertical-align: top; }
+.steps-table td.where { white-space: normal; }
+.steps-table .mono { display: block; word-break: break-all; }
+.tiles { display: flex; flex-wrap: wrap; gap: .6rem; margin: .3rem 0; }
+.tiles .tile { flex: 1 1 15rem; min-width: 0; border: 1px solid var(--rule); border-radius: 8px;
+               padding: .55rem .7rem; background: var(--surface-raised); }
+.tiles .tile h3 { margin: 0 0 .25rem; }
+
+/* --- the hierarchy filter strip. Narrows; never reorders. ---------------------------------
+   A list that reorders by a computed figure is a ranking, and a stable position is the only
+   thing that makes "where was I" answerable across 77 rows. */
+.filters { display: flex; flex-wrap: wrap; gap: .35rem; margin: .3rem 0 .6rem; }
+.filters a, .filters span { font-size: .76rem; padding: .12rem .45rem; border-radius: 5px;
+                            border: 1px solid var(--rule); text-decoration: none; }
+.filters .filter-active { background: var(--surface-sunken); font-weight: 600; }
 """
 
 SCRIPT: Final[str] = """
-// The only script in the application. It copies the run identifier and nothing else.
+// The only script in the application. It copies the run identifier and it collapses the panel.
 //
 // Everything that matters here works with scripting disabled: the raw and parsed views, the
 // side-by-side view, source-reference navigation, comments and review actions are ordinary links
 // and form posts rendered by the server. That is not nostalgia — it means the review surface has
 // no client-side state to lose, no rendering path that can disagree with what was stored, and no
 // way for a preserved filing to reach a JavaScript context at all.
+//
+// THE PANEL TOGGLE IS AN ENHANCEMENT, NOT A MECHANISM. Both controls are real links to
+// `?panel=open` and `?panel=closed` and still work with scripting off; this only spares the round
+// trip. It writes a cookie so the SERVER renders the right mode on the next page, which is what
+// makes the choice survive navigation — a query parameter was lost the moment you clicked a link,
+// so the panel silently reappeared on every page.
 (function () {
   "use strict";
   document.addEventListener("click", function (event) {
+    var toggle = event.target.closest("[data-panel]");
+    if (toggle) {
+      event.preventDefault();
+      var closed = toggle.getAttribute("data-panel") === "closed";
+      document.body.classList.toggle("panel-collapsed", closed);
+      document.cookie =
+        "kopexx_panel=" + (closed ? "closed" : "open") +
+        "; Path=/; Max-Age=31536000; SameSite=Strict";
+      return;
+    }
     var button = event.target.closest("[data-copy]");
     if (!button) { return; }
     var value = button.getAttribute("data-copy");

@@ -761,13 +761,25 @@ def test_the_bound_token_is_accepted_and_the_refusals_above_are_about_the_token(
 
 @pytest.mark.security
 def test_every_classification_control_is_a_form_post_and_never_a_link(app: ReviewApp) -> None:
-    """A link is something a browser can be made to follow; a state change must not be one."""
+    """A link is something a browser can be made to follow; a state change must not be one.
+
+    ASSERTED AGAINST THE ROUTER RATHER THAN AGAINST ONE URL STRING. This used to forbid the
+    literal `href=".../judgements"` on the grounds that judgements is a POST collection — true at
+    the time, and it caught a real defect: the review menu linked there before the read page
+    existed, which would have sent a reviewer into a 405. A GET now serves that path, so the
+    string check would forbid ever linking to a read-only page. Resolving each href through the
+    real router keeps the invariant the name promises and widens it from one URL to every one on
+    the page.
+    """
     for path in (f"{BASE}/spans", f"{BASE}/tables", f"{BASE}/images"):
         body = page(call(app, "GET", path, headers={"Accept": "text/html"}))
         assert 'method="post"' in body, f"{path} carries no post form"
-        assert f'href="/benchmark/{CIK}/{ACCESSION}/judgements"' not in body, (
-            f"{path} offers a judgement as a link"
-        )
+        for href in re.findall(r'href="([^"#?]+)', body):
+            if not href.startswith("/") or href.startswith("/static/"):
+                continue
+            assert app.router.resolve("GET", href) is not None, (
+                f"{path} links to {href}, which answers no GET — a reviewer clicking it gets 405"
+            )
 
 
 # --- recording a judgement ----------------------------------------------------------------------

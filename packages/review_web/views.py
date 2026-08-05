@@ -20,10 +20,13 @@ analysed, and unresolved content in the parse.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Final
 
 from .assets import STYLESHEET  # noqa: F401 - re-exported for the asset route
 from .html import badge, each, esc, join, tag, url, warning
+from .nav import Crumb, global_nav, mode_strip
+from .nav import crumbs as render_crumbs
 
 _STATE_KIND = {
     "READY_FOR_REVIEW": "ok",
@@ -92,6 +95,67 @@ def tabs(active: str, *, filing_href: str = "", benchmark_href: str = "") -> str
     )
 
 
+def panel_shell(
+    *,
+    active: str,
+    collapse_href: str,
+    mode: str,
+    search_href: str,
+    review_href: str,
+    review_reason: str,
+    body: str,
+    spend: dict[str, Any] | None = None,
+) -> str:
+    """The panel chrome both modes share: collapse, title, global nav, mode strip, then the body.
+
+    WHY THE CHROME IS HERE AND NOT IN EITHER MODE. `search_panel` used to own the collapse control
+    and the title, which meant the review menu could only get them by duplicating them — and a
+    duplicated control is one that drifts. Both modes now receive identical chrome by construction.
+
+    `collapse_href` IS SUPPLIED RATHER THAN LITERAL. It used to be the bare string "?panel=closed",
+    which discarded the entity and model selections the panel had just been rebuilt from: collapsing
+    the panel silently reset the form. The caller builds it with `nav.with_query`, which preserves
+    every other key.
+    """
+    return join(
+        tag(
+            "a",
+            "&#8592; collapse",
+            class_="collapse-control",
+            href=collapse_href,
+            data_panel="closed",
+        ),
+        tag("h1", "Kopexx parser review"),
+        global_nav(active),
+        mode_strip(
+            mode=mode,
+            search_href=search_href,
+            review_href=review_href,
+            review_reason=review_reason,
+        ),
+        tag("div", body, class_="panel-body"),
+        # THE MONEY COUNTER IS PANEL CHROME AND SHOWS IN BOTH MODES. It used to sit inside the
+        # search form, so it vanished the moment a reader opened a parse — the one place the
+        # figure actually bears on a decision, because every queue control on those pages spends
+        # against this same ceiling.
+        _spend_line(spend),
+    )
+
+
+def _spend_line(spend: dict[str, Any] | None) -> str:
+    """The cumulative authorized spend, or nothing when the caller could not cheaply supply it.
+
+    ABSENT RATHER THAN ZERO. A `USD 0.00 of 0.00` would be a measurement, and a wrong one.
+    """
+    if not spend:
+        return ""
+    return tag(
+        "p",
+        esc(f"Cumulative authorized spend: USD {spend['spent_usd']} of {spend['ceiling_usd']}."),
+        class_="hint panel-spend",
+    )
+
+
 def layout(
     *,
     title: str,
@@ -100,10 +164,21 @@ def layout(
     run_id: str | None,
     collapsed: bool,
     https: bool,
+    crumbs: Sequence[Crumb],
     tab_strip: str = "",
 ) -> str:
-    """The shell: a persistent left panel, the workspace, and the anchored run identifier."""
-    reopen = tag("a", "&#9776; menu", class_="reopen", href="?panel=open") if collapsed else ""
+    """The shell: a persistent left panel, the workspace, and the anchored run identifier.
+
+    BOTH PANEL CONTROLS ARE ALWAYS IN THE DOCUMENT, and CSS shows whichever the current mode calls
+    for. Rendering only the applicable one meant the other had to be fetched, which is why
+    collapsing the panel used to cost a full page load; with both present the toggle is a class
+    change on `body` and nothing is requested at all.
+
+    THE SERVER STILL RENDERS THE CORRECT MODE. `collapsed` comes from the request, so the markup
+    arrives in the state the reader left it in and there is no flash of an open panel snapping
+    shut after the script runs.
+    """
+    reopen = tag("a", "&#9776; menu", class_="reopen", href="?panel=open", data_panel="open")
     mode = (
         ""
         if https
@@ -124,9 +199,10 @@ def layout(
         f"<title>{esc(title)}</title>",
         '<link rel="stylesheet" href="/static/app.css">',
         '<script src="/static/app.js" defer></script>',
-        "</head><body>",
-        tag("aside", panel, class_="panel collapsed" if collapsed else "panel"),
-        tag("main", join(reopen, tab_strip, main, mode)),
+        "</head>",
+        f'<body class="{"panel-collapsed" if collapsed else ""}">',
+        tag("aside", panel, class_="panel"),
+        tag("main", join(reopen, render_crumbs(crumbs), tab_strip, main, mode)),
         _run_id_bar(run_id),
         "</body></html>",
     )
@@ -228,9 +304,16 @@ def search_panel(
     matches: list[dict[str, Any]] | None = None,
     filings: list[dict[str, Any]] | None = None,
     chosen: dict[str, str] | None = None,
-    spend: dict[str, str] | None = None,
 ) -> str:
-    """The persistent vertical search panel."""
+    """The persistent vertical search form. The chrome around it belongs to `panel_shell`.
+
+    IT TAKES NO `spend` AND CANNOT RENDER ONE. The cumulative figure moved to `panel_shell` for the
+    same reason the collapse control and the title did: it belongs to the panel rather than to this
+    form, and rendering it only in search mode meant the spend disappeared on every parse page —
+    precisely where a reader is looking at what a run cost and deciding whether to spend again. The
+    parameter stayed behind for a while, accepted and ignored, which is worse than either: a caller
+    passing it had no way to see that nothing came of it.
+    """
     chosen = chosen or {}
     roles = selectors["roles"]
     parsing_label = chosen.get("parsing_label", "")
@@ -375,19 +458,10 @@ def search_panel(
         )
     )
 
-    spend_line = ""
-    if spend:
-        spend_line = tag(
-            "p",
-            esc(
-                f"Cumulative authorized spend: USD {spend['spent_usd']} of {spend['ceiling_usd']}."
-            ),
-            class_="hint",
-        )
-
+    # THE COLLAPSE CONTROL AND THE TITLE MOVED TO `panel_shell`. They belong to the panel itself
+    # rather than to the search form, and both panel modes need them — a review menu with no way
+    # back to search, and no way to collapse, is a corner a reader gets stuck in.
     return join(
-        tag("a", "&#8592; collapse", class_="collapse-control", href="?panel=closed"),
-        tag("h1", "Kopexx parser review"),
         tag(
             "form",
             join(
@@ -425,7 +499,6 @@ def search_panel(
                     disabled=not can_run,
                 ),
                 blocked,
-                spend_line,
             ),
             method="post",
             action="/preflight",
@@ -655,9 +728,22 @@ def preflight_page(*, plan: dict[str, Any], csrf: str, form: dict[str, str]) -> 
 
 
 def run_page(
-    *, run: dict[str, Any], jobs: list[dict[str, Any]], events: list[dict[str, Any]]
+    *,
+    run: dict[str, Any],
+    jobs: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    hub: str = "",
 ) -> str:
-    """One parent run: its child filing jobs, each with its own identifier and terminal state."""
+    """One parent run: its child filing jobs, each with its own identifier and terminal state.
+
+    `hub` IS THE PARSE HUB, INLINED WHEN THIS RUN HAS EXACTLY ONE JOB. Every run in this store has
+    one — verified across 71 of them — so the job table is otherwise a one-row indirection between
+    the reader and the only thing on the page they came for. It is NOT inlined for a multi-job run:
+    thirteen destination rows times eleven jobs is not a page, and each row links to its own hub.
+
+    The run page is not redirected away even when it inlines the hub. The run owns the selections
+    that produced it and its stored event log, and the anchored run-identifier bar links here.
+    """
     rows = each(
         jobs,
         lambda j: tag(
@@ -668,16 +754,13 @@ def run_page(
                     tag(
                         "a",
                         esc(j["job_id"]),
-                        # A MULTIPART JOB OPENS AT ITS HIERARCHY, NOT AT THE SINGLE-RESPONSE PAGE.
-                        # Both pages exist for both kinds of job; what changes is which one answers
-                        # the first question a reviewer has about this job.
-                        href=url(
-                            "runs",
-                            run["run_id"],
-                            "jobs",
-                            j["job_id"],
-                            *(("multipart",) if j.get("strategy") == "multipart" else ()),
-                        ),
+                        # EVERY JOB OPENS AT ITS HUB, WHATEVER PROTOCOL RAN IT. This used to
+                        # branch on `strategy`, so the same click went to two different pages
+                        # depending on a field the reader could not see. It also answered the
+                        # wrong question: the first thing a reviewer wants of a job is not "which
+                        # calls ran" but "is this parse correct", and the hierarchy is one click
+                        # away from the hub as steps 1 and 5.
+                        href=url("runs", run["run_id"], "jobs", j["job_id"], "review"),
                     ),
                     class_="mono",
                 ),
@@ -730,6 +813,10 @@ def run_page(
             ),
             class_="card",
         ),
+        # THE HUB, WHEN THERE IS EXACTLY ONE JOB TO HUB. Rendered above the job table rather than
+        # instead of it: the table still states the job identifier, its protocol and its terminal
+        # states, which are run-level facts the hub does not repeat.
+        hub,
         tag(
             "div",
             join(

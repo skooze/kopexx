@@ -928,15 +928,27 @@ def test_no_identifier_free_route_returns_a_provider_endpoint_or_credential(
     routes = identifier_free_get_routes(app)
     assert len(routes) >= 8, "the sweep is scanning fewer routes than the application serves"
 
+    rendered = 0
     for path in routes:
         response = call(app, "GET", path, headers={"Accept": "text/html"})
+        # A REDIRECT CARRIES NO BODY, SO IT LEAKS NOTHING — but it also renders nothing, so it
+        # cannot be what this sweep is measuring. `/runs` is a POST collection whose GET exists
+        # only so a typed URL is not a bare 405. It is checked for an empty body and skipped.
+        if response.status == 303:
+            assert response.body == b"", f"{path} redirects AND carries a body"
+            continue
         assert response.status == 200, f"{path} answered {response.status}"
+        rendered += 1
         raw = response.body.decode("utf-8")
         for marker in PROVIDER_MARKERS:
             assert marker not in raw, f"{path} returned {marker!r}"
         for variable in CREDENTIAL_VARIABLE_NAMES:
             assert variable not in raw, f"{path} named a credential variable"
         assert not TWELVE_DIGITS.search(raw), f"{path} returned an account-shaped identifier"
+
+    # ANTI-VACUITY. If every route started redirecting, every assertion above would be skipped and
+    # this test would pass while checking nothing at all.
+    assert rendered >= 8, f"only {rendered} route(s) actually rendered a page to inspect"
 
 
 def test_the_provider_sweep_would_notice_a_leak(app: ReviewApp) -> None:
@@ -1351,3 +1363,242 @@ def test_a_browser_form_post_redirects_while_a_json_client_gets_a_body(
     )
     assert json_response.status == 201
     assert json_response.content_type.startswith("application/json")
+
+
+# --- published host names ------------------------------------------------------------------------
+
+
+def _policy(*hosts: str) -> SecurityPolicy:
+    return SecurityPolicy(
+        loopback_only=False, dev_auth_secret=DEV_SECRET, allowed_hosts=frozenset(hosts)
+    )
+
+
+def _get(host: str, path: str = "/") -> Request:
+    return Request(method="GET", path=path, headers={"host": host})
+
+
+def test_an_empty_allow_list_answers_every_host() -> None:
+    """The loopback developer posture: no published name, so no name to enforce."""
+    policy = _policy()
+    for host in ("127.0.0.1:8765", "10.0.0.2:8765", "anything.example"):
+        assert policy.check_host(_get(host)) is None
+
+
+def test_a_published_instance_answers_only_to_its_own_names() -> None:
+    policy = _policy("kopexx.com", "www.kopexx.com")
+    assert policy.check_host(_get("kopexx.com")) is None
+    assert policy.check_host(_get("www.kopexx.com")) is None
+    # The address the name resolves to is NOT the name. A request that arrives this way reached the
+    # process without passing whatever terminates TLS in front of it.
+    refused = policy.check_host(_get("67.176.123.237"))
+    assert refused is not None and refused.status == 421
+
+
+def test_the_port_is_not_part_of_the_name_but_an_ipv6_literal_keeps_its_brackets() -> None:
+    """A browser appends the port whenever it is not the scheme default."""
+    policy = _policy("kopexx.com", "[::1]")
+    assert policy.check_host(_get("kopexx.com:8765")) is None
+    assert policy.check_host(_get("KOPEXX.COM")) is None, "host names are case-insensitive"
+    assert policy.check_host(_get("[::1]:8765")) is None
+    assert policy.check_host(_get("[::1]")) is None
+
+
+def test_a_neighbouring_name_on_the_same_address_is_refused() -> None:
+    """Other sites share this address. Only the configured names may reach this application."""
+    policy = _policy("kopexx.com")
+    for other in ("nopexx.com", "realmstack.net", "kopexx.com.evil.test", "evilkopexx.com", ""):
+        assert policy.check_host(_get(other)) is not None, other
+
+
+def test_the_host_check_has_no_exemption_for_sign_in_or_health(harness: Harness) -> None:
+    """The two paths that skip AUTHENTICATION must not also skip host validation.
+
+    A sign-in form served to an unrecognised Host is exactly what a DNS rebinding attack needs: the
+    victim's browser is pointed here under a name the attacker controls, and anything this process
+    answers becomes same-origin to the attacker's page.
+    """
+    app = ReviewApp(
+        service=harness.service,
+        worker=harness.worker,
+        policy=_policy("kopexx.com"),
+    )
+    for path in ("/health", "/sign-in", "/static/app.css", "/"):
+        assert app.handle(_get("evil.test", path)).status == 421, path
+        assert app.handle(_get("kopexx.com", path)).status != 421, path
+
+
+def test_a_secure_cookie_is_set_only_when_a_browser_actually_uses_tls() -> None:
+    """Behind a proxy this process speaks plain HTTP, so the flag cannot be read off the socket."""
+    from packages.review_api.security import set_cookie
+
+    assert "Secure" in set_cookie("abc", https=True)
+    assert "Secure" not in set_cookie("abc", https=False)
+    for value in (set_cookie("abc", https=True), set_cookie("abc", https=False)):
+        assert "HttpOnly" in value and "SameSite=Strict" in value
+
+
+# --- published without authentication ------------------------------------------------------------
+
+
+def _open_policy(*hosts: str) -> SecurityPolicy:
+    """The kopexx.com posture: beyond loopback, no secret, no sign-in, host-restricted."""
+    return SecurityPolicy(
+        loopback_only=False,
+        dev_auth_secret=None,
+        allowed_hosts=frozenset(hosts),
+        authentication_disabled=True,
+    )
+
+
+def test_an_unauthenticated_instance_cannot_happen_by_forgetting_something() -> None:
+    """The guard's value is that the unsafe posture must be NAMED, never merely arrived at."""
+    from packages.configuration.settings import ReviewSettings
+
+    with pytest.raises(ValueError, match="REVIEW_PUBLIC_UNAUTHENTICATED"):
+        ReviewSettings(bind_host="0.0.0.0")  # noqa: S104 - the refusal is the assertion
+    # Naming it is what makes it constructible. Nothing else changed.
+    published = ReviewSettings(bind_host="0.0.0.0", public_unauthenticated=True)  # noqa: S104
+    assert published.loopback_only is False
+    # And the secret route still works, unchanged, for anyone who wants it.
+    assert ReviewSettings(bind_host="0.0.0.0", dev_auth_secret="x" * 16).loopback_only is False  # noqa: S104
+
+
+def test_a_published_instance_serves_without_a_session(harness: Harness) -> None:
+    app = ReviewApp(
+        service=harness.service, worker=harness.worker, policy=_open_policy("kopexx.com")
+    )
+    assert app.handle(_get("kopexx.com", "/")).status == 200
+    assert app.handle(_get("kopexx.com", "/health")).status == 200
+
+
+def test_the_sign_in_page_stops_offering_a_control_that_does_nothing(harness: Harness) -> None:
+    """With no secret to present there is no session to obtain; the form would be theatre."""
+    app = ReviewApp(
+        service=harness.service, worker=harness.worker, policy=_open_policy("kopexx.com")
+    )
+    page = app.handle(_get("kopexx.com", "/sign-in"))
+    assert page.status == 303 and page.headers["Location"] == "/"
+    posted = app.handle(
+        Request(method="POST", path="/sign-in", headers={"host": "kopexx.com"}, body=b"secret=x")
+    )
+    assert posted.status == 303 and posted.headers["Location"] == "/"
+
+
+def test_removing_authentication_does_not_also_remove_the_host_check(harness: Harness) -> None:
+    """These are separate controls. Publishing under a name is not publishing to every name.
+
+    With no login left, the host check is the only thing standing between this application and
+    every scanner that finds the address. It must not be quietly coupled to the auth setting.
+    """
+    app = ReviewApp(
+        service=harness.service, worker=harness.worker, policy=_open_policy("kopexx.com")
+    )
+    assert app.handle(_get("67.176.123.237", "/")).status == 421
+    assert app.handle(_get("nopexx.com", "/")).status == 421
+    assert app.handle(_get("kopexx.com", "/")).status == 200
+
+
+def test_the_collapsed_panel_survives_following_a_link(app: ReviewApp) -> None:
+    """The panel preference is remembered across pages, which is what made it look broken.
+
+    `?panel=closed` belonged to ONE url. Collapsing the panel and then clicking any link brought it
+    straight back, so the control appeared to do nothing that lasted. The cookie the toggle writes
+    is what the server reads on every subsequent page.
+    """
+    plain = call(app, "GET", "/", headers={"Accept": "text/html"}).body.decode()
+    assert 'class="panel-collapsed"' not in plain
+
+    remembered = call(
+        app, "GET", "/", headers={"Accept": "text/html", "Cookie": "kopexx_panel=closed"}
+    ).body.decode()
+    assert 'class="panel-collapsed"' in remembered
+
+
+def test_an_explicit_panel_parameter_beats_the_remembered_preference(app: ReviewApp) -> None:
+    """A deliberate act on THIS request wins: a no-script reader's click, or a shared URL."""
+    forced_open = call(
+        app,
+        "GET",
+        "/?panel=open",
+        headers={"Accept": "text/html", "Cookie": "kopexx_panel=closed"},
+    ).body.decode()
+    assert 'class="panel-collapsed"' not in forced_open
+
+    forced_shut = call(
+        app,
+        "GET",
+        "/?panel=closed",
+        headers={"Accept": "text/html", "Cookie": "kopexx_panel=open"},
+    ).body.decode()
+    assert 'class="panel-collapsed"' in forced_shut
+
+
+def test_the_event_stream_waits_between_polls_instead_of_spinning(
+    app: ReviewApp, completed_run: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """THE ONE CASE THE OTHER TWO STREAM TESTS CANNOT REACH: a run that is still working.
+
+    Both existing stream tests use a finished run, whose jobs are all terminal — so the loop exits
+    on its FIRST pass and never polls twice. That is why a 600-iteration watch with no wait in it
+    survived review: on every stored run it is unobservable, and it would appear only during the
+    live parse a reviewer opens the stream to watch.
+
+    Here `read_events` always has something new and no job is terminal, which is the shape of a run
+    mid-flight. The loop must therefore sleep between looks rather than re-listing the event
+    directory and re-loading every child job as fast as the disk answers.
+    """
+    run_id, _ = completed_run
+    from packages.review_api import handlers as handlers_module
+
+    slept: list[float] = []
+
+    def record(seconds: float) -> None:
+        slept.append(seconds)
+        if len(slept) >= 3:
+            raise _StopWatching
+
+    monkeypatch.setattr(handlers_module.time, "sleep", record)
+    # A run that never finishes and never runs out of events: the exact spin condition.
+    monkeypatch.setattr(
+        app.service.store,
+        "load_jobs",
+        lambda _run_id: [_RunningJob()],
+    )
+    counter = iter(range(1, 10_000))
+    monkeypatch.setattr(
+        app.service.store,
+        "read_events",
+        lambda _run_id, after=0: [_Event(next(counter))],
+    )
+
+    stream = call(app, "GET", f"/runs/{run_id}/events").stream
+    assert stream is not None
+    with pytest.raises(_StopWatching):
+        for _ in stream:
+            pass
+
+    assert slept == [handlers_module.EVENT_STREAM_POLL_SECONDS] * 3, (
+        "the watch polled without waiting, which is a spin rather than a watch"
+    )
+
+
+class _StopWatching(Exception):
+    """Ends the test's stream deterministically instead of waiting out 600 polls."""
+
+
+class _RunningJob:
+    """A child job that has not reached a terminal state, so the stream keeps watching."""
+
+    execution_state = ExecutionState.RUNNING
+
+
+class _Event:
+    """One run event, flat enough for the stream and nothing more."""
+
+    def __init__(self, sequence: int) -> None:
+        self.sequence = sequence
+        self.event_id = f"{sequence:08d}"
+        self.kind = "job.progress"
+        self.message = "still working"
+        self.task_id = None

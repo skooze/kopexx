@@ -323,6 +323,19 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
 
   /runs:
+    get:
+      tags: [review]
+      operationId: reviewRunsRedirect
+      summary: Redirect to the run list, so a typed collection URL is not a bare 405.
+      description: |
+        `/runs` is a POST collection. A reader who typed it, or who read it off the anchored
+        run-identifier bar, used to get a 405 with an Allow header and nothing else. It now
+        redirects to the page that lists runs.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.3
+      responses:
+        "303":
+          description: See the run list at `/`.
     post:
       tags: [review]
       operationId: reviewCreateRun
@@ -635,7 +648,51 @@ paths:
               schema: { $ref: "#/components/schemas/ValidationRecord" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /filings:
+    get:
+      tags: [review]
+      operationId: reviewFilingsIndexPage
+      summary: Every filing this instance holds evidence about.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.3
+      responses:
+        "200":
+          description: The filings index, as HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+
   /runs/{run_id}/jobs/{job_id}/review:
+    get:
+      tags: [review]
+      operationId: reviewParseHub
+      summary: One parse, and every way of examining it, ending in the verdict form.
+      description: |
+        The landing page for judging one parse. It states what has been recorded and what has not,
+        orders the evidence by what is cheapest and most decisive to check, and ends at the form
+        that records a verdict.
+
+        THE URL WHERE A VERDICT IS RECORDED IS THE URL WHERE IT IS DECIDED. The `post` below sets
+        the review state on this same path.
+
+        It carries NO coverage figure. Every one of them needs the source inventory and the anchor
+        ladder over the preserved bytes, so showing one here would re-walk the filing on the
+        landing page of every job. They stay on the model ledger page, which pays for them.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.3
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/ChildJobId"
+      responses:
+        "200":
+          description: The parse hub, as HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       tags: [review]
       operationId: reviewSetReviewState
@@ -1110,6 +1167,31 @@ paths:
         "409": { $ref: "#/components/responses/SourceUnavailable" }
 
   /benchmark/{cik}/{accession}/judgements:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkJudgementsPage
+      summary: Every human classification recorded for one filing, superseded versions included.
+      description: |
+        A truth document is superseded by a later version and BOTH are kept, so this page shows the
+        version history rather than only the current document. A page that showed only the current
+        one would make a revised judgement look like the only judgement there had ever been.
+
+        THE READ VIEW EXISTS BECAUSE THE MENU POINTS AT IT. Before it, every navigation entry for
+        judgements resolved to a POST-only path and would have answered 405.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.3
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+      responses:
+        "200":
+          description: The recorded judgements, as HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       tags: [review]
       operationId: reviewRecordBenchmarkJudgement

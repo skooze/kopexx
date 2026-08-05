@@ -73,7 +73,11 @@ TABLE_SLICE_CHARACTERS: int = 12_000
 #: How the classification of an item is coloured. REQUIRES_REVIEW is deliberately a warning: it is
 #: the state that blocks the gate, and rendering it as neutral would make an unreviewed filing look
 #: settled.
-_CLASSIFICATION_KIND = {
+#:
+#: PUBLIC BECAUSE `filings_view` RENDERS THE SAME VALUES. The judgements page lists what was
+#: classified here, and two dictionaries of the same twelve values drift the moment a thirteenth is
+#: added — so there is one, and it lives beside the control that records the classification.
+CLASSIFICATION_KIND = {
     "REQUIRES_REVIEW": "warn",
     "MATERIAL_FILING_CONTENT": "ok",
     "DATA_BEARING": "ok",
@@ -266,7 +270,7 @@ def _classification_block(
     let a reviewer accept a byte observation they never saw.
     """
     return join(
-        tag("p", badge(current, _CLASSIFICATION_KIND.get(current, "neutral"))),
+        tag("p", badge(current, CLASSIFICATION_KIND.get(current, "neutral"))),
         _suggestion_note(judgement),
         _recorded_note(judgement),
         _classification_control(

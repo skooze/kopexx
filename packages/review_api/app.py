@@ -187,7 +187,9 @@ def build(settings: Settings, *, provider: ModelProvider | None = None) -> Appli
     policy = SecurityPolicy(
         loopback_only=review.loopback_only,
         dev_auth_secret=review.dev_auth_secret,
-        https=False,
+        https=review.served_over_https,
+        allowed_hosts=frozenset(review.allowed_hosts),
+        authentication_disabled=review.public_unauthenticated,
     )
     return Application(
         app=ReviewApp(service=service, worker=worker, policy=policy),
@@ -208,10 +210,19 @@ def serve(settings: Settings | None = None) -> None:
     application.server = server
     mode = "loopback only" if resolved.review.loopback_only else "NETWORK INTERFACE"
     print(f"Kopexx parser review on {server.url}  ({mode})")  # noqa: T201 - the point of serving
-    if not resolved.review.loopback_only:
+    if not resolved.review.loopback_only and resolved.review.public_unauthenticated:
+        # STATED EVERY TIME IT STARTS. An unauthenticated public instance is a decision, and a
+        # decision nobody is reminded of is one that outlives the reason for it.
+        names = ", ".join(resolved.review.allowed_hosts) or "ANY host name"
         print(  # noqa: T201
-            "Bound beyond loopback. Authentication is required and this is still plain HTTP: "
-            "prefer loopback plus an SSH tunnel."
+            f"PUBLISHED WITHOUT AUTHENTICATION, answering to {names}. Anyone who can reach it can "
+            "read every preserved filing and every run's evidence, and can issue BILLABLE provider "
+            f"calls bounded only by the spend ceiling of USD {resolved.review.cost_ceiling_usd}."
+        )
+    elif not resolved.review.loopback_only:
+        print(  # noqa: T201
+            "Bound beyond loopback. Authentication is required and this process speaks plain "
+            "HTTP: terminate TLS in front of it, or prefer loopback plus an SSH tunnel."
         )
     try:
         server.serve_forever()

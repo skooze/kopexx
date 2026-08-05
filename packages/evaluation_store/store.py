@@ -35,6 +35,7 @@ from packages.llm_gateway import parse_yaml, require_mapping, to_yaml
 from packages.sec_identity import accession_dashed, cik_padded
 from packages.storage import FilesystemObjectStore, ObjectStore
 
+from . import attention
 from .errors import (
     BenchmarkTruthVersionExistsError,
     IllegalTransitionError,
@@ -75,6 +76,64 @@ from .states import (
 )
 from .tasks import MultipartTask
 
+#: The stored spelling of every task state the abandonment sweep may act on. Derived from the enum
+#: rather than written out, so a new resumable state cannot be added without this following it.
+_RESUMABLE_STATE_NAMES: frozenset[str] = frozenset(state.value for state in RESUMABLE_TASK_STATES)
+
+#: Every task state this codebase can write.
+#:
+#: WHY BOTH SETS ARE NEEDED, AND WHY THE FIRST VERSION OF THIS FILTER WAS WRONG. "Not resumable" and
+#: "not a state I recognise" are different facts, and collapsing them makes the filter SKIP an
+#: unfamiliar spelling — silently dropping that task from the sweep, which is the exact loss this
+#: fast path claims to be incapable of. Membership here is what separates a judgement from an
+#: admission of ignorance.
+_KNOWN_TASK_STATE_NAMES: frozenset[str] = frozenset(state.value for state in TaskState)
+
+#: The top-level `state:` line of a stored task manifest. Anchored to column zero so a nested
+#: `state:` inside an attempt or a payload cannot be mistaken for the task's own.
+_STATE_LINE = re.compile(rb"(?m)^state:[ \t]*[\"\']?([A-Za-z_]+)[\"\']?[ \t]*$")
+
+
+#: The stored spelling of every job execution state the restart sweep may act on.
+_RESUMABLE_EXECUTION_NAMES: frozenset[str] = frozenset(
+    state.value for state in RESUMABLE_EXECUTION_STATES
+)
+
+#: Every execution state this codebase can write. A value outside it is a spelling the filter does
+#: not understand, which is a reason to PARSE the record rather than to judge it.
+_KNOWN_EXECUTION_NAMES: frozenset[str] = frozenset(state.value for state in ExecutionState)
+
+#: The top-level `execution_state:` line of a stored job manifest.
+_EXECUTION_STATE_LINE = re.compile(rb"(?m)^execution_state:[ \t]*[\"\']?([A-Za-z_]+)[\"\']?[ \t]*$")
+
+
+def _may_be_resumable_job(raw: bytes) -> bool:
+    """Whether stored job bytes could hold a resumable execution state. Fails open, as below."""
+    match = _EXECUTION_STATE_LINE.search(raw)
+    if match is None:
+        return True
+    name = match.group(1).decode("ascii", errors="replace")
+    if name not in _KNOWN_EXECUTION_NAMES:
+        return True
+    return name in _RESUMABLE_EXECUTION_NAMES
+
+
+def _may_be_resumable(raw: bytes) -> bool:
+    """Whether stored task bytes could hold a resumable state, without parsing the YAML.
+
+    FAILS OPEN BY CONSTRUCTION. True means "parse it and find out"; False is returned only when the
+    state line was found AND its value is a known non-resumable state. Anything unrecognised is
+    True, so this can cost time and can never lose a task.
+    """
+    match = _STATE_LINE.search(raw)
+    if match is None:
+        return True
+    name = match.group(1).decode("ascii", errors="replace")
+    if name not in _KNOWN_TASK_STATE_NAMES:
+        return True
+    return name in _RESUMABLE_STATE_NAMES
+
+
 #: Evidence file names are written by this repository, never by a request. The pattern is still
 #: enforced: an evidence name reaches a storage key, and a guard that only exists because "no
 #: caller would do that" is a guard that stops holding the first time a caller does.
@@ -108,6 +167,10 @@ class EvaluationStore:
         # fingerprint on every read. See `load_task` for why this exists and why it cannot serve a
         # stale record.
         self._task_cache: dict[str, tuple[tuple[int, int], dict[str, Any]]] = {}
+        # The same fingerprinted cache for job manifests. `list_job_ids` parses every job
+        # of a run to sort them by creation time, and both start-up sweeps call it, so the
+        # same records were parsed repeatedly at 0.16 s each.
+        self._job_cache: dict[str, tuple[tuple[int, int], dict[str, Any]]] = {}
 
     @classmethod
     def at_path(cls, root: str | Path) -> EvaluationStore:
@@ -199,9 +262,17 @@ class EvaluationStore:
 
         Sorted by the manifest's timestamp rather than by identifier: the identifier is random by
         design, so sorting by it would present runs in an order with no meaning.
+
+        `max_depth=2` IS THE WHOLE COST OF THE HOME PAGE. A run manifest is always
+        `runs/<run_id>/run.yaml`, exactly two levels below the prefix, and nothing deeper can ever
+        satisfy this listing — but without the bound the walk descended into every run's `events/`,
+        `jobs/`, `tasks/` and `evidence/` to find 71 files among roughly 13,000. Measured on this
+        store it was 2.8 of the home page's 5.5 CPU seconds and 14,898 `relative_to` calls, on the
+        one page every reader lands on first. `list_job_ids` and `list_task_ids` already pass the
+        same bound for the same reason; this listing was simply missed.
         """
         found = []
-        for key in self._objects.list_keys(f"{_RUNS}/"):
+        for key in self._objects.list_keys(f"{_RUNS}/", max_depth=2):
             parts = key.split("/")
             if len(parts) == 3 and parts[2] == "run.yaml":
                 found.append(parts[1])
@@ -225,16 +296,31 @@ class EvaluationStore:
         )
 
     def load_job(self, run_id: str, job_id: str) -> JobRecord:
+        """One job manifest, parsed, behind the same fingerprinted cache `load_task` uses.
+
+        The entry is keyed by the object store's fingerprint — modification time in nanoseconds and
+        size — so any write by any process misses it, and a backend that cannot answer cheaply
+        returns None and every read goes to disk. See `load_task` for the full reasoning.
+        """
         key = self._job_key(run_id, job_id)
+        fingerprint = self._objects.fingerprint(key)
+        if fingerprint is not None:
+            cached = self._job_cache.get(key)
+            if cached is not None and cached[0] == fingerprint:
+                return JobRecord.from_mapping(cached[1])
         if not self._objects.exists(key):
             raise JobNotFoundError(f"no child job {job_id!r} is stored under run {run_id!r}")
-        return JobRecord.from_mapping(require_mapping(parse_yaml(self._objects.get_text(key))))
+        mapping = require_mapping(parse_yaml(self._objects.get_text(key)))
+        if fingerprint is not None:
+            self._job_cache[key] = (fingerprint, mapping)
+        return JobRecord.from_mapping(mapping)
 
     def list_job_ids(self, run_id: str) -> list[str]:
         """Child job identifiers in creation order."""
         prefix = f"{_RUNS}/{require_run_id(run_id)}/jobs/"
         found = []
-        for key in self._objects.list_keys(prefix):
+        # Depth 2 is exactly `<job_id>/job.yaml`, so neither `tasks/` nor `evidence/` is entered.
+        for key in self._objects.list_keys(prefix, max_depth=2):
             parts = key[len(prefix) :].split("/")
             if len(parts) == 2 and parts[1] == "job.yaml":
                 found.append(parts[0])
@@ -297,7 +383,9 @@ class EvaluationStore:
     def list_task_ids(self, run_id: str, job_id: str) -> list[str]:
         prefix = f"{_RUNS}/{require_run_id(run_id)}/jobs/{require_job_id(job_id)}/tasks/"
         found = []
-        for key in self._objects.list_keys(prefix):
+        # Depth 2 is exactly `<task_id>/task.yaml`. Each task's `evidence/` directory holds the
+        # preserved model responses and is never enumerated to answer this question.
+        for key in self._objects.list_keys(prefix, max_depth=2):
             parts = key[len(prefix) :].split("/")
             if len(parts) == 2 and parts[1] == "task.yaml":
                 found.append(parts[0])
@@ -402,6 +490,41 @@ class EvaluationStore:
             task, TaskState.READY, message=f"reopened by {author}; a new attempt will be reserved"
         )
 
+    def resumable_tasks_of(self, run_id: str, job_id: str) -> list[MultipartTask]:
+        """Every task of one job that is in a resumable state, parsing only the ones that might be.
+
+        WHY A PRE-FILTER EXISTS HERE AND NOWHERE ELSE. The two start-up sweeps are the only readers
+        that must visit EVERY task of EVERY run in the store, and after the first sweep has run they
+        almost always find nothing: a parked task is INTERRUPTED, which is not resumable, so the
+        next start-up re-reads the whole archive to confirm there is no work. Measured on this
+        repository — 724 task manifests, median 5.9 KB — that confirmation cost 46 seconds of
+        pure-Python YAML parsing at every launch, and the archive only grows.
+
+        THE FILTER MAY ONLY EVER SKIP, NEVER DECIDE. It reads the stored bytes and looks for the
+        top-level `state:` line. A manifest whose state it can positively identify as non-resumable
+        is skipped; ANY other outcome — no match, an unfamiliar value, an unreadable object — falls
+        through to the real parser. So a format this regex does not understand costs the old speed
+        and returns the old answer, rather than silently dropping a task from the sweep.
+
+        `load_task` still does the parsing, so its fingerprinted cache and its error handling are
+        unchanged for every task that survives the filter.
+        """
+        found: list[MultipartTask] = []
+        for task_id in self.list_task_ids(run_id, job_id):
+            try:
+                raw = self._objects.get_bytes(self._task_key(run_id, job_id, task_id))
+            except Exception:  # noqa: BLE001 - an unreadable object is the parser's problem, not ours
+                raw = b""
+            if raw and not _may_be_resumable(raw):
+                continue
+            try:
+                task = self.load_task(run_id, job_id, task_id)
+            except Exception:  # noqa: BLE001 - one corrupt task must not hide every other task
+                continue
+            if task.state in RESUMABLE_TASK_STATES:
+                found.append(task)
+        return found
+
     def mark_interrupted_tasks(self) -> list[tuple[str, str, str]]:
         """Park every ABANDONED mid-flight task. Returns (run, job, task) triples.
 
@@ -417,10 +540,11 @@ class EvaluationStore:
         touched: list[tuple[str, str, str]] = []
         now = utc_now()
         for run_id in self.list_run_ids():
-            for job in self.load_jobs(run_id):
-                for task in self.load_tasks(run_id, job.job_id):
-                    if task.state not in RESUMABLE_TASK_STATES:
-                        continue
+            # JOB IDENTIFIERS COME FROM THE KEYS, NOT FROM PARSED MANIFESTS. This sweep reaches
+            # past the job to its tasks and never reads a job field, so parsing every job record
+            # to recover an identifier the key already spells was pure cost.
+            for job_id in self.list_job_ids(run_id):
+                for task in self.resumable_tasks_of(run_id, job_id):
                     # ONLY ABANDONED WORK IS PARKED. A task whose owning process is still alive
                     # belongs to that process; parking it would reach across a process boundary and
                     # cancel work somebody is paying for right now. That is not hypothetical: this
@@ -437,11 +561,11 @@ class EvaluationStore:
                     self.append_event(
                         run_id,
                         kind="task.interrupted",
-                        job_id=job.job_id,
+                        job_id=job_id,
                         task_id=task.task_id,
                         message="interrupted by a server restart; not rerun automatically",
                     )
-                    touched.append((run_id, job.job_id, task.task_id))
+                    touched.append((run_id, job_id, task.task_id))
         return touched
 
     def find_successful_task(
@@ -594,7 +718,19 @@ class EvaluationStore:
         touched: list[tuple[str, str]] = []
         now = utc_now()
         for run_id in self.list_run_ids():
-            for job in self.load_jobs(run_id):
+            for job_id in self.list_job_ids(run_id):
+                # SKIP-ONLY, EXACTLY AS `resumable_tasks_of` IS. A manifest positively identified
+                # as terminal is not parsed; anything else falls through to the real loader.
+                try:
+                    raw = self._objects.get_bytes(self._job_key(run_id, job_id))
+                except Exception:  # noqa: BLE001 - unreadable is the loader's problem
+                    raw = b""
+                if raw and not _may_be_resumable_job(raw):
+                    continue
+                try:
+                    job = self.load_job(run_id, job_id)
+                except Exception:  # noqa: BLE001 - one corrupt job must not hide every other job
+                    continue
                 if job.execution_state in RESUMABLE_EXECUTION_STATES:
                     # A JOB IS ABANDONED ONLY WHEN NOTHING IS STILL WORKING ITS TASKS. A job holds
                     # no lease of its own — it is a container — so its liveness is the liveness of
@@ -604,8 +740,7 @@ class EvaluationStore:
                     # itself dead while it was demonstrably still running.
                     if any(
                         owner_is_alive(task.owner, task.heartbeat, now=now)
-                        for task in self.load_tasks(run_id, job.job_id)
-                        if task.state in RESUMABLE_TASK_STATES
+                        for task in self.resumable_tasks_of(run_id, job.job_id)
                     ):
                         continue
                     job.execution_state = ExecutionState.INTERRUPTED
@@ -837,6 +972,85 @@ class EvaluationStore:
             f"/tasks/{require_task_id(task_id)}/evidence/"
         )
         return [key[len(prefix) :] for key in self._objects.list_keys(prefix)]
+
+    # --- attention: which destinations this reviewer has already had rendered ---------------------
+    #
+    # DISPOSABLE SCRATCH, NEVER EVIDENCE, AND THE PREFIX IS WHAT GUARANTEES IT. Every key these
+    # three methods touch lives under `attention/`, sibling of `runs/` and `benchmarks/`. Deleting
+    # that directory resets every mark and loses not one byte that was paid for, which is why the
+    # trail is not kept on the records it describes. Nothing in orchestration, validation, the
+    # completeness gate, any API response or any prompt reads it, and it never reaches a model.
+    #
+    # `packages/evaluation_store/attention.py` owns every key, and it validates or mints every
+    # segment of one. These methods build no path themselves.
+
+    def record_opened(self, prefix: str, *, item: str, fingerprint: str) -> str:
+        """Record that one destination was rendered for this reviewer, at one version of it.
+
+        NEVER A READ-MODIFY-WRITE, AND THAT IS THE WHOLE DESIGN. One immutable object per
+        (reviewer, scope, item, fingerprint), holding a single timestamp line. Two browser tabs
+        recording at once either write the same key with a different timestamp — last write wins on
+        a timestamp, which loses nothing — or two different keys, which collide with nothing. There
+        is nothing to merge, so there is nothing to lose, and no lock exists here because none is
+        needed. A trail assembled by merging is a trail that can drop the entry it merged in.
+
+        THE MARK NEVER TOUCHES THE RECORD IT DESCRIBES. `save_job` and `save_task` stamp
+        `updated_at` on every write, so recording this on a job or task manifest would say a model's
+        artifact changed because somebody looked at it.
+
+        `put_text` goes through `put_bytes`, so a mark is written to a temporary path, flushed,
+        fsynced and renamed exactly as a preserved response is. It costs nothing to keep the
+        discipline uniform, and a half-written mark would be a mark nobody can parse.
+        """
+        key = attention.opened_key(prefix, item, fingerprint)
+        self._objects.put_text(key, f"{utc_now()}\n", content_type="text/plain")
+        return key
+
+    def opened_items(self, prefix: str) -> dict[str, frozenset[str]]:
+        """Every item opened under one scope, mapped to the versions of it that were opened.
+
+        ONE LISTING AND A FILENAME SPLIT. NO OBJECT IS READ AND NO YAML IS PARSED. The fingerprint
+        sits in the filename precisely so that "opened", "opened at an earlier version" and "not
+        opened" are string comparisons over a directory listing. A hierarchy page renders that
+        marker into as many as 77 links, and a manifest parse — measured at 64 ms cold, over a
+        pure-Python YAML 1.2 loader that is not going to get faster — behind a decoration on a link
+        is how a review surface stops being usable.
+
+        A FROZENSET PER ITEM, NOT A LATEST VALUE. A destination is legitimately opened at several
+        versions over a review, the caller is the only party that knows which version is current,
+        and the question it asks is membership. Collapsing to "the newest" here would need the
+        timestamps this method exists to avoid reading.
+
+        AN UNRECOGNISED FILENAME IS SKIPPED, NOT GUESSED. Only `opened_key` writes here, so a name
+        that is not `{item}.{fingerprint}.txt` is something this repository did not put there.
+        """
+        scope = attention.require_prefix(prefix)
+        found: dict[str, set[str]] = {}
+        # Depth 1 is exactly this scope's own mark files. A scope holds no directories today; the
+        # bound is stated anyway, so a sibling prefix that later does cannot silently be walked.
+        for key in self._objects.list_keys(scope, max_depth=1):
+            # `attention.opened_key` writes `{item}.{fingerprint}.txt`, and neither field admits a
+            # dot, so exactly three fields is the whole check.
+            fields = key[len(scope) :].split(".")
+            if len(fields) != 3 or fields[2] != "txt":
+                continue
+            found.setdefault(fields[0], set()).add(fields[1])
+        return {item: frozenset(fingerprints) for item, fingerprints in found.items()}
+
+    def opened_at(self, prefix: str, *, item: str, fingerprint: str) -> str:
+        """When one mark was last written, or "" when this reviewer has no mark for it.
+
+        THE ONLY READER OF A MARK'S BODY, and it exists for the one line that displays a single
+        timestamp beside the destination it belongs to. Every count goes through `opened_items`,
+        which opens no object at all.
+
+        A MISSING MARK IS AN ORDINARY ANSWER, NOT A FAILURE. Most destinations have never been
+        opened, and raising for the common case would make every caller wrap this in a try block.
+        """
+        key = attention.opened_key(prefix, item, fingerprint)
+        if not self._objects.exists(key):
+            return ""
+        return self._objects.get_text(key).strip()
 
 
 # --- the event wire format -----------------------------------------------------------------------

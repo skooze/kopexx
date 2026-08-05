@@ -22,9 +22,10 @@ never rendered as though it were cited.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from .html import badge, each, esc, join, tag, url, warning
+from .multipart_view import assembled_pane
 
 _VIEWS = (("raw", "Raw"), ("parsed", "Parsed"), ("side-by-side", "Side by side"))
 
@@ -189,8 +190,42 @@ def parsed_pane(
     parsed: dict[str, Any] | None,
     outcomes_by_node: dict[str, list[dict[str, Any]]],
     raw_response: str,
+    responses_live_on_tasks: bool = False,
 ) -> str:
-    """The model's structure in the model's own words, or the exact bytes when it will not parse."""
+    """The model's structure in the model's own words, or an honest account of why there is none.
+
+    THE TWO ABSENCES ARE DIFFERENT AND WERE BEING REPORTED AS ONE. `parsed is None` was rendered as
+    "the response is not one readable YAML 1.2 document" in both cases, and on a multipart parse
+    that sentence was simply false: there is no job-level response to be unreadable, because every
+    response belongs to a task. The reviewer was then told "the exact bytes are shown below" and
+    shown an empty block, since `response-visible.txt` does not exist at job level either. Two
+    wrong statements about a run that was working exactly as designed.
+
+    `responses_live_on_tasks` is the handler's answer to "did this parse put its responses
+    somewhere else", and only the handler can know it.
+    """
+    if parsed is None and responses_live_on_tasks:
+        return tag(
+            "section",
+            join(
+                tag("h2", "Parsed"),
+                warning(
+                    "This is a multipart parse and it has no single response. Every response "
+                    "belongs to a call, and the assembled index is built from them - so there is "
+                    "nothing at this level to show, and that is the design rather than a failure."
+                ),
+                tag(
+                    "ul",
+                    join(
+                        tag("li", tag("a", "Read the calls", href=url(*base, "multipart"))),
+                        tag(
+                            "li", tag("a", "Read the assembled index", href=url(*base, "assembled"))
+                        ),
+                    ),
+                    class_="menu",
+                ),
+            ),
+        )
     if parsed is None:
         return tag(
             "section",
@@ -200,9 +235,13 @@ def parsed_pane(
                     "Structured parse unavailable: the response is not one readable YAML 1.2 "
                     "document. The exact bytes the model returned are shown below and the run is "
                     "kept - it was billable and cannot be regenerated for free."
+                    if raw_response
+                    else "Structured parse unavailable, and no response is stored against this "
+                    "job at all - so there are no bytes to show. An empty block here used to "
+                    "claim the opposite."
                 ),
                 tag("h3", "Exact model response"),
-                tag("pre", esc(raw_response), class_="source"),
+                tag("pre", esc(raw_response), class_="source") if raw_response else "",
             ),
         )
 
@@ -284,7 +323,58 @@ def parsed_pane(
     )
 
 
-def _invocation_card(job: dict[str, Any]) -> str:
+#: The adapters that reach a real provider and bill for it. Anything else answered locally, and a
+#: page that reports its label, its region and its dollar cost as though it had not is lying.
+_BILLABLE_PROVIDERS: Final[frozenset[str]] = frozenset({"bedrock"})
+
+
+def _provider_warning(attempt_providers: list[str]) -> str:
+    """Say plainly when no real provider answered, before any figure that implies one did.
+
+    THE CARD USED TO CLAIM A CALL THAT NEVER HAPPENED. With `LLM_PROVIDER=mock` the review page
+    printed `Claude Haiku 4.5 - us.anthropic.claude-haiku-4-5-20251001-v1:0 - region us-east-1` and
+    `USD 0.0905289` for a response the mock adapter produced offline in four lines of stub YAML.
+    Every one of those values is real CONFIGURATION and none of them is a real INVOCATION, which is
+    the distinction `model_routing` cannot make on its own — it records what was selected, not what
+    answered. rules.md section 10 requires the invocation to record what it invoked; this is the
+    reader's half of that.
+
+    THE FIGURES ARE STILL SHOWN, NOT SUPPRESSED. A mock run's token counts and its journal entry
+    are real facts about this instance — the spend journal counted them, which is why a ceiling can
+    read as consumed by runs that never reached a provider. Hiding them would replace a false claim
+    with a missing one. The warning goes ABOVE them so the qualifier is read first.
+
+    AN ATTEMPT WITH NO RECORDED PROVIDER IS NOT ACCUSED OF BEING A MOCK. Runs stored before the
+    field existed read back empty, and empty means unknown: it is reported as unknown.
+
+    THE ATTEMPTS COME FROM THE HANDLER AND SPAN THE TASKS, WHICH IS THE WHOLE POINT ON THIS PAGE. A
+    multipart job carries `attempts: []` of its own — every attempt belongs to a call — so a warning
+    derived from `job["attempts"]` alone would fall silent on exactly the runs that need it, while
+    the card above it printed a model, a region and a dollar figure.
+    """
+    named = {p for p in attempt_providers if p}
+    if not named:
+        return (
+            warning(
+                "This run does not record which provider answered it, so nothing on this card "
+                "establishes that a real model was invoked. The model, region and cost below are "
+                "the configuration this run was created with."
+            )
+            if attempt_providers
+            else ""
+        )
+    if named & _BILLABLE_PROVIDERS:
+        return ""
+    listed = ", ".join(sorted(named))
+    return warning(
+        f"NO REAL MODEL WAS INVOKED. This run was answered by the {listed} provider, offline, and "
+        "no request reached AWS. The model, region, token counts and USD figure below describe the "
+        "configuration and the local stub, NOT a provider call - and the cost was still written to "
+        "the spend journal, so it counts against the ceiling."
+    )
+
+
+def _invocation_card(job: dict[str, Any], attempt_providers: list[str]) -> str:
     routing = job.get("model_routing") or {}
     cross = warning(routing["cross_region_reason"]) if routing.get("cross_region_reason") else ""
     attempts = job.get("attempts") or []
@@ -294,6 +384,9 @@ def _invocation_card(job: dict[str, Any]) -> str:
         "div",
         join(
             tag("h2", "Invocation"),
+            # BEFORE THE LABEL, NOT AFTER THE COST. A reader who has already read "Claude Haiku 4.5
+            # - region us-east-1 - USD 0.09" has formed the belief this warning exists to prevent.
+            _provider_warning(attempt_providers),
             tag(
                 "p",
                 esc(
@@ -357,9 +450,99 @@ def _invocation_card(job: dict[str, Any]) -> str:
     )
 
 
+def _assembly_validation_card(validation: dict[str, Any]) -> str:
+    """A multipart job's validation: what the mechanical assembly checked, and what it found."""
+    assembly = validation.get("assembly") or {}
+    if not assembly:
+        return tag(
+            "div",
+            join(tag("h2", "Validation"), tag("p", esc(str(validation.get("note") or "")))),
+            class_="card",
+        )
+    expected = assembly.get("parts_expected")
+    terminal = assembly.get("parts_with_a_terminal_result")
+    findings = assembly.get("findings") or []
+    rows = [
+        ("parts expected", expected),
+        ("parts with a terminal result", terminal),
+        ("reconciliation cycles", assembly.get("reconciliation_cycles")),
+        ("unresolved items", assembly.get("unresolved_items")),
+        ("declared cost USD", assembly.get("declared_cost_usd")),
+        ("recomputed cost USD", assembly.get("recomputed_cost_usd")),
+    ]
+    return tag(
+        "div",
+        join(
+            tag("h2", "Validation"),
+            tag(
+                "p",
+                join(
+                    badge(
+                        "consistent" if assembly.get("consistent") else "inconsistent",
+                        "ok" if assembly.get("consistent") else "warn",
+                    ),
+                    esc(" " + str(assembly.get("verdict_note") or validation.get("note") or "")),
+                ),
+            ),
+            tag(
+                "p",
+                esc(
+                    "THIS IS AN ASSEMBLY CHECK, NOT A JUDGEMENT OF THE PARSE. It says the parts "
+                    "reconcile with the plan and with the spend journal. It says nothing about "
+                    "whether any part is correct."
+                ),
+                class_="hint",
+            ),
+            tag(
+                "ul",
+                each(
+                    [(label, value) for label, value in rows if value is not None],
+                    lambda row: tag("li", esc(f"{row[0]}: {row[1]}")),
+                ),
+                class_="refs",
+            ),
+            tag("h3", "Checks run") if assembly.get("checks_run") else "",
+            tag(
+                "ul",
+                each(assembly.get("checks_run") or [], lambda c: tag("li", esc(str(c)))),
+                class_="refs",
+            )
+            if assembly.get("checks_run")
+            else "",
+            warning(f"{len(findings)} assembly finding(s)") if findings else "",
+            tag(
+                "ul",
+                each(findings, lambda f: tag("li", esc(str(f)))),
+                class_="refs",
+            )
+            if findings
+            else "",
+        ),
+        class_="card",
+    )
+
+
 def _validation_card(validation: dict[str, Any] | None) -> str:
+    """The validation record, in whichever of its two shapes this job carries.
+
+    TWO PROTOCOLS PRODUCE TWO DIFFERENT RECORDS AND THIS USED TO ASSUME ONE OF THEM. A
+    single-response job validates a document: node count, table count, references resolved,
+    a status and a note. A MULTIPART job validates an ASSEMBLY: parts expected against parts with
+    a terminal result, duplicate identifiers, orphan subparts, whether the costs reconcile. It has
+    no `status` key at all, and reading one raised `KeyError` on the spot.
+
+    THE PAGE NEVER REACHED THAT BRANCH BEFORE, WHICH IS WHY NOBODY SAW IT. The run page sent a
+    multipart job to its call hierarchy and only a single-response job here, so the crash sat
+    behind a link nothing followed. Pointing every job at its hub — where the reader can choose
+    this view — is what surfaced it.
+
+    A FIELD THAT IS NOT IN THIS SHAPE RENDERS AS NOTHING, NEVER AS A ZERO. A zero node count on a
+    parse that produced nine parts would be a measurement, and a wrong one.
+    """
     if not validation:
         return ""
+    if "status" not in validation:
+        return _assembly_validation_card(validation)
     return tag(
         "div",
         join(
@@ -422,21 +605,47 @@ def job_page(
     comments: list[dict[str, Any]],
     csrf: str,
     permitted_reviews: list[str],
+    responses_live_on_tasks: bool = False,
+    attempt_providers: list[str] | None = None,
+    assembly: dict[str, Any] | None = None,
 ) -> str:
-    """The whole review page for one child filing job."""
+    """The whole review page for one child filing job.
+
+    `attempt_providers` is the adapter that answered EVERY attempt this parse made, the job's own
+    and its calls', gathered by the handler. An empty string in the list is an attempt whose
+    provider was never recorded, and it is carried rather than dropped: the count of attempts is
+    what separates "nothing was invoked" from "something was invoked and nobody wrote down what".
+    """
     base = ("runs", run["run_id"], "jobs", job["job_id"])
     filing = job["filing"]
+    # DEFAULTS TO THE JOB'S OWN ATTEMPTS so a single-response parse needs no extra argument, and a
+    # caller that omits it on a multipart job gets the "nobody recorded it" warning rather than
+    # silence — the direction that fails towards saying less than it knows.
+    providers = (
+        attempt_providers
+        if attempt_providers is not None
+        else [str(a.get("provider") or "") for a in (job.get("attempts") or [])]
+    )
     outcomes_by_node: dict[str, list[dict[str, Any]]] = {}
     for outcome in (validation or {}).get("references", []):
         outcomes_by_node.setdefault(outcome["node_id"], []).append(outcome)
 
     raw = raw_pane(filename=artifact, text=artifact_text, focus=focus, focus_length=focus_length)
-    structured = parsed_pane(
-        base=base,
-        view=view,
-        parsed=parsed,
-        outcomes_by_node=outcomes_by_node,
-        raw_response=raw_response,
+    # A MULTIPART PARSE IS READ FROM ITS ASSEMBLY, WHICH IS WHERE ITS CONTENT IS. `parsed_pane`
+    # reads the job's own single response, and a multipart job has none — so this half of the
+    # side-by-side was empty for the whole Phase 2.1 protocol, on the screen this module exists
+    # for. The single-response path is untouched and still reads `parsed`.
+    structured = (
+        assembled_pane(base=base, assembly=assembly)
+        if assembly
+        else parsed_pane(
+            base=base,
+            view=view,
+            parsed=parsed,
+            outcomes_by_node=outcomes_by_node,
+            raw_response=raw_response,
+            responses_live_on_tasks=responses_live_on_tasks,
+        )
     )
 
     if view == "raw":
@@ -608,7 +817,7 @@ def job_page(
         view_controls(base, view, artifact),
         artifact_controls(base, view, artifacts, artifact),
         panes,
-        _invocation_card(job),
+        _invocation_card(job, providers),
         _validation_card(validation),
         reasoning_card,
         tag(

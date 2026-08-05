@@ -130,16 +130,69 @@ class SecurityPolicy:
         dev_auth_secret: str | None,
         sessions: SessionStore | None = None,
         https: bool = False,
+        allowed_hosts: frozenset[str] = frozenset(),
+        authentication_disabled: bool = False,
     ) -> None:
         self.loopback_only = loopback_only
         self._secret = dev_auth_secret
         self.sessions = sessions or SessionStore()
         self.https = https
+        self.authentication_disabled = authentication_disabled
+        self.allowed_hosts = frozenset(h.strip().lower() for h in allowed_hosts if h.strip())
+
+    def check_host(self, request: Request) -> Response | None:
+        """None when the request names a permitted host, or the response that refuses it.
+
+        WHAT THIS DEFENDS AGAINST, AND WHY A REVERSE PROXY DOES NOT ALREADY DO IT. When this
+        application is published under a name, TLS is terminated in front of it and the application
+        itself still listens on a raw port that anything on the network can reach directly. A
+        request that arrives by IP address, or under some other name pointed at the same address,
+        has bypassed the proxy entirely — and with it every rule the proxy was configured to apply.
+        Checking the name HERE is what makes the published name the only way in.
+
+        IT ALSO CLOSES DNS REBINDING. A page on an attacker's origin can point its own hostname at
+        this address and have the victim's browser issue requests that carry the victim's cookies.
+        `SameSite=Strict` and the CSRF token already make that hard; refusing an unrecognised Host
+        makes it not start.
+
+        THE PORT IS STRIPPED BEFORE COMPARISON because a browser includes it when it is not the
+        scheme default, so `kopexx.com` and `kopexx.com:8765` are the same name. An IPv6 literal
+        keeps its brackets, which is what distinguishes its colons from a port separator.
+
+        AN EMPTY ALLOW-LIST DISABLES THE CHECK. That is the configuration every loopback-only
+        developer instance has, where there is no published name to enforce and the interface
+        binding is already the control.
+        """
+        if not self.allowed_hosts:
+            return None
+        raw = request.header("host").strip().lower()
+        name = raw
+        if name.startswith("["):
+            name = name[: name.index("]") + 1] if "]" in name else name
+        elif ":" in name:
+            name = name.rsplit(":", 1)[0]
+        if name in self.allowed_hosts:
+            return None
+        return as_json(
+            {
+                "code": "host_not_permitted",
+                "message": (
+                    "this instance answers only to the host names it was configured with. Reach "
+                    "it by its published name rather than by address."
+                ),
+            },
+            status=421,
+        )
 
     @property
     def authentication_required(self) -> bool:
-        """Loopback-only needs none. Anything else does, and the settings guarantee a secret."""
-        return not self.loopback_only
+        """Loopback-only needs none, and neither does an instance published without it on purpose.
+
+        `authentication_disabled` reaches here only from `REVIEW_PUBLIC_UNAUTHENTICATED`, which the
+        settings refuse to infer. Everything else that binds beyond loopback still requires the
+        secret, because the settings guarantee one exists.
+        """
+        return not self.loopback_only and not self.authentication_disabled
 
     def check_secret(self, supplied: str) -> bool:
         """Constant-time comparison. A timing oracle on a short secret is a real oracle."""

@@ -29,13 +29,18 @@ from __future__ import annotations
 from html.parser import HTMLParser
 from typing import Any
 
+import pytest
+
 from packages.review_web import (
+    FILING,
     SCRIPT,
     STYLESHEET,
+    destination,
     esc,
     home,
     job_page,
     layout,
+    panel_shell,
     parsed_pane,
     preflight_page,
     raw_pane,
@@ -566,6 +571,9 @@ def _layout(**overrides: Any) -> str:
         "run_id": "run-1",
         "collapsed": False,
         "https": True,
+        # A TRAIL IS REQUIRED AND HAS NO DEFAULT. `layout` refuses to render without one, so a
+        # handler that forgets it fails the type check rather than shipping a blank strip.
+        "crumbs": (),
     }
     kwargs.update(overrides)
     return layout(**kwargs)
@@ -585,10 +593,27 @@ def test_the_run_identifier_bar_is_rendered_outside_the_panel() -> None:
 
 def test_the_run_identifier_bar_survives_a_collapsed_panel() -> None:
     rendered = _layout(collapsed=True)
-    assert '<aside class="panel collapsed">' in rendered
+    # The collapsed MODE is stated on `body` rather than on the panel, so one class change can
+    # swap the panel and its reopen control together. See the toggle test below for why.
+    assert 'class="panel-collapsed"' in rendered
     chains = _ancestors(rendered, "run-id")
     assert len(chains) == 1
     assert "aside" not in chains[0]
+
+
+def test_the_reopen_control_is_rendered_in_both_modes() -> None:
+    """This is what makes collapsing free, and it is the whole reason the mode moved to `body`.
+
+    Rendering the reopen control only when the panel was ALREADY collapsed meant it had to be
+    FETCHED, so collapsing cost a full page load. With it always present the toggle is a class
+    change and nothing is requested. If a later change starts omitting it again, the reload comes
+    back silently — the page would still work, it would just be slow in a way nothing would catch.
+    """
+    for collapsed in (True, False):
+        rendered = _layout(collapsed=collapsed)
+        assert 'data-panel="open"' in rendered, f"reopen control missing (collapsed={collapsed})"
+        # It remains a real link, so the panel still reopens with scripting disabled.
+        assert 'href="?panel=open"' in rendered
 
 
 def test_the_run_identifier_carries_a_copy_control_with_an_accessible_label() -> None:
@@ -616,6 +641,32 @@ def _panel(**overrides: Any) -> str:
     kwargs: dict[str, Any] = {"selectors": _selectors(), "csrf": "a-csrf-token"}
     kwargs.update(overrides)
     return search_panel(**kwargs)
+
+
+def test_the_collapse_control_is_a_real_link_and_a_toggle_target() -> None:
+    """Both at once, deliberately: `data-panel` is the enhancement, `href` is the fallback.
+
+    THE CONTROL MOVED FROM `search_panel` TO `panel_shell`, which is why this reads from the shell
+    now. It belongs to the panel rather than to the search form: both panel modes need it, and a
+    review menu with no way to collapse is a corner a reader gets stuck in.
+
+    THE HREF IS SUPPLIED RATHER THAN LITERAL. It used to be the bare `?panel=closed`, which
+    discarded the entity and model selections the panel had just been rebuilt from — collapsing
+    the panel silently reset the form. The caller builds it with `with_query`.
+    """
+    rendered = panel_shell(
+        active="home",
+        collapse_href="/runs?cik=0000320193&panel=closed",
+        mode="search",
+        search_href="/runs?panel_mode=search",
+        review_href="/runs?panel_mode=review",
+        review_reason="no parse or filing is open on this page",
+        body="<p>the panel</p>",
+    )
+    assert 'data-panel="closed"' in rendered
+    assert 'href="/runs?cik=0000320193&amp;panel=closed"' in rendered
+    # The selections survive the click, which is the point of supplying the href.
+    assert "cik=0000320193" in rendered
 
 
 def test_all_four_model_selectors_render() -> None:
@@ -710,10 +761,45 @@ def test_the_developer_mode_filing_selector_offers_the_timeframe_and_each_filing
     assert "~900,000 est tokens" in offered[1][1]
 
 
+def _shell(**overrides: Any) -> str:
+    kwargs: dict[str, Any] = {
+        "active": "home",
+        "collapse_href": "/?panel=closed",
+        "mode": "search",
+        "search_href": "/?panel_mode=search",
+        "review_href": "/?panel_mode=review",
+        "review_reason": "no parse or filing is open on this page",
+        "body": "<p>the panel</p>",
+    }
+    kwargs.update(overrides)
+    return panel_shell(**kwargs)
+
+
 def test_cumulative_spend_is_shown_against_the_authorized_ceiling() -> None:
-    """rules.md section 21 rule 11: spend is previewed and authorized, never reconciled after."""
-    rendered = _panel(spend={"spent_usd": "1.23", "ceiling_usd": "5.00"})
+    """rules.md section 21 rule 11: spend is previewed and authorized, never reconciled after.
+
+    READ FROM THE SHELL, NOT FROM THE SEARCH FORM. The figure moved to `panel_shell` with the
+    collapse control, so it shows in BOTH panel modes: it used to vanish the moment a reader opened
+    a parse, which is the one page where every queue control spends against this same ceiling.
+    """
+    rendered = _shell(spend={"spent_usd": "1.23", "ceiling_usd": "5.00"})
     assert "Cumulative authorized spend: USD 1.23 of 5.00." in rendered
+
+
+def test_the_panel_shows_no_spend_line_when_the_figure_was_not_supplied() -> None:
+    """ABSENT RATHER THAN ZERO. `USD 0.00 of 0.00` would be a measurement, and a wrong one."""
+    assert "Cumulative authorized spend" not in _shell()
+
+
+def test_the_search_form_no_longer_renders_the_spend_line() -> None:
+    """MUTATION PROOF: the figure lives in exactly one place, so it cannot be shown twice.
+
+    `search_panel` does not accept `spend` at all — a parameter accepted and ignored is worse than
+    one that is absent, because a caller passing it has no way to see nothing came of it.
+    """
+    assert "Cumulative authorized spend" not in _panel()
+    with pytest.raises(TypeError):
+        _panel(spend={"spent_usd": "1.23", "ceiling_usd": "5.00"})
 
 
 def _run_button(markup: str) -> dict[str, str | None]:
@@ -1202,3 +1288,211 @@ def test_the_stylesheet_anchors_the_run_identifier_to_the_viewport() -> None:
     """The markup test above only proves the bar is outside the panel; this is the other half."""
     block = STYLESHEET.split(".run-id {", 1)[1].split("}", 1)[0]
     assert "position: fixed" in block
+
+
+# --- the menu is navigation, not a printed URL list ---------------------------------------------
+
+
+def test_a_destination_does_not_print_its_own_href() -> None:
+    """MEASURED, NOT STYLISTIC. The panel is 320px and the URLs were 67% of its text.
+
+    18 printed hrefs averaging 75 characters sat against 689 characters of labels and counts on one
+    parse page. `.mono` is 12.5px monospace with no truncation, so a 96-character path needs about
+    720px and wrapped to three lines: the menu rendered roughly 54 lines of URL.
+    """
+    rendered = destination("Read the parts", "/runs/r1/jobs/j1/multipart", kind="page")
+    assert 'href="/runs/r1/jobs/j1/multipart"' in rendered
+    assert '<span class="mono">' not in rendered
+    assert rendered.count("/runs/r1/jobs/j1/multipart") == 1
+
+
+def test_a_destination_still_says_what_it_will_do_and_what_it_is_about() -> None:
+    """The URL went; nothing else did. Dropping the kind word would hide a POST behind a link."""
+    rendered = destination(
+        "Judgements", "/benchmark/1/2/judgements", kind="page", scope=FILING, count="3 recorded"
+    )
+    assert "page" in rendered
+    assert "[filing]" in rendered
+    assert "3 recorded" in rendered
+
+
+# --- the invocation card may not claim a call that never happened -------------------------------
+
+
+def test_a_mock_answered_run_says_no_real_model_was_invoked() -> None:
+    """rules.md section 10. The card printed a Bedrock id, a region and USD for an offline stub."""
+    rendered = _render_job_page(attempt_providers=["mock"])
+    assert "NO REAL MODEL WAS INVOKED" in rendered
+    assert "mock" in rendered
+    # THE FIGURES STAY. The journal counted them, so hiding them replaces a false claim with a
+    # missing one; the warning goes above them instead.
+    assert "Invocation" in rendered
+
+
+def test_a_bedrock_answered_run_carries_no_provider_warning() -> None:
+    """MUTATION PROOF: the warning must not fire on the runs it is not about."""
+    rendered = _render_job_page(attempt_providers=["bedrock"])
+    assert "NO REAL MODEL WAS INVOKED" not in rendered
+    assert "does not record which provider" not in rendered
+
+
+def test_an_attempt_with_no_recorded_provider_is_reported_as_unknown() -> None:
+    """Not accused of being a mock. Every run stored before the field existed reads back empty."""
+    rendered = _render_job_page(attempt_providers=[""])
+    assert "does not record which provider answered it" in rendered
+    assert "NO REAL MODEL WAS INVOKED" not in rendered
+
+
+def test_a_job_with_no_attempt_at_all_carries_no_provider_sentence() -> None:
+    """An absent invocation is not an unrecorded one, and the two get different pages."""
+    rendered = _render_job_page(attempt_providers=[])
+    assert "does not record which provider" not in rendered
+    assert "NO REAL MODEL WAS INVOKED" not in rendered
+
+
+# --- a multipart parse has no job-level response, and that is not a failure ---------------------
+
+
+def test_a_multipart_parse_says_where_its_responses_are() -> None:
+    """It used to claim the response was unreadable YAML and then show an empty block."""
+    rendered = parsed_pane(
+        base=("runs", "r1", "jobs", "j1"),
+        view="side-by-side",
+        parsed=None,
+        outcomes_by_node={},
+        raw_response="",
+        responses_live_on_tasks=True,
+    )
+    assert "no single response" in rendered
+    assert "not one readable YAML" not in rendered
+    assert 'href="/runs/r1/jobs/j1/multipart"' in rendered
+    assert 'href="/runs/r1/jobs/j1/assembled"' in rendered
+
+
+def test_an_absent_response_does_not_claim_bytes_are_shown_below() -> None:
+    """The pane promised the exact bytes and rendered an empty block. Now it says there are none."""
+    rendered = parsed_pane(
+        base=("runs", "r1", "jobs", "j1"),
+        view="parsed",
+        parsed=None,
+        outcomes_by_node={},
+        raw_response="",
+    )
+    assert "no response is stored against this job at all" in rendered
+    assert "<pre" not in rendered
+
+
+def test_an_unparseable_response_still_shows_its_exact_bytes() -> None:
+    """MUTATION PROOF: the honest case above must not have removed the case that has bytes."""
+    rendered = parsed_pane(
+        base=("runs", "r1", "jobs", "j1"),
+        view="parsed",
+        parsed=None,
+        outcomes_by_node={},
+        raw_response="}{ not yaml",
+    )
+    assert "not one readable YAML" in rendered
+    assert "}{ not yaml" in rendered
+
+
+# --- a multipart parse is read from its assembly, beside the filing -----------------------------
+
+
+def _assembly(**overrides: Any) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "part_count": 2,
+        "node_count": 1,
+        "status": "INCOMPLETE_WORK",
+        "status_note": "not a completeness verdict",
+        "parts": [
+            {
+                "part_id": "cover",
+                "title": "FORM 10-Q",
+                "type": "filing cover",
+                "task_id": "tsk_1",
+                "node_count": 1,
+                "reference_count": 1,
+                "references_resolved": 1,
+                "output_tokens": 900,
+                "truncated": False,
+                "task_state": "SUCCEEDED",
+                "stop_reason": "end_turn",
+                "nodes": [
+                    {
+                        "id": "n1",
+                        "type": HOSTILE,
+                        "title": "Cover",
+                        "content": "Total net sales were 391,035.",
+                        "source": [{"filename": "a.htm", "quote": "Total net sales"}],
+                    }
+                ],
+            },
+            {
+                "part_id": "risks",
+                "title": "Risk Factors",
+                "type": "section",
+                "task_id": "tsk_2",
+                "node_count": 0,
+                "reference_count": 0,
+                "references_resolved": 0,
+                "output_tokens": 8000,
+                "truncated": True,
+                "task_state": "TRUNCATED",
+                "stop_reason": "max_tokens",
+                "nodes": [],
+            },
+        ],
+    }
+    body.update(overrides)
+    return body
+
+
+def test_a_multipart_parse_renders_its_assembled_nodes_beside_the_filing() -> None:
+    """The whole Phase 2.1 protocol had an empty parsed pane on the screen built to show it."""
+    rendered = _render_job_page(assembly=_assembly())
+    assert "2 part(s) and 1 node(s)" in rendered
+    assert "Total net sales were 391,035." in rendered
+    assert "FORM 10-Q" in rendered
+    assert "Risk Factors" in rendered
+
+
+def test_a_part_that_produced_nothing_is_shown_with_the_reason() -> None:
+    """35 of 81 parts of the benchmark parse produced no node, 16 of them truncated.
+
+    Rendering only the parts with content would show a clean parse and hide every truncation in it.
+    """
+    rendered = _render_job_page(assembly=_assembly())
+    assert "produced no node" in rendered
+    assert "max_tokens" in rendered
+    assert "blind continuation is prohibited" in rendered
+
+
+def test_the_assembled_pane_states_its_status_and_claims_no_completeness() -> None:
+    rendered = _render_job_page(assembly=_assembly())
+    assert "INCOMPLETE_WORK" in rendered
+    assert "not a completeness verdict" in rendered
+
+
+def test_a_quoted_string_is_not_rendered_as_a_located_citation() -> None:
+    """A job's validation carries no per-node outcome, so a resolution badge would be invented."""
+    rendered = _render_job_page(assembly=_assembly())
+    assert "quoted by the model" in rendered
+    assert "not a located citation" in rendered
+    for resolution in ("EXACT", "WHITESPACE_NORMALISED", "UNRESOLVED"):
+        assert f">{resolution}<" not in rendered
+
+
+def test_a_model_chosen_node_type_is_escaped_in_the_assembled_pane() -> None:
+    """A part id, a title and a node type are strings a model wrote after reading a filing."""
+    rendered = _render_job_page(assembly=_assembly())
+    assert HOSTILE not in rendered
+    assert HOSTILE_ESCAPED in rendered
+
+
+def test_a_single_response_parse_is_unaffected_by_the_assembly_path() -> None:
+    """MUTATION PROOF: the protocol that already worked must still read its own response."""
+    rendered = _render_job_page()
+    assert "part(s) and" not in rendered
+    # The apostrophe is escaped by `esc`, so the assertion avoids one rather than encoding it.
+    assert "own vocabulary" in rendered
+    assert "a-shape-nobody-anticipated" in rendered

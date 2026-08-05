@@ -37,7 +37,7 @@ FOUR THINGS THIS SERVICE NEVER DOES, EACH OF WHICH WOULD BE EASIER THAN WHAT IT 
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any, Final
@@ -356,15 +356,26 @@ class MultipartParseService:
     # PERSON has to decide to pay for again.
 
     def resume(self, run_id: str, job_id: str) -> list[str]:
-        """Reopen every INTERRUPTED task of one filing. Completed parts are untouched.
+        """Reopen every INTERRUPTED or FAILED task of one filing. Completed parts are untouched.
 
         Returns the task identifiers reopened. A parse whose plan and four parts succeeded keeps
-        all five; only the branch that was in flight is re-armed, which is what "do not restart the
+        all five; only the branch that did not finish is re-armed, which is what "do not restart the
         entire filing parse when only one part is incomplete" means in code.
+
+        FAILED WAS EXCLUDED AND THAT MADE THE ONE RECOVERY ACTION UNABLE TO RECOVER THE COMMONEST
+        FAILURE. `EvaluationStore.resume_task` has always documented itself as "the only path back
+        from either state", and this selected only one of them. An expired AWS IAM Identity Center
+        session leaves every subsequent task FAILED with a non-retryable credential error — it
+        happened in Phase 2.1 and again here, killing three parses between them — and `resume`
+        reopened nothing at all, reporting success while changing nothing.
+
+        IT IS STILL AN EXPLICIT USER ACTION AND STILL SPENDS MONEY. Nothing calls this
+        automatically, the reservation for the failed attempt is not refunded, and a retry takes a
+        second one. What changed is that a person who asks to resume can now actually resume.
         """
         reopened: list[str] = []
         for task in self._store.load_tasks(run_id, job_id):
-            if task.state is TaskState.INTERRUPTED:
+            if task.state in (TaskState.INTERRUPTED, TaskState.FAILED):
                 self._store.resume_task(task, author=self._author)
                 reopened.append(task.task_id)
         # THE CHILD JOB REOPENS TOO, OR A FINISHED PARSE COULD NEVER REACH REVIEW. A restart marks
@@ -484,7 +495,10 @@ class MultipartParseService:
             context.job = self._store.load_job(run_id, job_id)
             if context.plan is None:
                 context.plan = self._load_plan(context.job)
-            steps += self._execute_batch(context, runnable, remaining=max_steps - steps)
+            ran = self._execute_pool(context, run_id, job_id, remaining=max_steps - steps)
+            if ran == 0:
+                break
+            steps += ran
         if steps >= max_steps:
             self._store.append_event(
                 run_id,
@@ -497,10 +511,88 @@ class MultipartParseService:
             )
         return self._finish(run_id, job_id)
 
+    def _execute_pool(self, context: _Context, run_id: str, job_id: str, *, remaining: int) -> int:
+        """Keep up to `max_parallel_tasks` provider calls in flight, and return how many ran.
+
+        WHY THIS IS A TOPPED-UP POOL AND NOT A BATCH. The first parallel implementation submitted N
+        tasks and waited for ALL of them before submitting the next N. Measured across three parses
+        of Apple's 10-Q, that returned only 2.2x against a width of 8:
+
+            GPT OSS 120B    16 calls   peak 8   wall  8.2m   serial-equivalent 18.9m
+            Qwen3 235B      25 calls   peak 8   wall 14.6m   serial-equivalent 32.4m
+            Qwen3 VL 235B    8 calls   peak 6   wall 11.4m   serial-equivalent 19.3m
+
+        Call latencies on the same model ranged 29 to 157 seconds, so every barrier ran at the speed
+        of its slowest member and up to seven workers idled waiting for it. Starting the next
+        runnable task the moment ANY worker frees recovers that idle time, and it also picks up work
+        that did not exist when the pass began: a plan task completing mid-pool makes its parts
+        runnable immediately rather than one barrier later.
+
+        WHY IT IS SAFE TO PARALLELISE AT ALL. Phase 2.1 ran one task at a time because "a pool
+        racing over shared budget would make the ceiling advisory". That was right then and is no
+        longer the constraint: the spend journal takes a cross-process lock across re-read, append
+        and write, so a reservation is atomic whoever takes it, and the ceiling refuses correctly
+        under any number of workers. The parts are independent by construction — each receives the
+        complete source intact and returns a standalone document — and `runnable_tasks` has already
+        resolved every declared dependency.
+
+        THE BUDGET IS STILL CHECKED BEFORE EVERY CALL, inside `_execute`, under the journal lock. A
+        pool that crosses the ceiling has its later members refused and paused with the reason
+        visible, exactly as a serial run would; nothing is shrunk or dropped to fit.
+
+        `started` EXISTS BECAUSE SUBMISSION IS NOT EXECUTION. A task handed to the pool has not yet
+        moved out of a runnable state, so the next top-up would hand it over a second time. The
+        guard is the submitting thread's own record of what it has already dispatched.
+
+        DURABILITY IS UNCHANGED. Every task writes its own record before the queue is re-read, so a
+        crash mid-pool leaves the finished ones finished and the rest resumable — which is what the
+        one-at-a-time rule was actually protecting.
+        """
+        width = max(1, min(self._settings.max_parallel_tasks, remaining))
+        ran = 0
+        started: set[str] = set()
+        inflight: dict[Future[None], str] = {}
+
+        with ThreadPoolExecutor(max_workers=width) as pool:
+            while True:
+                if ran + len(inflight) < remaining and len(inflight) < width:
+                    for task in self._store.runnable_tasks(run_id, job_id):
+                        if len(inflight) >= width or ran + len(inflight) >= remaining:
+                            break
+                        if task.task_id in started:
+                            continue
+                        started.add(task.task_id)
+                        # A SEPARATE CONTEXT PER WORKER. `_Context` carries mutable per-call state
+                        # and sharing one across threads would let two tasks interleave on it.
+                        # Rebuilding is cheap beside a 29-second provider call, and the source-set
+                        # guard has already run for this pass.
+                        inflight[pool.submit(self._execute, replace(context), task)] = task.task_id
+                if not inflight:
+                    break
+                done, _ = wait(list(inflight), return_when=FIRST_COMPLETED)
+                for future in done:
+                    inflight.pop(future, None)
+                    # An exception is re-raised here rather than swallowed: `_execute` already
+                    # records a provider failure durably on the task, so anything reaching this
+                    # point is a defect in the orchestrator and hiding it would lose the only
+                    # report of it.
+                    future.result()
+                    ran += 1
+                # NEW WORK BECOMES VISIBLE HERE. A completed plan or reconciliation writes tasks and
+                # amends the job; re-reading both means the next top-up sees them, and a part
+                # submitted afterwards carries the plan its brief needs.
+                context.job = self._store.load_job(run_id, job_id)
+                if context.plan is None:
+                    context.plan = self._load_plan(context.job)
+        return ran
+
     def _execute_batch(
         self, context: _Context, runnable: list[MultipartTask], *, remaining: int
     ) -> int:
-        """Run as many INDEPENDENT tasks as the concurrency allows, and return how many ran.
+        """Run a FIXED set of independent tasks to completion, and return how many ran.
+
+        Retained for callers that hold a task list and want exactly it — `_execute_pool` is what
+        `drive` uses, because it re-reads the queue and picks up work created mid-pass.
 
         WHY THIS IS SAFE TO PARALLELISE AND WHY IT WAS NOT DONE SOONER. Phase 2.1 ran one task at a
         time because "a pool racing over shared budget would make the ceiling advisory". That was
@@ -1060,6 +1152,7 @@ class MultipartParseService:
                     output_tokens=record.output_tokens,
                     visible_characters=len(record.response_body),
                     reasoning_characters=len(record.reasoning_body),
+                    provider=record.provider,
                     provider_request_id=record.provider_request_id,
                     error=record.error,
                     retryable=None,
@@ -2147,6 +2240,12 @@ class MultipartParseService:
                         "part_id": t.part_id,
                         "depth": t.depth,
                         "attempts": t.attempt_count,
+                        # WHICH ADAPTER ANSWERED THIS CALL, rolled up here so the job page can
+                        # tell a Bedrock parse from a mock one without opening every task. The
+                        # review page loads this one document already; loading the 123 task
+                        # records of this filing's parse instead cost 2.5 seconds to read a
+                        # string. Empty when no attempt recorded one — never defaulted.
+                        "providers": sorted({a.provider for a in t.attempts if a.provider}),
                         "input_tokens": sum(a.input_tokens for a in t.attempts),
                         "output_tokens": sum(a.output_tokens for a in t.attempts),
                         "latency_ms": sum(a.latency_ms for a in t.attempts),

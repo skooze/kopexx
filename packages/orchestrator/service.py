@@ -1026,6 +1026,7 @@ class ParserReviewService:
                 output_tokens=record.output_tokens,
                 visible_characters=len(record.response_body),
                 reasoning_characters=len(record.reasoning_body),
+                provider=record.provider,
                 provider_request_id=record.provider_request_id,
                 error=record.error,
                 retryable=None,
