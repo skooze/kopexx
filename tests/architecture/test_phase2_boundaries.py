@@ -368,18 +368,31 @@ def test_binding_beyond_loopback_without_a_secret_is_refused() -> None:
 # --- 6. only the authorized stage runs -------------------------------------------------------------
 
 
-def test_only_the_parsing_stage_is_executable_in_this_phase() -> None:
-    """A selector that was filled in by mistake must fail loudly, not spend money.
+def test_only_a_selected_stage_can_run_and_none_is_substituted() -> None:
+    """SUPERSEDED BY PHASE 3, AND STRENGTHENED RATHER THAN DELETED.
 
-    Read from the source rather than exercised end to end: the point is that the refusal exists in
-    `create_run` before anything is routed or invoked, and an integration test that reached the
-    refusal would already have assembled a source set to get there.
+    This test used to assert that `create_run` raised `StageNotAuthorizedError` for any non-parsing
+    role, which was correct while no other stage existed. Phase 3 implements image, summary and
+    analysis, so the blanket refusal is gone and the guard it was really protecting is not: a stage
+    runs ONLY because the user selected it, and no role ever borrows another role's model.
+
+    Read from the source because the property is structural. `run_optional_stages` iterates the
+    three labels the RUN RECORD carries, so a blank selector produces no entry and therefore no
+    call — there is no `if summary_enabled` to get wrong, which is rules.md section 21 rule 8.
     """
     source = (PACKAGES / "orchestrator" / "service.py").read_text(encoding="utf-8")
-    assert "StageNotAuthorizedError" in source, (
-        "the orchestrator no longer refuses an unauthorized stage"
+    assert "def run_optional_stages" in source, "the optional stages have no runner"
+    # THE THREE ROLES ARE READ FROM THE RUN, never defaulted and never inferred from the parser.
+    for field in ("run.image_label", "run.summary_label", "run.analysis_label"):
+        assert field in source, f"the optional stages do not read {field}"
+    assert "if not label or role.value in job.stages:" in source, (
+        "a stage no longer skips an unselected role, or re-runs one that already ran"
     )
-    assert "ModelRole.PARSING" in source
+    # MUTATION PROOF: a substitution would have to name the parsing label somewhere in the runner.
+    runner = source.split("def run_optional_stages", 1)[1].split("def _stage_instruction", 1)[0]
+    assert "parsing_label" not in runner, (
+        "the optional-stage runner names the parsing label; a blank role can borrow the parser"
+    )
 
 
 def test_a_blank_optional_role_runs_no_stage_and_borrows_no_model() -> None:

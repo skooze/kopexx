@@ -270,9 +270,17 @@ def selector_entries(
     A candidate that silently vanishes from a selector is indistinguishable from one that was
     never approved, so nothing is filtered out. A candidate that cannot fill this role in any
     verified region comes back disabled, with the reason on the row.
+
+    THE IMAGE ROLE IS THE ONE EXCEPTION, BY EXPLICIT PRODUCT DECISION. A model with no verified
+    image-input path can never fill it — the reason is a property of the model, not of a region or
+    a moment — so listing five text-only candidates as permanently disabled rows was five rows of
+    noise on the one selector where the constraint is absolute. Every other role still shows every
+    candidate, because there the disabled reason is something that can change.
     """
     entries: list[SelectorEntry] = []
     for capability in snapshot.candidates:
+        if role is ModelRole.IMAGE and not capability.image_input:
+            continue
         region = (
             preferred_region
             if preferred_region in capability.verified_regions

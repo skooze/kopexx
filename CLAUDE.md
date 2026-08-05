@@ -279,11 +279,24 @@ Nemotron fits only with its answer cut from 32,000 output tokens to 12,493, and 
 4,493 against its own 8,000 cap. Under `INTACT_SOURCE_ONLY` an incompatible pairing is a RESULT: it
 is recorded as an exact blocker, and nothing is truncated, sliced or swapped to another model.
 
-**THE BENCHMARK HAS NOT RUN AND NO PROVIDER REQUEST HAS BEEN ISSUED.** The four candidates that can
-receive the filing would cost `USD 13.3745` at their own measured Phase 2.1 call counts, against
-`USD 5.00` authorized; the part-explosion guardrail ceiling puts the bound at `USD 31.8218`.
-Measured Bedrock spend for this phase: **USD 0.00000000**. Running a partial arbitrary subset is
-prohibited, so nothing billable runs until the ceiling question is answered.
+**THE BENCHMARK RAN, AND THE PARAGRAPH THAT STOOD HERE SAYING IT HAD NOT WAS FALSE FROM
+2026-08-04.** The ceiling was raised from `USD 5.00` to `USD 38.05` and six candidates parsed the
+benchmark filing `0000320193-25-000008`: GLM 5 (`USD 4.03`), Qwen3 VL 235B (`3.50`), Qwen3 235B
+A22B (`3.24`), GPT OSS 120B (`1.51`), Claude Haiku 4.5 (`1.50`), NVIDIA Nemotron 3 Super 120B
+(`0.58`). All six reached `READY_FOR_REVIEW`.
+
+**MEASURED REAL BEDROCK SPEND IS `USD 17.88` ACROSS 47 JOBS**, not the `USD 2.603827` the Phase 2.1
+record states and not the `USD 0.00000000` this file claimed. Verify it from the store rather than
+from any prose: an attempt with a `provider_request_id` and a non-zero latency reached a provider.
+
+**GPT OSS 120B RAN, HAVING BEEN RECORDED AS INCOMPATIBLE.** The capability snapshot was revised
+between the two statements. The snapshot is the single home for that fact; this file is not.
+
+**WHAT THE BENCHMARK STILL HAS NOT PRODUCED IS A JUDGEMENT.** `var/evaluation-runs/benchmarks/`
+does not exist, every one of the 71 stored jobs is at `EVALUATION`, and `review_history` is empty
+on all of them. No item of any filing's inventory has been classified, so every completeness
+percentage available today is a ratio against an unclassified denominator — a fact about the
+denominator, not about any model.
 
 ### What Phase 2.2 added, so you do not rebuild it
 
@@ -299,6 +312,33 @@ llm_gateway/errors.py                  CredentialResolutionError, transport_atte
 orchestrator/spend_journal.py          release() and unsettled()
 prompts/parser/*-v2.txt                six superseding families plus parser-multipart-table@1
 ```
+
+### What Phase 3 and the review-surface work added, so you do not rebuild it
+
+```
+prompts/parser/stage-*-v1.txt          the summary, image and analysis prompts, hash-locked
+orchestrator/service.py                run_optional_stages(), one call and one reservation each
+evaluation_store/records.py            JobRecord.stages, InvocationAttempt.provider
+review_web/nav.py                      sections, breadcrumbs, panel modes, destination()
+review_web/panel.py                    the contextual review menu
+review_web/progress.py                 the only place a count becomes words
+review_web/hub_view.py                 the parse hub: is this parse correct?
+review_web/filings_view.py             the filings index and the judgements record
+review_web/multipart_view.py           assembled_pane(): the parsed half of side-by-side
+evaluation_store/attention.py          the opened trail, scratch and never evidence
+```
+
+**THE `Reviews` NAV SECTION AND ITS PAGE ARE DELETED.** It indexed every parse, which the home page
+already lists under the run each belongs to. Two doors onto one room; `nav.active_section` records
+why. Do not add it back.
+
+**`parsed_pane` DOES NOT SERVE A MULTIPART PARSE — `assembled_pane` DOES.** The job's own
+`response-visible.txt` does not exist for a multipart run because every response belongs to a call,
+and for the whole Phase 2.1 protocol the parsed half of the side-by-side rendered nothing at all.
+
+**THE STAGE PROMPTS CONTAIN NO BACKTICKS, AND THAT IS ENFORCED RATHER THAN STYLED.** Inline backtick
+formatting is prohibited model-visible content; all three prompts failed the boundary validator on
+first run until the marks were stripped. A prompt edit is a NEW VERSION with a new hash.
 
 **LEVELS 1 TO 4 OF THE ANCHOR LADDER COUNT AS RESOLVED. LEVELS 5 AND 6 NEVER DO.** Case-insensitive
 and approximate matches are HUMAN-REVIEW CANDIDATES. Counting a near-match as proof is how a
@@ -316,8 +356,12 @@ the UI on `127.0.0.1`. Measured results, per-filing cost and the comparison are 
 `docs/sprints/PHASE-0002-parser-experiments-and-review-ui.md`; the decision record is ADR-0019.
 
 **STILL TRUE AFTER PHASE 2, AND NOT SMALL. NOTHING IS DEPLOYED. NO APPLICATION DATABASE EXISTS. NO
-REDIS EXISTS. NO SUMMARY, IMAGE OR CHAT ARTIFACT EXISTS** — Phase 2 ran the PARSING stage only and
-the orchestrator raises `StageNotAuthorizedError` rather than running another. An APPROVED artifact
+REDIS EXISTS.** Phase 3 implemented the image, summary and analysis stages on 2026-08-05, so the
+orchestrator no longer raises `StageNotAuthorizedError` — that refusal is deleted and the three
+guards which enforced it were rewritten to protect what replaced it: a stage runs exactly once,
+only because it was selected, and no role borrows another role's model. **EVERY STAGE ARTIFACT SO
+FAR CAME FROM THE MOCK PROVIDER.** The pipeline is verified; the outputs are stubs. An APPROVED
+artifact
 records a judgement and activates no reuse: no search consults the evaluation store and no cache is
 populated. Breadth across the 22 form strings has NOT been attempted.
 

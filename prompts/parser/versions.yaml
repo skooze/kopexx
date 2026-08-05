@@ -392,3 +392,70 @@ prompts:
       part to recover one table would re-send the intact filing and re-emit everything else the
       part already produced, and on a filing this size that is the difference between a repair and
       a rerun.
+
+  # --- the optional stages, added by Phase 3 -----------------------------------------------------
+  #
+  # THE DIRECTORY IS NAMED `parser` FOR HISTORICAL REASONS AND THE MANIFEST IS THE CONTRACT. The
+  # registry has always keyed a prompt by its ROLE — `active_for(role)` predates these three — and
+  # moving the parsing prompts to a new path would rewrite the recorded `file` of every version
+  # that has already produced a billable response. The role field is what routes; the folder is a
+  # location.
+  #
+  # ONE ACTIVE PROMPT PER ROLE, which `active_for` enforces by refusing two.
+
+  - prompt_id: stage-summary
+    version: "1"
+    file: stage-summary-v1.txt
+    sha256: "61e487f748e3d8b341cc50f81a3f869095a468f0d9fce60fff695049add782bf"
+    created: "2026-08-05"
+    status: ACTIVE
+    role: summary
+    supersedes: null
+    superseded_by: null
+    note: >-
+      The first summary prompt. It summarises the NODES an accepted parse identified, one entry per
+      node, and refuses to merge two into one or to drop one silently — rules.md section 3 makes
+      every required node an independent summary target, so a summary stage that folded nodes
+      together would break the completeness invariant from the other end.
+
+      IT INVENTS NO NUMBER AND MAKES NO JUDGEMENT. A summary is level 5 in the source-of-truth
+      hierarchy and is never evidence for a financial value; a stage that computed a total would
+      manufacture one at a level that may not carry it.
+
+  - prompt_id: stage-image
+    version: "1"
+    file: stage-image-v1.txt
+    sha256: "275c405db28ae200853ee00909d61edbbca38931016ea777e3395e634a135cf6"
+    created: "2026-08-05"
+    status: ACTIVE
+    role: image
+    supersedes: null
+    superseded_by: null
+    note: >-
+      The first image prompt. It receives the complete filed image set intact and describes each
+      image, in filed order, one entry per image including the ones it cannot read.
+
+      `carries_information: false` IS A FIRST-CLASS ANSWER. The image set of a real filing is
+      mostly logos, rules and spacers, and a prompt that pushed for significance would produce it.
+
+      IT READS AND NEVER INFERS: an unlabelled bar has no value known to the model, and a cut-off
+      word is not completed.
+
+  - prompt_id: stage-analysis
+    version: "1"
+    file: stage-analysis-v1.txt
+    sha256: "1df374dc95b13b277b938cb1dba7256cfc2cda87870ea4f6d89b874bbb6dbbc3"
+    created: "2026-08-05"
+    status: ACTIVE
+    role: analysis
+    supersedes: null
+    superseded_by: null
+    note: >-
+      The first analysis prompt, and it is deliberately the narrowest of the three. rules.md
+      section 1 requires that Deep Analysis is scoped, and section 11 that it never escapes the
+      corpus it was authorized for: this prompt is bound to ONE accession, refuses every question
+      about anything else, and refuses every recommendation.
+
+      EVERY MATERIAL CLAIM CARRIES A CITATION AND NO NUMBER IS DERIVED. rules.md section 2 puts an
+      interpretation at level 6 and forbids it as evidence for a value, so a stage that computed a
+      margin would produce a figure the hierarchy says it may not.

@@ -1450,7 +1450,7 @@ def _assembly(**overrides: Any) -> dict[str, Any]:
 def test_a_multipart_parse_renders_its_assembled_nodes_beside_the_filing() -> None:
     """The whole Phase 2.1 protocol had an empty parsed pane on the screen built to show it."""
     rendered = _render_job_page(assembly=_assembly())
-    assert "2 part(s) and 1 node(s)" in rendered
+    assert "2 part(s), 1 node(s)" in rendered
     assert "Total net sales were 391,035." in rendered
     assert "FORM 10-Q" in rendered
     assert "Risk Factors" in rendered
@@ -1462,7 +1462,7 @@ def test_a_part_that_produced_nothing_is_shown_with_the_reason() -> None:
     Rendering only the parts with content would show a clean parse and hide every truncation in it.
     """
     rendered = _render_job_page(assembly=_assembly())
-    assert "produced no node" in rendered
+    assert "No content:" in rendered
     assert "max_tokens" in rendered
     assert "blind continuation is prohibited" in rendered
 
@@ -1476,7 +1476,6 @@ def test_the_assembled_pane_states_its_status_and_claims_no_completeness() -> No
 def test_a_quoted_string_is_not_rendered_as_a_located_citation() -> None:
     """A job's validation carries no per-node outcome, so a resolution badge would be invented."""
     rendered = _render_job_page(assembly=_assembly())
-    assert "quoted by the model" in rendered
     assert "not a located citation" in rendered
     for resolution in ("EXACT", "WHITESPACE_NORMALISED", "UNRESOLVED"):
         assert f">{resolution}<" not in rendered
@@ -1492,7 +1491,7 @@ def test_a_model_chosen_node_type_is_escaped_in_the_assembled_pane() -> None:
 def test_a_single_response_parse_is_unaffected_by_the_assembly_path() -> None:
     """MUTATION PROOF: the protocol that already worked must still read its own response."""
     rendered = _render_job_page()
-    assert "part(s) and" not in rendered
+    assert "part(s)," not in rendered
     # The apostrophe is escaped by `esc`, so the assertion avoids one rather than encoding it.
     assert "own vocabulary" in rendered
     assert "a-shape-nobody-anticipated" in rendered

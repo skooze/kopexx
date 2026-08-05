@@ -531,6 +531,14 @@ class JobRecord:
     source_set_id: str | None = None
     source_set: dict[str, Any] | None = None
     validation: dict[str, Any] | None = None
+    #: What each OPTIONAL stage produced, keyed by role — `image`, `summary`, `analysis`.
+    #:
+    #: A ROLE IS ABSENT UNTIL IT RUNS, AND ABSENT IS NOT FAILED. The three optional selectors may be
+    #: left blank, and a blank one is a complete, valid configuration — rules.md section 1: only the
+    #: parsing model is required. A missing key means the user did not select that stage; a present
+    #: one carries its own `status`, so a stage that ran and failed is distinguishable from one that
+    #: was never asked for. Reading a zero into either would invent a result.
+    stages: dict[str, Any] = field(default_factory=dict)
     image_coverage: dict[str, Any] | None = None
     incompatibility: Incompatibility | None = None
     attempts: list[InvocationAttempt] = field(default_factory=list)
@@ -573,6 +581,7 @@ class JobRecord:
             "source_set_id": self.source_set_id,
             "source_set": self.source_set,
             "validation": self.validation,
+            "stages": self.stages,
             "image_coverage": self.image_coverage,
             "incompatibility": (
                 self.incompatibility.to_mapping() if self.incompatibility else None
@@ -628,6 +637,9 @@ class JobRecord:
             source_set_id=_optional_text(raw, "source_set_id"),
             source_set=raw.get("source_set"),
             validation=raw.get("validation"),
+            # ABSENT ON EVERY JOB STORED BEFORE THE OPTIONAL STAGES EXISTED, and it reads back
+            # as no stages rather than as a stage that produced nothing.
+            stages=raw.get("stages") or {},
             image_coverage=raw.get("image_coverage"),
             incompatibility=(
                 Incompatibility.from_mapping(incompatible_raw)

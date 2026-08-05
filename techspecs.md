@@ -133,10 +133,13 @@ packages/orchestrator        preflight, the THREE-CEILING durable spend journal,
                              bounded in-process worker
 packages/review_api          the review HTTP application on the standard library: router,  6
                              security policy, handlers, threaded server, assembly
-packages/review_web          server-rendered pages, escaping, the two assets, the          7
-                             multipart hierarchy, per-call and assembled views, and the
+packages/review_web          server-rendered pages, escaping, the two assets, the         13
+                             multipart hierarchy, per-call and assembled views, the
                              completeness review surface where a person classifies one
-                             filing's inventory. No framework, no bundler, no npm, no
+                             filing's inventory, the parse hub, the contextual review
+                             menu, the navigation and progress vocabularies, and the
+                             assembled pane that is the parsed half of side-by-side for
+                             a multipart parse. No framework, no bundler, no npm, no
                              build step.
 packages/multipart           the MODEL-DIRECTED multipart envelopes, their generic         9
                              structural validation, safe carriage of a model-created
@@ -300,6 +303,15 @@ Why each, once, in `docs/adr/ADR-0017`.
 | Versioned human benchmark truth, stored per accession and source hash | `completeness/truth.py`, `evaluation_store` | IMPLEMENTED — Phase 2.2 |
 | Effective-artifact resolution, structured tables, gap fingerprints | `multipart` | IMPLEMENTED — Phase 2.2; `tables.py` and `gaps.py` have no caller yet |
 | Pre-transport reservation release | `llm_gateway`, `orchestrator/spend_journal.py` | IMPLEMENTED — Phase 2.2 |
+| Navigation, breadcrumbs, panel modes, link destinations | `review_web/nav.py` | IMPLEMENTED — Phase 3 |
+| The contextual review menu for one parse or filing | `review_web/panel.py` | IMPLEMENTED — Phase 3 |
+| Progress words, and the only place a count becomes one | `review_web/progress.py` | IMPLEMENTED — Phase 3 |
+| The parse hub: the seven questions asked of one parse | `review_web/hub_view.py` | IMPLEMENTED — Phase 3 |
+| The filings index and the judgements record | `review_web/filings_view.py` | IMPLEMENTED — Phase 3 |
+| The assembled pane: a multipart parse beside its filing | `review_web/multipart_view.py` | IMPLEMENTED — Phase 3 |
+| The opened trail — scratch, never evidence | `evaluation_store/attention.py` | IMPLEMENTED — Phase 3 |
+| The optional image, summary and analysis stages | `orchestrator/service.py`, `prompts/parser/stage-*` | IMPLEMENTED — Phase 3; verified against the MOCK provider only |
+| Which adapter answered an attempt | `evaluation_store/records.py` | IMPLEMENTED — Phase 3 |
 | Single-filing completeness benchmark run | — | BLOCKED — Phase 2.2, on a cost-ceiling decision |
 | Image / summary / chat artifacts | — | PLANNED, Phase 3 |
 | Persistence, approval gate, Redis cache | — | PLANNED, Phase 4 |

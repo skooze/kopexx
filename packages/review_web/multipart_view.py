@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .html import badge, each, esc, join, tag, url, warning
+from .html import badge, collapsible, each, esc, join, tag, url, warning
 
 _TASK_STATE_KIND = {
     "SUCCEEDED": "ok",
@@ -776,138 +776,183 @@ def _part_absence(entry: dict[str, Any]) -> str:
     stop = str(entry.get("stop_reason") or "")
     if entry.get("truncated") or state == "TRUNCATED":
         return warning(
-            "This part produced no node in the assembled parse: its attempt reached the output "
-            f"limit (stop reason {stop or 'unreported'}). The partial output is preserved as "
-            "evidence and is deliberately NOT merged in - blind continuation is prohibited."
+            "No content: this call reached the output limit "
+            f"(stop reason {stop or 'unreported'}). Its partial output is preserved as evidence "
+            "and is deliberately NOT merged in — blind continuation is prohibited."
         )
     return warning(
-        f"This part produced no node in the assembled parse. Its call is in state "
-        f"{state or 'unrecorded'} and its stop reason was {stop or 'unreported'}."
+        f"No content: this call is in state {state or 'unrecorded'} and stopped for "
+        f"{stop or 'an unreported reason'}."
     )
 
 
-def _assembled_node(entry: dict[str, Any], node: dict[str, Any]) -> str:
-    """One node as the model wrote it, with the quotes it cited and no claim that they resolve.
+def _node_label(node: dict[str, Any]) -> str:
+    """A node's heading, WITHOUT the `(no title)` noise the first version printed everywhere.
 
-    THE QUOTES ARE THE MODEL'S CLAIM AND ARE LABELLED AS SUCH. A job's `validation` for a multipart
-    parse carries the assembly summary and no per-node resolution outcome, so this pane has nothing
-    that would justify an EXACT or UNRESOLVED badge. The per-part figure it DOES have is measured
-    and is printed beside the part; the badge belongs on the task page, which resolves each quote
-    against the preserved bytes and links it to its offset.
+    A model routinely gives a node a type and no title — `regulatory header`, `part header` — and
+    228 rows reading `(no title)` is not a review surface. The type is the label when there is no
+    title, and the type is dropped when it merely repeats the title.
+    """
+    title = str(node.get("title") or "").strip()
+    kind = str(node.get("type") or "").strip()
+    if title and kind and kind.lower() != title.lower():
+        return join(tag("span", esc(kind), class_="kind"), tag("span", esc(title), class_="title"))
+    return tag("span", esc(title or kind or "untitled node"), class_="title")
 
-    Rendering an unchecked quote with a resolution badge is precisely how a citation rate starts
-    flattering the model that produced it.
+
+def _node_quotes(node: dict[str, Any]) -> str:
+    """The quotes the model cited, as ITS CLAIM and never as a located citation.
+
+    A job's validation carries the assembly summary and no per-node resolution outcome, so this
+    pane has nothing that would justify an EXACT or UNRESOLVED badge. The per-part figure it does
+    have is measured and sits on the part; the badge belongs on the task page, which resolves each
+    quote against the preserved bytes and links it to the offset where it was found.
     """
     quotes = [q for q in (node.get("source") or []) if isinstance(q, dict)]
+    if not quotes:
+        return ""
+    return tag(
+        "ul",
+        each(
+            quotes,
+            lambda q: tag("li", esc(f"“{str(q.get('quote') or '')[:160]}”")),
+        ),
+        class_="refs",
+    )
+
+
+def _assembled_node(node: dict[str, Any], children: dict[str, list[dict[str, Any]]]) -> str:
+    """One node and the nodes the MODEL said belong under it.
+
+    NESTING IS THE MODEL'S, READ FROM `parent_id`, AND IS NOT INFERRED. A flat list of 228 nodes is
+    the wall of text this pane was rightly complained about; the parse already carries the shape and
+    nothing was reading it. Backend code assigns no hierarchy of its own — rules.md section 21 rules
+    1 and 19 — it only renders the one the model declared.
+
+    AN EMPTY BODY IS OMITTED, NOT RENDERED EMPTY. A heading node legitimately carries no content,
+    and an empty `div` per heading was most of the vertical space on this page.
+    """
+    body = str(node.get("content") or "").strip()
+    confidence = str(node.get("confidence") or "").strip()
+    kids = children.get(str(node.get("id") or ""), [])
     return tag(
         "div",
         join(
-            tag("div", esc(node.get("type") or "(no type)"), class_="kind"),
-            tag("div", esc(node.get("title") or "(no title)"), class_="title"),
-            tag("div", esc(node.get("content") or ""), class_="body"),
-            (
-                tag("p", esc("Ambiguity: " + str(node["ambiguity"])), class_="hint")
-                if node.get("ambiguity")
-                else ""
-            ),
-            (
-                tag(
-                    "ul",
-                    each(
-                        quotes,
-                        lambda q: tag(
-                            "li",
-                            join(
-                                badge("quoted by the model", "neutral"),
-                                tag("span", esc(f" “{str(q.get('quote') or '')[:110]}”")),
-                                tag("span", esc(f" - {q.get('filename') or ''}"), class_="hint"),
-                            ),
-                        ),
-                    ),
-                    class_="refs",
-                )
-                if quotes
-                else tag("p", "No source reference was supplied for this node.", class_="refs")
-            ),
+            _node_label(node),
+            tag("div", esc(body), class_="body") if body else "",
+            tag("p", esc(f"model-stated confidence: {confidence}"), class_="hint")
+            if confidence
+            else "",
+            # A TABLE REFERENCE IS NAMED, NOT SILENTLY DROPPED. `table_count` is zero in every run
+            # recorded here, so no structured table has ever been returned to render; a node that
+            # points at one is still saying something about the filing and says it here.
+            tag(
+                "p",
+                esc(f"references table(s): {', '.join(str(t) for t in node['table_ids'])}"),
+                class_="hint",
+            )
+            if node.get("table_ids")
+            else "",
+            _node_quotes(node),
+            each(kids, lambda child: _assembled_node(child, children)),
         ),
         class_="node",
     )
+
+
+def _part_block(base: tuple[str, ...], entry: dict[str, Any]) -> str:
+    """One part, collapsed by default, with everything needed to judge it in the summary line.
+
+    COLLAPSED BECAUSE 81 PARTS OF ONE FILING IS NOT A PAGE. `details` is markup, not script: it
+    works with scripting disabled, it is keyboard operable, and a browser's own find-in-page opens
+    it. The parts that produced nothing stay closed and say so in the summary line rather than
+    costing a screen each.
+    """
+    nodes = entry.get("nodes") or []
+    part_id = str(entry.get("part_id") or "")
+    # THE MODEL'S OWN PARENT LINKS, GROUPED ONCE PER PART. A node whose declared parent is not in
+    # this part is rendered at the top level rather than dropped: a dangling reference is the
+    # model's, and losing the node to it would be the backend deciding the parse was wrong.
+    children: dict[str, list[dict[str, Any]]] = {}
+    ids = {str(n.get("id") or "") for n in nodes}
+    roots: list[dict[str, Any]] = []
+    for node in nodes:
+        parent = str(node.get("parent_id") or "")
+        if parent and parent in ids:
+            children.setdefault(parent, []).append(node)
+        else:
+            roots.append(node)
+    counts = (
+        f"{len(nodes)} node(s)"
+        if nodes
+        else f"no content — {entry.get('task_state') or 'unrecorded'}"
+    )
+    quotes = (
+        f" · {entry.get('references_resolved', 0)}/{entry.get('reference_count', 0)} quotes located"
+        if entry.get("reference_count")
+        else ""
+    )
+    return collapsible(
+        join(
+            tag("span", esc(entry.get("title") or part_id or "untitled part"), class_="title"),
+            tag("span", esc(f"  {counts}{quotes}"), class_="hint"),
+        ),
+        join(
+            tag("p", esc(f"{entry.get('type') or 'no type'} \u00b7 part {part_id}"), class_="hint"),
+            (
+                warning(
+                    f"{entry['image_reference_count']} node(s) here depend on image content. "
+                    "Whether those images were analysed is in this job's coverage report, and a "
+                    "text-only parser never claims image coverage."
+                )
+                if entry.get("image_reference_count")
+                else ""
+            ),
+            _part_absence(entry) if not nodes else "",
+            each(roots, lambda n: _assembled_node(n, children)),
+            tag(
+                "p",
+                tag(
+                    "a",
+                    "the exact response for this part, with every quote checked",
+                    href=url(*base, "tasks", entry.get("task_id") or ""),
+                ),
+                class_="hint",
+            ),
+        ),
+        open_=bool(nodes) and len(nodes) <= _OPEN_PART_NODES,
+        class_="part",
+        id=f"part-{part_id}" if part_id else None,
+    )
+
+
+#: A part small enough to be open on arrival. Large parts stay collapsed so the page opens on an
+#: index rather than on 94,000 characters of content — measured on the benchmark parse.
+_OPEN_PART_NODES: int = 6
 
 
 def assembled_pane(*, base: tuple[str, ...], assembly: dict[str, Any]) -> str:
     """Every part of a multipart parse with the content it produced, for the side-by-side view.
 
     WHY THIS EXISTS AT ALL. `job_view.parsed_pane` was written for the single-response protocol and
-    reads the job's own `response-visible.txt`. A multipart parse has none - every response belongs
-    to a call - so the parsed half of the side-by-side rendered nothing for the entire Phase 2.1
-    protocol. On the benchmark parse that is 81 parts and 229 nodes of real content sitting behind
-    an empty pane, on the one screen `job_view`'s own docstring calls the point of Phase 2: a parsed
-    artifact cannot be evaluated without the filing it came from beside it.
+    reads the job's own `response-visible.txt`. A multipart parse has none — every response belongs
+    to a call — so the parsed half of the side-by-side rendered nothing for the entire Phase 2.1
+    protocol. On the benchmark parse that is 81 parts and 229 nodes of real content behind an empty
+    pane, on the one screen `job_view`'s own docstring calls the point of Phase 2.
 
     IT IS AN INDEX WITH CONTENT, NOT A REWRITTEN PARSE. Part order, part identifiers, part titles,
-    node types and node titles are the model's and are carried verbatim - `rules.md` section 21
-    rule 19. Nothing is renamed, nothing is merged, nothing is sorted and no part is dropped,
-    including the ones that produced nothing.
+    node types, node titles and the parent links between nodes are the model's and are carried
+    verbatim — `rules.md` section 21 rule 19. Nothing is renamed, merged, sorted or dropped,
+    including the parts that produced nothing.
 
     IT STATES ITS STATUS AND NEVER IMPLIES COMPLETENESS. `INCOMPLETE_WORK` and
-    `RECONCILIATION_UNRESOLVED` are printed as they are stored, and the assembly's own status note
-    - which says in terms that these signals are not a completeness verdict - is printed with them.
+    `RECONCILIATION_UNRESOLVED` are printed as stored, with the assembly's own note saying in terms
+    that these signals are not a completeness verdict.
     """
     parts = assembly.get("parts") or []
     resolved = sum(int(p.get("references_resolved") or 0) for p in parts)
     cited = sum(int(p.get("reference_count") or 0) for p in parts)
     empty = sum(1 for p in parts if not (p.get("nodes") or []))
-
-    def part(entry: dict[str, Any]) -> str:
-        nodes = entry.get("nodes") or []
-        return tag(
-            "div",
-            join(
-                tag(
-                    "div",
-                    esc(f"{entry.get('type') or '(no type)'} — part {entry.get('part_id') or ''}"),
-                    class_="kind",
-                ),
-                tag("div", esc(entry.get("title") or "(no title)"), class_="title"),
-                tag(
-                    "p",
-                    esc(
-                        f"{entry.get('node_count', 0)} node(s); "
-                        f"{entry.get('references_resolved', 0)} of "
-                        f"{entry.get('reference_count', 0)} quotes located in the preserved bytes; "
-                        f"{entry.get('output_tokens', 0):,} output tokens"
-                    ),
-                    class_="hint",
-                ),
-                # STATED PER PART RATHER THAN PER NODE, and that is not a workaround. The assembly
-                # already counts image references per part, which is the figure a reviewer needs
-                # here, and `tests/architecture/test_phase21_boundaries.py` forbids a multipart
-                # module naming a non-parsing model ROLE by name. The guard is blunt on purpose and
-                # is not worth weakening for a rendering convenience.
-                (
-                    warning(
-                        f"{entry['image_reference_count']} node(s) in this part depend on image "
-                        "content. Whether those images were analysed is recorded in this job's "
-                        "coverage report, and a text-only parser never claims image coverage."
-                    )
-                    if entry.get("image_reference_count")
-                    else ""
-                ),
-                _part_absence(entry) if not nodes else "",
-                each(nodes, lambda n: _assembled_node(entry, n)),
-                tag(
-                    "p",
-                    tag(
-                        "a",
-                        "the exact response for this part, with every quote checked",
-                        href=url(*base, "tasks", entry.get("task_id") or ""),
-                    ),
-                    class_="hint",
-                ),
-            ),
-            class_="node",
-        )
-
     return tag(
         "section",
         join(
@@ -915,25 +960,57 @@ def assembled_pane(*, base: tuple[str, ...], assembly: dict[str, Any]) -> str:
             tag(
                 "p",
                 esc(
-                    f"{assembly.get('part_count', 0)} part(s) and "
-                    f"{assembly.get('node_count', 0)} node(s), in the model's order and its own "
-                    f"vocabulary. {resolved} of {cited} quotes across the parse were located in "
-                    f"the preserved bytes; {empty} part(s) produced no node."
+                    f"{assembly.get('part_count', 0)} part(s), "
+                    f"{assembly.get('node_count', 0)} node(s), "
+                    f"{resolved} of {cited} quotes located in the preserved bytes, "
+                    f"{empty} part(s) with no content."
                 ),
             ),
             warning(
                 f"Assembled status {assembly.get('status') or 'unrecorded'}. "
                 + str(assembly.get("status_note") or "")
             ),
+            _part_index(parts),
             tag(
                 "p",
                 esc(
-                    "A quote below is what the model cited, not a located citation. Each part "
-                    "links to its own page, which resolves every quote against the preserved "
-                    "bytes and links it to the offset where it was found."
+                    "A quote below is what the model cited, not a located citation. Each part links "
+                    "to its own page, which resolves every quote against the preserved bytes."
                 ),
                 class_="hint",
             ),
-            each(parts, part),
+            each(parts, lambda entry: _part_block(base, entry)),
         ),
+    )
+
+
+def _part_index(parts: list[dict[str, Any]]) -> str:
+    """Every part as one jump link, so the pane opens on a map rather than on the content.
+
+    THE INDEX IS THE PAGE'S ONLY CONCESSION TO SIZE, and it adds no claim: it is the model's own
+    part titles in the model's own order, each with the node count already on the part below it.
+    """
+    if not parts:
+        return ""
+    return tag(
+        "ul",
+        each(
+            parts,
+            lambda p: tag(
+                "li",
+                join(
+                    tag(
+                        "a",
+                        esc(p.get("title") or p.get("part_id") or "untitled part"),
+                        href=f"#part-{p.get('part_id') or ''}",
+                    ),
+                    tag(
+                        "span",
+                        esc(f"  {len(p.get('nodes') or [])}"),
+                        class_="hint",
+                    ),
+                ),
+            ),
+        ),
+        class_="refs part-index",
     )

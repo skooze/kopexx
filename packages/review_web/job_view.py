@@ -608,6 +608,7 @@ def job_page(
     responses_live_on_tasks: bool = False,
     attempt_providers: list[str] | None = None,
     assembly: dict[str, Any] | None = None,
+    stage_texts: dict[str, str] | None = None,
 ) -> str:
     """The whole review page for one child filing job.
 
@@ -817,6 +818,7 @@ def job_page(
         view_controls(base, view, artifact),
         artifact_controls(base, view, artifacts, artifact),
         panes,
+        stages_card(job, base, stage_texts or {}),
         _invocation_card(job, providers),
         _validation_card(validation),
         reasoning_card,
@@ -838,4 +840,89 @@ def job_page(
         ),
         tag("div", join(tag("h2", "Review"), review_form), class_="card"),
         tag("div", join(tag("h2", "Comments"), comment_list, comment_form), class_="card"),
+    )
+
+
+#: How an optional stage's status is coloured. A COLOUR IS A CATEGORY, NEVER A SCORE: `FAILED` is
+#: red because the stage did not return, not because the answer was poor — nothing here judges a
+#: stage's content, which is what the reviewer is for.
+_STAGE_KIND: Final[dict[str, str]] = {"READY_FOR_REVIEW": "ok", "FAILED": "bad"}
+
+#: What each optional stage is, in one line, so a reviewer knows what they are looking at before
+#: they read it. rules.md section 1: only the parsing model is required and each of these runs ONLY
+#: because the user selected it.
+_STAGE_NOTE: Final[dict[str, str]] = {
+    "summary": "one entry per node of the parse, in the model's own prose. It is level 5 in the "
+    "source-of-truth hierarchy and is never evidence for a financial value.",
+    "image": "one entry per image filed with this accession, in filed order, including the ones "
+    "the model could not read.",
+    "analysis": "an answer bound to THIS accession, with a citation for every material claim. It "
+    "is level 6 and is navigation, never evidence.",
+}
+
+
+def stages_card(job: dict[str, Any], base: tuple[str, ...], texts: dict[str, str]) -> str:
+    """What the optional stages produced, or nothing at all when none was selected.
+
+    A ROLE THE USER LEFT BLANK RENDERS NOTHING, NOT AN EMPTY ROW. A blank selector is a complete,
+    valid configuration — rules.md section 1 — and a card reading `summary: not run` would report a
+    missing feature where the user made a choice. Absence of the key IS the absence of the stage.
+
+    THE EXACT BYTES ARE SHOWN, NOT A READING OF THEM. Every stage response is preserved before
+    anything parses it, and this card renders that text. Nothing here validates a stage's YAML, and
+    nothing here decides whether its content is any good: both are the reviewer's, and a card that
+    scored a summary would be the backend judging a model's output.
+    """
+    stages = job.get("stages") or {}
+    if not stages:
+        return ""
+
+    def one(role: str) -> str:
+        info = stages.get(role) or {}
+        status = str(info.get("status") or "")
+        text = texts.get(role, "")
+        return tag(
+            "div",
+            join(
+                tag(
+                    "h3",
+                    join(
+                        esc(role),
+                        " ",
+                        badge(status, _STAGE_KIND.get(status, "neutral")),
+                    ),
+                ),
+                tag("p", esc(_STAGE_NOTE.get(role, "")), class_="hint"),
+                tag(
+                    "p",
+                    esc(
+                        f"{info.get('model_label') or 'unrecorded model'} in "
+                        f"{info.get('region') or 'an unrecorded region'} — prompt "
+                        f"{info.get('prompt') or 'unrecorded'} — "
+                        f"{info.get('output_tokens') or 0} output token(s) — "
+                        f"USD {info.get('actual_cost_usd') or '0'}"
+                    ),
+                    class_="hint",
+                ),
+                warning(str(info["error"])) if info.get("error") else "",
+                tag("pre", esc(text), class_="source") if text else "",
+            ),
+            class_="node",
+        )
+
+    return tag(
+        "div",
+        join(
+            tag("h2", "Optional stages"),
+            tag(
+                "p",
+                esc(
+                    "Each of these ran because it was selected. A role left blank runs nothing and "
+                    "appears nowhere here — only the parsing model is required."
+                ),
+                class_="hint",
+            ),
+            each(sorted(stages), one),
+        ),
+        class_="card",
     )

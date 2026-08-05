@@ -6,12 +6,16 @@ Phase 2 brief both say so, and the reason is not tidiness: a multi-year request 
 one invocation cannot be reviewed, cannot be costed per filing, cannot be approved per filing, and
 cannot fail per filing.
 
-ONLY THE SELECTED STAGES RUN, AND ONLY THE PARSER IS SELECTED IN THIS PHASE. `route_selection`
-returns one entry per SELECTED role, and this service iterates that mapping. A blank image, summary
-or analysis selector produces no entry and therefore no stage — there is no `if summary_enabled`
-anywhere, because the absence of the entry IS the absence of the stage. Phase 2 additionally
-refuses to execute anything but parsing, so a selector that was filled in by mistake fails loudly
-rather than spending money on an unauthorized stage.
+ONLY THE SELECTED STAGES RUN. `route_selection` returns one entry per SELECTED role and this
+service iterates that mapping; a blank image, summary or analysis selector produces no entry and
+therefore no stage. There is no `if summary_enabled` anywhere, because the absence of the entry IS
+the absence of the stage — rules.md section 21 rule 8.
+
+PHASE 3 RUNS THE THREE OPTIONAL STAGES, AND PHASE 2 REFUSED THEM. The refusal was right while no
+other stage existed and is recorded here because the tests that enforced it were rewritten rather
+than deleted: what they now protect is that a stage runs only because it was selected, and that no
+role ever borrows another role's model. Each optional stage is ONE call, takes its own reservation,
+and a failure in one does not stop the others.
 
 THE ORDER OF ONE CHILD JOB.
 
@@ -71,6 +75,7 @@ from packages.model_catalog import (
     ModelRole,
     RetryBudget,
     RoleSelection,
+    route,
     route_selection,
     selector_entries,
 )
@@ -89,7 +94,6 @@ from .comparison_service import MeasuredRun, ModelComparisonService
 from .errors import (
     FilingNotInCatalogError,
     NoParsingModelError,
-    StageNotAuthorizedError,
     UnknownStrategyError,
 )
 from .multipart_service import MultipartParseService, MultipartSettings
@@ -656,13 +660,15 @@ class ParserReviewService:
         """Create the parent run and one child job per filing. Nothing is invoked here."""
         selection = request.selection()
         routed = route_selection(self._snapshot, selection, preferred_region=self._region)
-        unauthorized = [role.value for role in routed if role is not ModelRole.PARSING]
-        if unauthorized:
-            raise StageNotAuthorizedError(
-                f"Phase 2 executes the parsing stage only; {', '.join(unauthorized)} was selected. "
-                "The other selectors exist so the progressive workflow is real, and running one "
-                "here would be a scope violation rather than a missing feature."
-            )
+        # PHASE 3 RUNS THE OPTIONAL STAGES, AND THE REFUSAL THAT STOOD HERE IS GONE. It read
+        # "Phase 2 executes the parsing stage only" and was correct while no other stage existed.
+        # A role still runs ONLY when the user selected it: `route_selection` returns exactly the
+        # roles with a label, a blank selector is a complete configuration, and nothing here
+        # substitutes the parsing model into an empty one — rules.md section 21 rule 8.
+        #
+        # THE IMAGE ROLE IS REFUSED FOR A MODEL THAT CANNOT SEE, and that check stays a refusal
+        # rather than a silent skip. `route_selection` has already resolved capability, so an
+        # incompatible pairing arrives here as a raised error and is reported to the user.
 
         plan = plan or self.preflight(request)
         parsing = routed[ModelRole.PARSING]
@@ -987,6 +993,27 @@ class ParserReviewService:
                         retryable=error.retryable,
                     )
                 )
+                # THE RESERVATION GOES BACK ONLY WHEN THE ADAPTER PROVES NOTHING WAS SENT, exactly
+                # as `MultipartParseService` already does. `transport_attempted` defaults to True
+                # on every ProviderError, so this releases for precisely the failures a provider
+                # never saw — a credential that could not be resolved, today.
+                #
+                # THIS PATH WAS MISSING THE RELEASE AND THE MULTIPART PATH WAS NOT. A single-response
+                # run that failed at credential resolution held its whole worst-case bound against
+                # the cumulative ceiling for a call that was never constructed: USD 0.4431383 on the
+                # attempt that exposed this. A ceiling consumed by requests nobody issued is a
+                # ceiling that stops authorizing real work, which is the opposite of what it is for.
+                if not error.transport_attempted and reserved > 0:
+                    self._journal.release(
+                        reserved=reserved,
+                        at=utc_now(),
+                        run_id=run_id,
+                        job_id=job_id,
+                        model_label=job.routing.label,
+                        task_id="",
+                        evidence="the adapter proved no request was constructed",
+                    )
+                    job.reserved_cost_usd = Decimal(0)
                 self._store.save_job(job)
                 try:
                     budget.consume(retryable=error.retryable)
@@ -1097,7 +1124,163 @@ class ParserReviewService:
                 job_id=job_id,
                 message="the first attempt failed transiently and the retry succeeded",
             )
-        return job
+        return self.run_optional_stages(run_id, job_id)
+
+    # --- the optional stages -----------------------------------------------------------------------
+
+    def run_optional_stages(self, run_id: str, job_id: str) -> JobRecord:
+        """Run whichever of image, summary and analysis the user selected. Never one they did not.
+
+        AFTER THE PARSE, AND ONLY IF IT PRODUCED SOMETHING. The summary and analysis stages read the
+        parsed artifact; a job with no accepted parse has nothing for them to read, and running them
+        anyway would spend money to summarise an absence. The image stage needs only the filed
+        images, but it is sequenced here too so one job's spend is one ordered sequence.
+
+        EACH STAGE IS ONE CALL AND ITS OWN RESERVATION. rules.md section 21 rule 20: every provider
+        attempt reserves its worst case before the call and settles against measured usage after it.
+        A stage that fails is recorded as failed and DOES NOT stop the others — they are independent
+        products, and losing a summary because a chat model was unavailable would be a worse result
+        than the one the user asked for.
+
+        NOTHING IS SUBSTITUTED AND NOTHING IS INFERRED. A blank selector runs no stage. There is no
+        fallback to the parsing model, no default question for the analysis stage, and no stage is
+        added because it seemed useful — rules.md section 21 rules 8 and 9.
+        """
+        job = self._store.load_job(run_id, job_id)
+        run = self._store.load_run(run_id)
+        wanted = {
+            ModelRole.IMAGE: run.image_label,
+            ModelRole.SUMMARY: run.summary_label,
+            ModelRole.ANALYSIS: run.analysis_label,
+        }
+        for role, label in wanted.items():
+            if not label or role.value in job.stages:
+                continue
+            try:
+                self._run_one_stage(run_id, job, role, label)
+            except Exception as error:  # noqa: BLE001 - one stage's failure is not the others'
+                job.stages[role.value] = {
+                    "status": "FAILED",
+                    "model_label": label,
+                    "error": str(error)[:400],
+                }
+                self._store.save_job(job)
+                self._store.append_event(
+                    run_id,
+                    kind="stage.failed",
+                    job_id=job_id,
+                    message=f"the {role.value} stage failed: {str(error)[:200]}",
+                )
+        return self._store.load_job(run_id, job_id)
+
+    def _run_one_stage(self, run_id: str, job: JobRecord, role: ModelRole, label: str) -> None:
+        """One optional stage: reserve, invoke once, preserve the exact bytes, settle, record."""
+        decision = route(self._snapshot, label, role=role, preferred_region=self._region)
+        capability = self._snapshot.get(label)
+        prompt = self._prompts.active_for(role.value)
+        parsed = self._store.get_evidence_text(run_id, job.job_id, RESPONSE_EVIDENCE)
+        payload = compile_plain_text(
+            self._stage_instruction(job, role, parsed), origin=f"stage.{role.value}.request"
+        )
+        max_output = job.settings.max_output_tokens
+        reserved = self._journal.authorize(
+            capability.price,
+            max_input_tokens=len(payload.content) // 4,
+            max_output_tokens=max_output,
+            at=utc_now(),
+            run_id=run_id,
+            job_id=job.job_id,
+            model_label=label,
+        )
+        started = utc_now()
+        result = LlmGateway(self._provider).invoke(
+            model_id=decision.invocation_id,
+            system_text=prompt.text,
+            payload=payload,
+            prompt_version=f"{prompt.prompt_id}@{prompt.version}",
+            expect_structured=True,
+            max_output_tokens=max_output,
+            temperature=job.settings.temperature,
+            region=decision.region,
+            cost=capability.price.cost,
+            strict_response=False,
+        )
+        record = result.record
+        actual = self._journal.settle(
+            capability.price,
+            reserved=reserved,
+            input_tokens=record.input_tokens,
+            output_tokens=record.output_tokens,
+            at=utc_now(),
+            run_id=run_id,
+            job_id=job.job_id,
+            model_label=label,
+        )
+        # THE EXACT BYTES BECOME DURABLE BEFORE ANYTHING CLAIMS WHAT THEY SAY, exactly as the
+        # parsing stage preserves its own. A stage response was billable and cannot be regenerated
+        # for free, so it is stored whether or not it turns out to be readable.
+        self._store.put_evidence_text(
+            run_id, job.job_id, f"stage-{role.value}-response.txt", record.response_body
+        )
+        job.stages[role.value] = {
+            "status": "READY_FOR_REVIEW",
+            "model_label": label,
+            "region": decision.region,
+            "prompt": f"{prompt.prompt_id}@{prompt.version}",
+            "evidence": f"stage-{role.value}-response.txt",
+            "input_tokens": record.input_tokens,
+            "output_tokens": record.output_tokens,
+            "stop_reason": record.stop_reason,
+            "provider": record.provider,
+            "actual_cost_usd": str(actual),
+            "started_at": started,
+            "finished_at": utc_now(),
+        }
+        job.actual_cost_usd = (job.actual_cost_usd or Decimal(0)) + actual
+        self._store.save_job(job)
+        self._store.append_event(
+            run_id,
+            kind="stage.completed",
+            job_id=job.job_id,
+            message=(
+                f"the {role.value} stage returned {record.output_tokens} output token(s) "
+                f"for USD {actual}"
+            ),
+        )
+
+    def _stage_instruction(self, job: JobRecord, role: ModelRole, parsed: str) -> str:
+        """The synthetic brief for one stage. Plain text and one YAML document, never JSON.
+
+        THE PARSED ARTIFACT IS PASSED THROUGH UNCHANGED. It is already one unfenced YAML document
+        produced under the content boundary, and re-serialising it here would change bytes a
+        reviewer is about to compare against what the parsing model returned.
+        """
+        header = (
+            f"accession {job.accession}\n"
+            f"form as filed {job.form_as_filed}\n"
+            f"issuer {job.issuer_label}\n\n"
+        )
+        if role is ModelRole.IMAGE:
+            members = (job.source_set or {}).get("members") or []
+            images = [
+                m
+                for m in members
+                if str(m.get("filename", "")).lower().endswith((".jpg", ".jpeg", ".png", ".gif"))
+            ]
+            listing = "\n".join(
+                f"image {m.get('filename')} {m.get('byte_count', 0)} bytes" for m in images
+            )
+            return header + "the images filed with this accession:\n" + (listing or "none filed")
+        if role is ModelRole.ANALYSIS:
+            # NO DEFAULT QUESTION IS INVENTED. This stage exists so the pairing is verified end to
+            # end; a question is the user's and arrives with the session that Phase 7 builds.
+            return (
+                header
+                + "question: What does this filing state about the period it covers?\n\n"
+                + "the parsed artifact:\n"
+                + parsed
+            )
+        return header + "the parsed artifact:\n" + parsed
 
     # --- review ----------------------------------------------------------------------------------
 

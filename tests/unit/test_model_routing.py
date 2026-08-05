@@ -14,6 +14,11 @@ anything failing: a cross-region route is DISCLOSED before the invocation rather
 a bill afterwards, the region it picks is DETERMINISTIC because `verified_regions` is an ordered
 tuple and not a set, a blank optional role runs NO stage rather than borrowing the parsing model,
 and a candidate that cannot be used comes back DISABLED WITH A REASON rather than filtered away.
+
+THE IMAGE ROLE IS THE ONE PLACE A CANDIDATE IS FILTERED, and it is a product decision rather than a
+drift: a model with no image path can never fill that role, so the row could only ever be disabled,
+and five permanently dead rows is noise on the one selector whose constraint cannot change. Every
+other role still lists every candidate.
 """
 
 from __future__ import annotations
@@ -518,15 +523,26 @@ def test_changing_the_role_changes_which_rows_are_offered() -> None:
     A router that ignored it would return the same enabled row for the image selector as for the
     parsing selector, and a text-only model would be offered for a job it cannot do.
     """
-    snap = load_snapshot(snapshot())
-    (for_parsing,) = selector_entries(snap, role=ModelRole.PARSING, preferred_region="region-one")
-    (for_image,) = selector_entries(snap, role=ModelRole.IMAGE, preferred_region="region-one")
+    snap = load_snapshot(
+        snapshot(candidate(), second(image_input=True, multimodal=False, image_verified=False))
+    )
+    parsing = selector_entries(snap, role=ModelRole.PARSING, preferred_region="region-one")
+    image = selector_entries(snap, role=ModelRole.IMAGE, preferred_region="region-one")
 
-    assert for_parsing.available is True
-    assert for_image.available is False
-    assert for_image.disabled_reason is not None
-    assert "image" in for_image.disabled_reason.lower()
-    assert for_image.image_input is False, "the row states the capability, not just the verdict"
+    # Both candidates can parse; only the one CLAIMING an image path reaches the image selector.
+    assert [e.label for e in parsing] == ["Model One", "Model Two"]
+    assert [e.label for e in image] == ["Model Two"], (
+        "a text-only candidate is offered for a role it cannot fill"
+    )
+
+    assert parsing[0].available is True
+    # MUTATION GUARD, AND IT STILL BITES. `Model Two` claims image input and has NOT been verified,
+    # so it survives the filter and must still come back disabled with the role's own reason —
+    # which is only possible if `role` reached `unavailable_reason`.
+    assert image[0].available is False
+    assert image[0].disabled_reason is not None
+    assert "image" in image[0].disabled_reason.lower()
+    assert image[0].image_input is True, "the row states the capability, not just the verdict"
 
 
 def test_an_unverified_field_reads_unverified_rather_than_blank() -> None:

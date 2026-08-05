@@ -482,9 +482,16 @@ def _steps_block(context: PanelContext) -> str:
             "ol",
             join(
                 _step_what_happened(context, base),
-                _ledger_step(context, "What it never mentioned", "omitted"),
-                _ledger_step(context, "Whether its citations exist", "claims"),
-                _ledger_step(context, "Whether its numbers exist", "tables"),
+                # ONE LEDGER STEP, NOT THREE. The three questions — what it never mentioned,
+                # whether its citations exist, whether its numbers exist — are three fragments of
+                # ONE page, and rendering them as three menu entries put four links to the same
+                # destination in an eighteen-link panel. The ledger is where all three are answered
+                # and the step now says so once.
+                _ledger_step(
+                    context,
+                    "What it omitted, and whether its citations and numbers exist",
+                    "omitted",
+                ),
                 _step_read_the_parts(context, base),
                 _step_could_not_do(context, base),
                 _step_record_the_verdict(context, base),
@@ -684,15 +691,10 @@ def _parts_block(context: PanelContext) -> str:
                     _next_matching(rows, index, _carries_evidence),
                 ),
                 _walk(context, rows, index),
-                tag(
-                    "li",
-                    destination(
-                        "the full list",
-                        url("runs", context.run_id, "jobs", context.job_id, "multipart"),
-                        kind="page",
-                        count=total,
-                    ),
-                ),
+                # `the full list` WAS REMOVED, NOT MOVED. Step 1 of the seven, `What happened
+                # when it ran`, is the same destination, and two entries onto one page in the same
+                # panel is the defect the `Reviews` nav item was deleted for, one level down. The
+                # count that lived on this row is on that step.
             ),
             class_="menu",
         ),

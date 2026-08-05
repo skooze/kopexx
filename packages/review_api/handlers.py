@@ -1059,6 +1059,15 @@ class ReviewApp:
         # part still writes an assembly record — `part_count: 0`, `node_count: 0` — and rendering
         # it would put an empty index on the page in place of the sentence explaining why there is
         # nothing. The sentence is the more useful of the two.
+        # THE EXACT BYTES OF EACH OPTIONAL STAGE, read from the evidence the stage preserved.
+        # A stage that failed has no evidence and renders its error instead; a role the user left
+        # blank has no entry at all and renders nothing.
+        stage_texts = {
+            role: self.service.store.get_evidence_text(run_id, job_id, str(info["evidence"]))
+            for role, info in (job.stages or {}).items()
+            if info.get("evidence")
+            and self.service.store.has_evidence(run_id, job_id, str(info["evidence"]))
+        }
         assembled = self.service.store.load_assembly(run_id, job_id)
         if assembled is not None and not (assembled.get("parts") or []):
             assembled = None
@@ -1095,6 +1104,7 @@ class ReviewApp:
                 # never reached assembly — a job whose plan produced no part has nothing to show,
                 # and `parsed_pane` says so rather than rendering an empty index as content.
                 assembly=assembled,
+                stage_texts=stage_texts,
                 # GATHERED ACROSS THE TASKS FOR THE SAME REASON. A multipart job's own `attempts`
                 # is empty, so an invocation card reading only that could not tell a Bedrock call
                 # from a mock one — and it was printing a model, a region and a USD figure for

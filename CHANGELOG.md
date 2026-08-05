@@ -7,6 +7,74 @@ Format follows Keep a Changelog, with two additional sections that matter for th
 `Data migrations` and `Operational changes`.
 
 
+## Phase 3 — the optional stages, and a review surface that shows a multipart parse (2026-08-05)
+
+**THE SIDE-BY-SIDE VIEW WAS EMPTY FOR THE ENTIRE PHASE 2.1 PROTOCOL, AND THAT IS THE HEADLINE.**
+`parsed_pane` reads the job's own `response-visible.txt`; a multipart parse has none, because every
+response belongs to a call. On the benchmark parse that is 81 parts and 229 nodes of real content
+behind a blank pane, on the one screen the module's own docstring calls the point of Phase 2.
+`multipart_view.assembled_pane` now renders the assembly beside the filing: nested by the model's
+own `parent_id`, collapsible per part, with a jump index, and with every part shown — including the
+35 of 81 that produced nothing, each saying why. 16 of those hit the output cap, and a pane that
+rendered only the parts with content would have shown a clean parse and hidden every truncation.
+
+**THE THREE OPTIONAL STAGES RUN.** `create_run` refused any non-parsing role with
+`StageNotAuthorizedError`, which was correct while no other stage existed. Image, summary and
+analysis are implemented: three hash-locked prompts, one call and one reservation each, exact bytes
+preserved before anything reads them, and an `Optional stages` card on the review page. A blank
+selector runs nothing and appears nowhere. Three guards enforced the old refusal and all three were
+REWRITTEN rather than deleted, to protect what replaced it — a stage runs exactly once, only
+because it was selected, and no role borrows another role's model.
+
+**EVERY STAGE ARTIFACT SO FAR CAME FROM THE MOCK PROVIDER.** The pipeline is verified end to end;
+the outputs are stubs. The real-provider leg failed at credential resolution in the environment the
+work was done in, and no request was constructed.
+
+**THE INVOCATION CARD WAS CLAIMING A CALL THAT NEVER HAPPENED.** With `LLM_PROVIDER=mock` the review
+page printed a Bedrock inference-profile id, a region and `USD 0.0905289` for a response the mock
+adapter produced offline in four lines of stub YAML. `ModelResponse.provider` carried the truth and
+stopped at the evaluation store; `InvocationAttempt.provider` now records it, gathered across the
+job AND its tasks because a multipart job's own `attempts` is empty.
+
+**A RESERVATION FOR A CALL THAT WAS NEVER CONSTRUCTED IS NOW RELEASED ON BOTH PATHS.**
+`MultipartParseService` released when `transport_attempted` was false; `execute_job` did not, so a
+single-response run that failed at credential resolution held its entire worst-case bound against
+the cumulative ceiling forever. Found by a real attempt that stuck `USD 0.4431383`.
+
+**THE HOME PAGE COST 5.4 CPU SECONDS TO PRODUCE 26KB.** `list_run_ids` walked every run's `events/`,
+`jobs/`, `tasks/` and `evidence/` to find 71 manifests — 14,898 `relative_to` calls. `list_keys`
+already took the bound and two sibling methods already passed it. Home is now 0.74s.
+
+**THE RUN-EVENT STREAM BOUNDED ITS WATCH BY A COUNT AND NOT A DURATION**, with no wait between
+polls. Unobservable on stored data, because every stored run is terminal and the loop exits on its
+first pass; it would have appeared during exactly the live parse a reviewer opens the stream to
+watch.
+
+**THE `Reviews` PAGE AND NAV SECTION ARE DELETED.** It indexed every parse, which the home page
+already lists under the run each belongs to — a second door onto one room. The panel menu printed
+every link's full URL beside it: 18 hrefs averaging 75 characters against 689 characters of labels,
+67 percent of a 320-pixel column. Panel text went from 2,114 characters to 745, and 18 links with 5
+duplicates became 15 with 2.
+
+**THE IMAGE SELECTOR NO LONGER LISTS MODELS THAT CANNOT FILL IT.** Five text-only candidates were
+permanently disabled rows on the one selector whose constraint cannot change. Every other role still
+lists every candidate, because there a disabled reason is something that can change.
+
+### Documentation
+
+**THIS ENTRY CORRECTS TWO CLAIMS THAT HAD BECOME FALSE, ADDITIVELY.** `roadmap.md` and `CLAUDE.md`
+stated that the Phase 2.2 benchmark had not run and that measured Bedrock spend was
+`USD 0.00000000`. The ceiling was raised to `USD 38.05` and six candidates parsed
+`0000320193-25-000008` on 2026-08-04 and 2026-08-05. Measured real spend is **`USD 17.88` across 47
+jobs**, of which `USD 14.36` is those six parses. The original arithmetic stands as the record of
+why the phase was blocked; it is superseded, not rewritten.
+
+**WHAT THE BENCHMARK STILL HAS NOT PRODUCED IS A JUDGEMENT.** `var/evaluation-runs/benchmarks/`
+does not exist, all 71 jobs are at `EVALUATION`, and `review_history` is empty on every one. No
+completeness figure available today means anything.
+
+---
+
 ## Phase 2.2 — the source inventory, the completeness ledger, a blocked benchmark (2026-08-04)
 
 **A PARSE CAN NOW BE MEASURED AGAINST THE FILING INSTEAD OF AGAINST ITS OWN CITATIONS.** Phase 2.1

@@ -101,3 +101,29 @@ def badge(label: str, kind: str = "neutral") -> str:
 def warning(message: str) -> str:
     """A warning shown at the point of use. A warning nobody sees protects nobody."""
     return tag("p", esc(message), class_="warning", role="status")
+
+
+def collapsible(heading: str, body: str, *, open_: bool = False, **pairs: Any) -> str:
+    """A disclosure block: `details` with a `summary`, both already-built markup.
+
+    MARKUP, NOT A SCRIPTED WIDGET. It works with scripting disabled, it is keyboard operable, and a
+    browser's own find-in-page opens it — which is what makes it usable on a page whose purpose is
+    locating one disclosure among 81 collapsed parts.
+
+    `heading` AND `body` ARE MARKUP AND ARE NOT ESCAPED HERE, exactly as `tag` treats its children.
+    Both are assembled by callers out of `esc`-ed pieces; this helper adds no content of its own.
+
+    IT LIVES HERE RATHER THAN IN THE VIEW THAT NEEDS IT, and the reason is worth recording. The
+    element is spelled `summary`, which is also the name of a MODEL ROLE — and
+    `tests/architecture/test_phase21_boundaries.py` refuses any string literal naming a non-parsing
+    role inside a multipart module, so that a multipart parse cannot quietly invoke another stage.
+    The guard is a blunt literal scan on purpose and is worth more than the convenience of writing
+    the tag inline; putting the markup in the shared HTML layer keeps both the guard and the
+    correct element.
+    """
+    return tag(
+        "details",
+        join(tag("summary", heading), body),
+        open="open" if open_ else None,
+        **pairs,
+    )

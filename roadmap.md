@@ -50,14 +50,20 @@ PHASE 2.1  Model-directed multipart parsing           COMPLETE  2026-08-04. All 
                                                       candidates ran, both multimodal ones
                                                       also on an image-bearing filing.
                                                       Seven runs, USD 2.603827 measured.
-PHASE 2.2  Bedrock deep dive, the mechanical source   COMPLETE 2026-08-04, EXCEPT THE BENCHMARK
-           inventory, the completeness ledger         RUN ITSELF, which is BLOCKED on a
-                                                      cost-ceiling decision. Every nonbillable
-                                                      task finished. NO MODEL WAS INVOKED:
-                                                      measured Bedrock spend USD 0.00000000.
+PHASE 2.2  Bedrock deep dive, the mechanical source   COMPLETE 2026-08-05. THE BENCHMARK RAN.
+           inventory, the completeness ledger         Six candidates parsed the benchmark filing
+                                                      0000320193-25-000008 after the ceiling was
+                                                      raised to USD 38.05. Every one reached
+                                                      READY_FOR_REVIEW. NOT ONE HAS BEEN
+                                                      CLASSIFIED OR JUDGED, so no completeness
+                                                      figure yet means anything.
 PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
                                                       BLOCKED on a user parser-selection decision
-PHASE 3    Optional model stages: image, summary, chat
+PHASE 3    Optional model stages: image, summary, chat   IMPLEMENTED 2026-08-05.
+                                                      All three run, each one call,
+                                                      each its own reservation. NOT
+                                                      yet verified against a real
+                                                      provider.
 PHASE 4    Persistence, approval gate and reuse
 PHASE 5    Background population
 PHASE 6    Functional beta UI
@@ -73,9 +79,10 @@ and `docs/llm/model-benchmark.md`; per-filing cost is recorded in `docs/llm/cost
 verified identifiers, regions, modalities, limits and prices remain in exactly one file,
 `docs/llm/bedrock-capability-snapshot.yaml`.
 
-**STILL TRUE AFTER PHASE 2, AND NOT SMALL.** Nothing is deployed. No application database exists.
-No Redis exists. No summary artifact, no image artifact and no chat session exists — Phase 2 ran
-the PARSING stage only, and the orchestrator raises rather than running another. An approved
+**STILL TRUE, AND NOT SMALL.** Nothing is deployed. No application database exists. No Redis
+exists. Phase 3 implemented the three optional stages on 2026-08-05 — the orchestrator no longer
+refuses them — but every stage artifact produced so far came from the MOCK provider: the pipeline
+is verified, the outputs are stubs. An approved
 artifact records a judgement and activates no reuse: no search consults the evaluation store and no
 cache is populated. Breadth across the 22 substantive form strings has NOT been attempted and is
 blocked on a user decision about which parser and prompt version should advance.
@@ -87,7 +94,11 @@ the repository's own compatibility guard. `GPT OSS 120B` is INCOMPATIBLE: the so
 1.9x its entire 128,000-token context and no output request makes that fit. Running the four that
 can receive it, at each one's OWN measured Phase 2.1 call count, costs `USD 13.3745` against a
 `USD 5.00` authorized ceiling. Nothing billable ran: measured Bedrock spend for the phase is
-`USD 0.00000000`. Section PHASE 2.2 below carries the arithmetic.
+`USD 0.00000000` AT THE TIME THAT WAS WRITTEN. It is no longer true: the ceiling was raised to
+USD 38.05 and the benchmark ran on 2026-08-04 and 2026-08-05. Measured real Bedrock spend across
+this repository is now **USD 17.88 over 47 jobs**, of which **USD 14.36** is the six benchmark
+parses of `0000320193-25-000008`. Section PHASE 2.2 below carries the original arithmetic, which
+remains the record of why it was blocked.
 
 | Area | Status |
 |---|---|

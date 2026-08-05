@@ -54,7 +54,6 @@ from packages.orchestrator import (
     ParserReviewService,
     RunRequest,
     SpendJournal,
-    StageNotAuthorizedError,
 )
 from packages.orchestrator.service import (
     INSTRUCTION_EVIDENCE,
@@ -352,11 +351,17 @@ def _write_corpus(root: Path) -> tuple[Path, ManifestInventory]:
 
 
 def _write_prompts(root: Path) -> PromptRegistry:
-    """A prompt directory with one ACTIVE parsing prompt, loaded through its real hash gate."""
+    """A prompt directory with one ACTIVE prompt per role, loaded through its real hash gate.
+
+    THE THREE OPTIONAL ROLES ARE HERE BECAUSE PHASE 3 RUNS THEM. `active_for(role)` refuses a role
+    with no ACTIVE prompt, so a selected stage would fail on configuration rather than on anything
+    this test is about. The texts are deliberately trivial: this file asserts nothing about what a
+    stage prompt should say, only that a selected stage resolves one and preserves what came back.
+    """
     directory = root / "prompts"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "parser-v1.txt").write_text(PROMPT_TEXT, encoding="utf-8")
-    (directory / "versions.yaml").write_text(
+    entries = (
         'schema_version: "prompt-versions-v1"\n'
         "prompts:\n"
         "  - prompt_id: synthetic-parser\n"
@@ -367,9 +372,23 @@ def _write_prompts(root: Path) -> PromptRegistry:
         "    status: ACTIVE\n"
         "    role: parsing\n"
         "    supersedes: null\n"
-        "    superseded_by: null\n",
-        encoding="utf-8",
+        "    superseded_by: null\n"
     )
+    for role in ("image", "summary", "analysis"):
+        text = f"Return one YAML document for the {role} stage of one filing.\n"
+        (directory / f"{role}-v1.txt").write_text(text, encoding="utf-8")
+        entries += (
+            f"  - prompt_id: synthetic-{role}\n"
+            '    version: "1"\n'
+            f"    file: {role}-v1.txt\n"
+            f'    sha256: "{sha256_text(text)}"\n'
+            '    created: "2026-01-01"\n'
+            "    status: ACTIVE\n"
+            f"    role: {role}\n"
+            "    supersedes: null\n"
+            "    superseded_by: null\n"
+        )
+    (directory / "versions.yaml").write_text(entries, encoding="utf-8")
     return PromptRegistry.from_directory(directory)
 
 
@@ -913,14 +932,15 @@ def test_a_parser_only_run_invokes_exactly_one_model_and_selects_exactly_one_rol
 
 
 @pytest.mark.parametrize("role", ["image", "summary", "analysis"])
-def test_selecting_an_unauthorized_stage_refuses_rather_than_quietly_running_it(
+def test_a_selected_optional_stage_runs_once_and_preserves_its_exact_bytes(
     harness: Harness, role: str
 ) -> None:
-    """Phase 2 executes the parsing stage only, and a filled selector is a scope violation.
+    """SUPERSEDED BY PHASE 3. This asserted `StageNotAuthorizedError` while no stage but parsing ran.
 
-    The other three selectors exist so the progressive workflow is real. Running one because it was
-    filled in would spend money on a stage no one authorized, which is why this raises with the
-    role NAMED instead of ignoring the selection.
+    The refusal was correct for Phase 2 and is wrong now that image, summary and analysis are
+    implemented. What replaces it is the property that actually protects the user's money: a
+    selected stage runs EXACTLY ONCE, its exact bytes become durable, and its cost is recorded
+    against the role that spent it.
     """
     request = RunRequest(
         cik=CIK,
@@ -928,12 +948,32 @@ def test_selecting_an_unauthorized_stage_refuses_rather_than_quietly_running_it(
         accessions=(ACCESSION_RECENT,),
         **{f"{role}_label": VISION_PARSER},
     )
-    with pytest.raises(StageNotAuthorizedError) as error:
-        harness.service.create_run(request)
+    run = harness.service.create_run(request)
+    job = harness.store.load_jobs(run.run_id)[0]
+    before = len(harness.provider.invocations)
+    job = harness.service.execute_job(run.run_id, job.job_id)
 
-    assert role in str(error.value)
-    assert harness.provider.invocations == [], "an unauthorized stage reached a provider"
-    assert harness.store.list_run_ids() == [], "a refused run must leave no parent run behind"
+    assert role in job.stages, f"the selected {role} stage did not run"
+    recorded = job.stages[role]
+    assert recorded["status"] == "READY_FOR_REVIEW", recorded.get("error")
+    assert recorded["model_label"] == VISION_PARSER, "the stage did not use the selected model"
+    # ONE CALL FOR THE PARSE AND ONE FOR THE STAGE, never a stage run twice.
+    assert len(harness.provider.invocations) == before + 2
+    assert harness.store.has_evidence(run.run_id, job.job_id, recorded["evidence"]), (
+        "the stage response was not preserved before anything read it"
+    )
+    # THE OTHER TWO ROLES WERE BLANK AND RAN NOTHING — rules.md section 21 rule 8.
+    assert set(job.stages) == {role}
+
+
+def test_a_blank_optional_selector_runs_no_stage_at_all(harness: Harness) -> None:
+    """MUTATION GUARD for the test above: a parser-only run must record no stage whatsoever."""
+    run = harness.service.create_run(
+        RunRequest(cik=CIK, parsing_label=TEXT_PARSER, accessions=(ACCESSION_RECENT,))
+    )
+    job = harness.store.load_jobs(run.run_id)[0]
+    job = harness.service.execute_job(run.run_id, job.job_id)
+    assert job.stages == {}, "a stage ran for a role the user left blank"
 
 
 def test_a_parsing_only_selection_is_not_refused(harness: Harness) -> None:

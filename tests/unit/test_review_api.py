@@ -1100,12 +1100,13 @@ def test_a_preflight_prices_the_run_without_spending_anything(
     assert harness.service.journal.spent_usd == before, "a preflight spent money"
 
 
-def test_selecting_a_stage_this_phase_never_authorized_is_refused_loudly(app: ReviewApp) -> None:
-    """Phase 2 executes the parsing stage only.
+def test_selecting_an_optional_stage_is_accepted_and_recorded_on_the_run(app: ReviewApp) -> None:
+    """SUPERSEDED BY PHASE 3. This asserted a 400 while no stage but parsing existed.
 
-    A summary selector filled in by mistake must fail rather than quietly spend on a stage nobody
-    authorized — and must fail rather than being silently ignored, which would leave the user
-    believing a stage ran.
+    The refusal was right for Phase 2 and is wrong now: image, summary and analysis are implemented,
+    so a filled selector is a request rather than a mistake. What still has to hold is that the
+    choice is RECORDED — a stage the user selected and the run does not carry is a stage that will
+    never run, and the user would have no way to see that.
     """
     response = call(
         app,
@@ -1120,8 +1121,13 @@ def test_selecting_a_stage_this_phase_never_authorized_is_refused_loudly(app: Re
             }
         ).encode(),
     )
-    assert response.status == 400
-    assert "summary" in body_json(response)["message"]
+    assert response.status == 202
+    run_id = body_json(response)["run_id"]
+    run = app.service.store.load_run(run_id)
+    assert run.summary_label == PARSING_LABEL, "the selected summary model was not recorded"
+    assert run.image_label is None and run.analysis_label is None, (
+        "a blank selector was filled in for the user"
+    )
 
 
 def test_a_parser_only_run_is_created_with_one_child_job_per_filing(

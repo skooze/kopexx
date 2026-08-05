@@ -204,6 +204,25 @@ pre.source mark { background: var(--accent-blue-in); }
 .refs { font-size: .76rem; color: var(--ink-muted); }
 .refs li { margin: .12rem 0; }
 
+/* --- the assembled parse ---------------------------------------------------------------------
+   A NESTED NODE IS INDENTED BY ITS OWN RULE AND NOT BY A MARGIN ON `.node`. The nesting is the
+   model's `parent_id` chain, so depth is whatever the model declared; a fixed indent per level
+   compounds correctly at any depth without the renderer counting one. */
+.node .node { margin-left: .6rem; }
+
+/* A PART IS COLLAPSED MARKUP, NOT A SCRIPTED WIDGET. `details` works with scripting disabled, is
+   keyboard operable, and a browser's find-in-page opens it — which matters on a page whose whole
+   purpose is locating one disclosure among 81 parts. */
+details.part { border: 1px solid var(--rule); border-radius: 6px; margin: .5rem 0;
+               padding: .35rem .6rem; }
+details.part > summary { cursor: pointer; padding: .15rem 0; }
+details.part > summary .title { font-weight: 600; }
+details.part[open] > summary { border-bottom: 1px solid var(--rule); margin-bottom: .4rem; }
+
+/* The jump index. Two columns so 81 parts are a map rather than another scroll. */
+.part-index { columns: 2; column-gap: 1.2rem; margin: .5rem 0 .8rem; padding: 0; list-style: none; }
+.part-index li { break-inside: avoid; }
+
 form.inline { display: flex; gap: .4rem; flex-wrap: wrap; align-items: flex-start; }
 form.inline textarea { flex: 1 1 22rem; min-height: 3.4rem; padding: .4rem;
                        border: 1px solid var(--rule); border-radius: 5px; font: inherit; }
