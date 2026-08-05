@@ -1135,6 +1135,56 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/SourceUnavailable" }
 
+  /benchmark/{cik}/{accession}/compare:
+    get:
+      tags: [review]
+      operationId: reviewBenchmarkCompareParsesPage
+      summary: Two models' parses of one filing, each beside the preserved filing, in four panes.
+      description: |
+        FOUR PANES: the preserved source and the parsed artifact for each of TWO models, chosen by
+        the reader from two selects. Both sides are chosen; nothing is preselected on the reader's
+        behalf beyond the first two parses the store lists.
+
+        THE SOURCE IS RENDERED TWICE ON PURPOSE. Every run of one accession carries the same
+        `source_set_id`, so the bytes are identical; the second pane exists for its SCROLL POSITION.
+        Comparing part 14 of one parse against part 31 of another is the job, and one shared pane
+        would force both to the same offset.
+
+        THIS IS A COMPARISON SURFACE AND NOT A SELECTION ONE. No score, no winner, no ordering by
+        any figure, and nothing recorded about a preference. The product chooses a parsing model
+        PER JOB — `docs/architecture/product-definition.md`: the user chooses each role
+        independently, for every job — so this page advances no candidate and retires none.
+
+        A parse that produced no node is offered and rendered with that fact stated, because "this
+        model returned nothing for this filing" is one of the more useful comparison results.
+
+        NOTHING HERE INVOKES A MODEL OR SPENDS ANYTHING.
+      x-implementation-status: IMPLEMENTED
+      x-phase: 2.5
+      parameters:
+        - $ref: "#/components/parameters/Cik"
+        - $ref: "#/components/parameters/Accession"
+        - name: a
+          in: query
+          required: false
+          description: >-
+            The run identifier for the left pair. Ignored unless it names a parse of THIS filing.
+          schema: { type: string }
+        - name: b
+          in: query
+          required: false
+          description: >-
+            The run identifier for the right pair. Ignored unless it names a parse of THIS filing.
+          schema: { type: string }
+      responses:
+        "200":
+          description: HTML.
+          content:
+            text/html:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SourceUnavailable" }
+
   /benchmark/{cik}/{accession}/models/{run_id}:
     get:
       tags: [review]

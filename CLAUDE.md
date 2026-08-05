@@ -259,7 +259,8 @@ Phase 2.2  Bedrock deep dive and the completeness harness   HARNESS COMPLETE 202
                                                             THE BENCHMARK RUN IS BLOCKED on a
                                                             cost-ceiling decision — see below.
 Phase 2.5  BREADTH across all 22 substantive form strings   BLOCKED on a user decision about
-                                                            which parser and prompt version advances
+                                                            NOT BLOCKED — the "parser-selection"
+                                                            gate was a drift and is withdrawn
 Phase 3-8  optional model stages, persistence and the approval gate, background population,
            beta UI, Deep Dive, breadth                   NOT STARTED
 ```
@@ -428,7 +429,15 @@ judges parse quality. **Correctness is still unmeasured** — `review_history` i
 — and so is repeat-run variability, because no filing was parsed twice by the same model.
 Measured results: `docs/sprints/PHASE-0201-model-directed-multipart-parsing.md` section 3.
 
-**NO PARSER HAS BEEN SELECTED, RANKED OR PROMOTED**, and the single-response protocol remains
+**NO PARSER HAS BEEN SELECTED, RANKED OR PROMOTED — AND NOTHING REQUIRES THAT ONE EVER IS.** This
+sentence is an instruction to the AGENT: do not silently promote a candidate. It was once read as a
+product requirement that a human must crown one definitive parser before breadth could proceed, and
+that inversion put a phantom BLOCKER on Phase 2.5. The product chooses a parsing model PER JOB —
+`docs/architecture/product-definition.md`: "The user chooses each independently, for every job" —
+so there is no definitive parser to select and never was. The operator COMPARES parses and chooses
+per job; `/benchmark/{cik}/{accession}/compare` renders two of them beside the filing.
+
+The single-response protocol remains
 runnable so the two can be compared. Do not choose one.
 
 **The review UI uses the standard library and adds no dependency.** No web framework, no ASGI

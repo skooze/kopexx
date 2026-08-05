@@ -78,8 +78,10 @@ from packages.review_web import (
     TaskRow,
     active_section,
     assembled_page,
+    assembled_pane,
     base_path,
     benchmark_index,
+    comparison_panes,
     counts,
     counts_sentence,
     esc,
@@ -97,6 +99,7 @@ from packages.review_web import (
     multipart_page,
     panel_mode,
     panel_shell,
+    parsed_pane,
     preflight_page,
     review_menu,
     run_page,
@@ -652,6 +655,12 @@ class ReviewApp:
             "/benchmark/{cik}/{accession}/models",
             self.benchmark_models_html,
             name="benchmarkModelComparisonPage",
+        )
+        r.add(
+            "GET",
+            "/benchmark/{cik}/{accession}/compare",
+            self.benchmark_compare_html,
+            name="benchmarkCompareParsesPage",
         )
         r.add(
             "GET",
@@ -1986,6 +1995,104 @@ class ReviewApp:
                 stamp=found.inventory.source_set_sha256,
             ),
             main=model_run_page(inventory=found.inventory, truth=truth, run=run),
+        )
+
+    # --- two parses of one filing, side by side --------------------------------------------------
+
+    def _parses_of(self, cik: str, accession: str) -> list[dict[str, Any]]:
+        """Every stored parse of one accession, in the order the store lists runs.
+
+        NEVER ORDERED BY A FIGURE. The node count is carried so a reader can see it, not so the
+        list can be ranked — `rules.md` section 21 rule 14. A parse that produced nothing stays in
+        the list, because "this model returned nothing for this filing" is a comparison result.
+        """
+        found: list[dict[str, Any]] = []
+        for run_id in self.service.store.list_run_ids():
+            for job in self.service.store.load_jobs(run_id):
+                if job.cik != cik or job.accession != accession:
+                    continue
+                try:
+                    assembly = self.service.store.load_assembly(run_id, job.job_id)
+                except Exception:  # noqa: BLE001 - a parse with no assembly is still a parse
+                    assembly = None
+                found.append(
+                    {
+                        "run_id": run_id,
+                        "job_id": job.job_id,
+                        "label": job.routing.label,
+                        "nodes": int((assembly or {}).get("node_count") or 0),
+                        "assembly": assembly,
+                        "job": job,
+                    }
+                )
+        return found
+
+    def _rendered_parse(self, entry: dict[str, Any] | None) -> dict[str, Any]:
+        """One side of the comparison, already rendered, or a sentence saying why there is none."""
+        if entry is None:
+            return {"label": "nothing selected", "parsed": "", "note": "choose a parse above"}
+        job = entry["job"]
+        base = ("runs", entry["run_id"], "jobs", job.job_id)
+        assembly = entry["assembly"]
+        if assembly and (assembly.get("parts") or []):
+            parsed = assembled_pane(base=base, assembly=assembly)
+            note = f"{entry['nodes']} node(s) — run {entry['run_id']}"
+        else:
+            parsed = parsed_pane(
+                base=base,
+                view="side-by-side",
+                parsed=None,
+                outcomes_by_node={},
+                raw_response="",
+                responses_live_on_tasks=bool(
+                    self.service.store.list_task_ids(entry["run_id"], job.job_id)
+                ),
+            )
+            note = f"no parsed content — run {entry['run_id']}"
+        return {"label": entry["label"], "parsed": parsed, "note": note, "run_id": entry["run_id"]}
+
+    def benchmark_compare_html(self, request: Request) -> Response:
+        """Four panes: the preserved filing beside each of two models' parses of it."""
+        found, _, _ = self._for_display(request)
+        cik, accession = found.filing.cik, found.filing.accession
+        parses = self._parses_of(cik, accession)
+        by_run = {p["run_id"]: p for p in parses}
+        # A REQUESTED RUN THAT IS NOT A PARSE OF THIS FILING IS IGNORED, never rendered. The two
+        # identifiers are query text and the only ones honoured are those this page already listed.
+        left = by_run.get(request.q("a")) or (parses[0] if parses else None)
+        right = by_run.get(request.q("b")) or (parses[1] if len(parses) > 1 else None)
+
+        filename, source_text = "", ""
+        if left is not None:
+            names = self._artifact_names(left["job"])
+            filename = names[0] if names else ""
+            source_text = self._artifact_text(left["run_id"], left["job"], filename)
+
+        return self._page(
+            request,
+            title=f"Compare parses {accession}",
+            crumbs=self._filing_crumbs(
+                cik, accession, found.filing.form_as_filed, Crumb("Compare")
+            ),
+            tab=BENCHMARK_TAB,
+            filing_href="",
+            benchmark_href=url("benchmark", cik, accession),
+            panel=self._panel(request),
+            run_id=None,
+            main=comparison_panes(
+                cik=cik,
+                accession=accession,
+                issuer_label=found.filing.issuer_label,
+                form_as_filed=found.filing.form_as_filed,
+                filename=filename,
+                source_text=source_text,
+                left=self._rendered_parse(left),
+                right=self._rendered_parse(right),
+                choices=[
+                    {"run_id": p["run_id"], "label": p["label"], "nodes": p["nodes"]}
+                    for p in parses
+                ],
+            ),
         )
 
     def benchmark_inventory_json(self, request: Request) -> Response:

@@ -58,7 +58,11 @@ PHASE 2.2  Bedrock deep dive, the mechanical source   COMPLETE 2026-08-05. THE B
                                                       CLASSIFIED OR JUDGED, so no completeness
                                                       figure yet means anything.
 PHASE 2.5  BREADTH VALIDATION across all 22 substantive form strings
-                                                      BLOCKED on a user parser-selection decision
+                                                      NOT BLOCKED. The "user parser-selection
+                                                      decision" that stood here was a DRIFT and
+                                                      is withdrawn — see below. The comparison
+                                                      surface it was waiting on is IMPLEMENTED
+                                                      2026-08-05.
 PHASE 3    Optional model stages: image, summary, chat   IMPLEMENTED 2026-08-05.
                                                       All three run, each one call,
                                                       each its own reservation. NOT
@@ -84,8 +88,26 @@ exists. Phase 3 implemented the three optional stages on 2026-08-05 — the orch
 refuses them — but every stage artifact produced so far came from the MOCK provider: the pipeline
 is verified, the outputs are stubs. An approved
 artifact records a judgement and activates no reuse: no search consults the evaluation store and no
-cache is populated. Breadth across the 22 substantive form strings has NOT been attempted and is
-blocked on a user decision about which parser and prompt version should advance.
+cache is populated. Breadth across the 22 substantive form strings has NOT been attempted.
+
+**IT IS NOT BLOCKED ON A PARSER-SELECTION DECISION, AND SAYING IT WAS WAS A DRIFT.** This file and
+`CLAUDE.md` both carried "blocked on a user decision about which parser and prompt version should
+advance". No specification ever asked for that. It is a paraphrase of one line of ADR-0019, under a
+heading titled *What this ADR does NOT decide*: `which parser advances to breadth — the user's
+decision, from the evidence Phase 2 produced`. An ADR declining to decide something became a
+BLOCKER on a phase, and the phase has no written section anywhere to contradict it.
+
+**THE PRODUCT HAS NO DEFINITIVE PARSER TO SELECT.** `docs/architecture/product-definition.md`: "The
+user chooses each independently, FOR EVERY JOB." `rules.md` section 1 point 6: a "user-selected
+parsing model". A phase gated on crowning one was gated on an event this product never produces.
+What the operator needs is the ability to COMPARE two parses and choose per job — which is the
+feature, and `/benchmark/{cik}/{accession}/compare` is it.
+
+**WHAT `CLAUDE.md` ACTUALLY SAYS IS AN INSTRUCTION TO THE AGENT, NOT A PRODUCT GATE.** "NO PARSER
+HAS BEEN SELECTED, RANKED OR PROMOTED ... Do not choose one" stops an agent silently promoting a
+candidate. It does not require a human to crown one before anything else may proceed, and reading
+it that way inverted it. Corrected additively under section 21 rule 16: the old wording is quoted
+above rather than erased.
 
 **A MODERN FILING DOES NOT FIT EVERY CANDIDATE, AND THE PROOF THAT WOULD SHOW IT DOES NOT FIT THE
 BUDGET.** Phase 2.2 measured Apple's 10-Q `0000320193-25-000008` — 63 members, 915,890

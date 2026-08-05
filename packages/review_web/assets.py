@@ -223,6 +223,26 @@ details.part[open] > summary { border-bottom: 1px solid var(--rule); margin-bott
 .part-index { columns: 2; column-gap: 1.2rem; margin: .5rem 0 .8rem; padding: 0; list-style: none; }
 .part-index li { break-inside: avoid; }
 
+/* --- comparing two parses of one filing ------------------------------------------------------
+   FOUR PANES, EACH SCROLLING INDEPENDENTLY. The preserved bytes are identical on both rows — every
+   run of one accession carries the same source_set_id — so the second source pane exists for its
+   SCROLL POSITION, not its content: a reviewer parks each one at the passage its own parse is
+   discussing. A single shared pane would force both comparisons to the same offset, which is the
+   one position they are never both interesting at. */
+.compare-row { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem;
+               border-top: 2px solid var(--rule); padding-top: .5rem; margin-top: .6rem; }
+.compare-row > .compare-head { grid-column: 1 / -1; }
+.compare-head h2 { margin: 0; }
+.compare-source, .compare-parsed { max-height: 70vh; overflow: auto;
+                                   border: 1px solid var(--rule); border-radius: 6px;
+                                   padding: .4rem .6rem; }
+/* The panes stack on a narrow viewport rather than scrolling the page sideways. */
+@media (max-width: 1100px) { .compare-row { grid-template-columns: 1fr; } }
+
+.compare-chooser { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+                   margin: .6rem 0; }
+.compare-chooser select { padding: .3rem; max-width: 26rem; }
+
 form.inline { display: flex; gap: .4rem; flex-wrap: wrap; align-items: flex-start; }
 form.inline textarea { flex: 1 1 22rem; min-height: 3.4rem; padding: .4rem;
                        border: 1px solid var(--rule); border-radius: 5px; font: inherit; }

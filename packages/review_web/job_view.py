@@ -27,6 +27,10 @@ from typing import Any, Final
 from .html import badge, each, esc, join, tag, url, warning
 from .multipart_view import assembled_pane
 
+# THE SINGLE HOME FOR EXECUTION-STATE COLOUR is `views`, and it is imported rather than repeated:
+# two maps of the same states drift the moment a state is added.
+from .views import _STATE_KIND
+
 _VIEWS = (("raw", "Raw"), ("parsed", "Parsed"), ("side-by-side", "Side by side"))
 
 _RESOLUTION_KIND = {
@@ -808,12 +812,23 @@ def job_page(
         tag(
             "p",
             join(
-                badge(job["execution_state"], "info"),
+                # COLOURED BY THE STATE, NOT ALWAYS `info`. Every execution state rendered blue
+                # meant a FAILED job looked exactly like a RUNNING one at a glance, on the page a
+                # reviewer opens precisely to find out which it is.
+                badge(job["execution_state"], _STATE_KIND.get(job["execution_state"], "neutral")),
                 " ",
                 badge(job["review_state"], "neutral"),
                 evaluation_note,
             ),
         ),
+        # WHY IT FAILED, AT THE TOP, BEFORE THE EMPTY PANES. The record carries an exact reason —
+        # a credential that would not resolve, a source set that moved between preflight and
+        # execution, a provider refusal — and the page showed none of it: a reader saw "no parsed
+        # output" beside a blue badge and had to guess whether the model failed, the parse failed,
+        # or the filing was at fault. A job that failed has one useful thing to say and this is it.
+        warning(f"This job FAILED and produced no parse. {job['failure']}")
+        if job.get("failure")
+        else "",
         image_warning,
         view_controls(base, view, artifact),
         artifact_controls(base, view, artifacts, artifact),

@@ -42,6 +42,7 @@ this page exists to display attacker-influenceable bytes and hands none of them 
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from packages.completeness import (
@@ -64,6 +65,7 @@ from .benchmark_view import (
     source_element_grid,
 )
 from .html import badge, each, esc, join, tag, url, warning
+from .job_view import raw_pane
 
 if TYPE_CHECKING:  # pragma: no cover - a typing edge, deliberately not a runtime one
     # THE RENDERER DOES NOT IMPORT THE ORCHESTRATION LAYER AT RUNTIME. `MeasuredRun` is a data
@@ -305,6 +307,18 @@ def model_comparison_page(
         filing_heading(inventory, truth),
         tag("p", esc(issuer_label)),
         page_navigation(base_path(inventory.cik, inventory.accession), "models"),
+        # THE TABLE IS FIGURES; THE COMPARISON IS THE PARSES THEMSELVES. A reviewer deciding
+        # between two models reads what each produced beside the filing, not a row of counts.
+        tag(
+            "p",
+            tag(
+                "a",
+                "Compare two of these parses side by side, with the filing",
+                href=url("benchmark", inventory.cik, inventory.accession, "compare"),
+            ),
+        )
+        if runs
+        else "",
         _what_this_measures_card(truth),
         body,
     )
@@ -892,4 +906,139 @@ def _unresolved_card(run: MeasuredRun) -> str:
             tag("ul", each(items, item), class_="refs"),
         ),
         class_="card",
+    )
+
+
+# --- two parses of one filing, side by side ------------------------------------------------------
+
+
+def _pane_pair(*, label: str, source: str, filename: str, parsed: str, note: str) -> str:
+    """One model's row: the preserved source on the left, what that model made of it on the right."""
+    return tag(
+        "div",
+        join(
+            tag(
+                "div",
+                join(
+                    tag("h2", esc(label)),
+                    tag("p", esc(note), class_="hint") if note else "",
+                ),
+                class_="compare-head",
+            ),
+            tag("div", source, class_="compare-source"),
+            tag("div", parsed, class_="compare-parsed"),
+        ),
+        class_="compare-row",
+    )
+
+
+def comparison_panes(
+    *,
+    cik: str,
+    accession: str,
+    issuer_label: str,
+    form_as_filed: str,
+    filename: str,
+    source_text: str,
+    left: dict[str, Any],
+    right: dict[str, Any],
+    choices: Sequence[dict[str, Any]],
+) -> str:
+    """Two models' parses of ONE filing, each beside the filing, in four panes.
+
+    WHY FOUR PANES AND NOT THREE. The preserved bytes are identical for both models — every run of
+    this accession carries the same `source_set_id`, and that is verified rather than assumed — so a
+    single shared source pane would show the same characters. It is still rendered TWICE, because
+    the two panes scroll independently: a reviewer parks each one at the passage its own parse is
+    discussing, and comparing part 14 of one model against part 31 of another is the entire job.
+    One shared pane forces the two comparisons to happen at the same scroll offset, which is exactly
+    the position they are never both interesting at.
+
+    THIS PAGE RANKS NOTHING AND RECOMMENDS NOTHING. No score, no winner, no ordering by any figure —
+    `rules.md` section 21 rule 14, and the same prohibition `model_comparison_page` already carries.
+    The reader chooses both sides and the page shows what each model produced.
+
+    IT IS A COMPARISON SURFACE, NOT A SELECTION ONE. The product chooses a parsing model PER JOB —
+    `docs/architecture/product-definition.md`: the user chooses each role independently, for every
+    job — so nothing here advances a candidate, retires one, or records a preference. Comparing two
+    parses is the feature; crowning one was never in the product.
+
+    EITHER SIDE MAY BE ABSENT AND SAYS SO. A model whose parse produced no node is shown with that
+    fact rather than omitted, because "this model returned nothing for this filing" is one of the
+    more useful answers this page can give.
+    """
+    return join(
+        tag("h1", esc(f"Compare parses — {form_as_filed} {accession}")),
+        tag("p", esc(f"{issuer_label} — CIK {cik}")),
+        _compare_chooser(cik, accession, choices, left, right),
+        tag(
+            "div",
+            join(
+                _pane_pair(
+                    label=str(left.get("label") or "left"),
+                    source=raw_pane(
+                        filename=filename, text=source_text, focus=None, focus_length=1
+                    ),
+                    filename=filename,
+                    parsed=str(left.get("parsed") or ""),
+                    note=str(left.get("note") or ""),
+                ),
+                _pane_pair(
+                    label=str(right.get("label") or "right"),
+                    source=raw_pane(
+                        filename=filename, text=source_text, focus=None, focus_length=1
+                    ),
+                    filename=filename,
+                    parsed=str(right.get("parsed") or ""),
+                    note=str(right.get("note") or ""),
+                ),
+            ),
+            class_="compare-grid",
+        ),
+    )
+
+
+def _compare_chooser(
+    cik: str,
+    accession: str,
+    choices: Sequence[dict[str, Any]],
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> str:
+    """Two selects and a submit. A GET form, so a chosen pair is a URL a reviewer can send.
+
+    IN THE ORDER THE HANDLER RESOLVED THEM, NEVER ORDERED BY A FIGURE. A dropdown sorted by node
+    count would rank the candidates in the one control whose whole purpose is letting a person pick
+    without being steered.
+    """
+
+    def select(name: str, chosen: dict[str, Any]) -> str:
+        current = str(chosen.get("run_id") or "")
+        return tag(
+            "select",
+            each(
+                choices,
+                lambda c: tag(
+                    "option",
+                    esc(f"{c['label']} — {c['nodes']} node(s) — {c['run_id']}"),
+                    value=str(c["run_id"]),
+                    selected="selected" if str(c["run_id"]) == current else None,
+                ),
+            ),
+            name=name,
+            id=f"compare-{name}",
+        )
+
+    return tag(
+        "form",
+        join(
+            tag("label", "Left", for_="compare-a"),
+            select("a", left),
+            tag("label", "Right", for_="compare-b"),
+            select("b", right),
+            tag("button", "Compare", type="submit", class_="run-button"),
+        ),
+        method="get",
+        action=url("benchmark", cik, accession, "compare"),
+        class_="compare-chooser",
     )

@@ -30,11 +30,12 @@ from .job_view import RAW_WINDOW_CHARACTERS, job_page, parsed_pane, raw_pane
 from .model_comparison_view import (
     OMITTED_SPANS_SHOWN,
     TABLES_SHOWN,
+    comparison_panes,
     model_comparison_page,
     model_run_page,
     models_base,
 )
-from .multipart_view import assembled_page, multipart_page, task_page
+from .multipart_view import assembled_page, assembled_pane, multipart_page, task_page
 from .nav import (
     FILING,
     PARSE,
@@ -86,6 +87,8 @@ __all__ = [
     "TABLES_SHOWN",
     "TABLE_SLICE_CHARACTERS",
     "assembled_page",
+    "assembled_pane",
+    "comparison_panes",
     "badge",
     "base_path",
     "benchmark_index",
